@@ -1,0 +1,97 @@
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { startOfMonth, endOfMonth, format, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { TrendingUp, TrendingDown, Wallet, AlertCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import SummaryCard from '@/components/dashboard/SummaryCard';
+import CategoryChart from '@/components/dashboard/CategoryChart';
+import RecentTransactions from '@/components/dashboard/RecentTransactions';
+import PendingAlerts from '@/components/dashboard/PendingAlerts';
+
+const now = new Date();
+const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
+const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
+
+export default function Dashboard() {
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: () => base44.entities.Transaction.list('-date', 200),
+  });
+
+  const { data: payables = [] } = useQuery({
+    queryKey: ['payables'],
+    queryFn: () => base44.entities.Payable.list('-due_date', 50),
+  });
+
+  const { data: receivables = [] } = useQuery({
+    queryKey: ['receivables'],
+    queryFn: () => base44.entities.Receivable.list('-due_date', 50),
+  });
+
+  const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
+  const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
+  const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const balance = totalIncome - totalExpense;
+
+  const pendingPayables = payables.filter(p => p.status === 'pending');
+  const pendingReceivables = receivables.filter(r => r.status === 'pending');
+
+  const expenseByCategory = monthTx
+    .filter(t => t.type === 'expense')
+    .reduce((acc, t) => {
+      const cat = t.category || 'outros';
+      acc[cat] = (acc[cat] || 0) + t.amount;
+      return acc;
+    }, {});
+
+  const categoryData = Object.entries(expenseByCategory).map(([name, value]) => ({ name, value }));
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-sora font-bold text-foreground">Dashboard</h1>
+        <p className="text-muted-foreground text-sm mt-1">{format(now, "MMMM 'de' yyyy", { locale: ptBR })}</p>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <SummaryCard
+          title="Receitas do Mês"
+          value={totalIncome}
+          icon={TrendingUp}
+          color="success"
+        />
+        <SummaryCard
+          title="Despesas do Mês"
+          value={totalExpense}
+          icon={TrendingDown}
+          color="destructive"
+        />
+        <SummaryCard
+          title="Saldo Líquido"
+          value={balance}
+          icon={Wallet}
+          color={balance >= 0 ? 'success' : 'destructive'}
+        />
+        <SummaryCard
+          title="A Pagar (Pendente)"
+          value={pendingPayables.reduce((s, p) => s + p.amount, 0)}
+          icon={AlertCircle}
+          color="warning"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <CategoryChart data={categoryData} />
+          <RecentTransactions transactions={transactions.slice(0, 8)} />
+        </div>
+        <div>
+          <PendingAlerts payables={pendingPayables} receivables={pendingReceivables} />
+        </div>
+      </div>
+    </div>
+  );
+}
