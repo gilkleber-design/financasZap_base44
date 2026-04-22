@@ -1,0 +1,31 @@
+{
+  "name": "Card",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome do cart\u00e3o (ex: Nubank, Ita\u00fa Platinum)"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "credit",
+        "debit",
+        "both"
+      ],
+      "description": "Tipo: cr\u00e9dito, d\u00e9bito ou ambos"
+    },
+    "bank": {
+      "type": "string",
+      "description": "Banco/institui\u00e7\u00e3o emissora"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "type"
+  ]
+}
