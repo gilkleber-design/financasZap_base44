@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, Building2, MessageSquare } from 'lucide-react';
+import { Plus, Trash2, Building2, MessageSquare, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Settings() {
@@ -143,9 +143,20 @@ export default function Settings() {
               <li>Você revisa e confirma antes de salvar</li>
             </ul>
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm">
-            <p className="font-medium text-blue-700 mb-1">🚀 Integração direta com WhatsApp Business API</p>
-            <p className="text-blue-600 text-xs">Para receber lançamentos automaticamente sem copiar mensagens, é possível configurar uma integração via Twilio/Z-API. Entre em contato para configurar.</p>
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm space-y-3">
+            <p className="font-medium text-green-700">📱 Conectar seu WhatsApp ao agente FinançasZap</p>
+            <p className="text-green-600 text-xs">Clique no botão abaixo para vincular seu WhatsApp. Depois disso, basta mandar uma mensagem como <em>"Gastei R$50 no mercado"</em> e o lançamento é criado automaticamente.</p>
+            <a
+              href={base44.agents.getWhatsAppConnectURL('financas_zap')}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button className="bg-green-600 hover:bg-green-700 text-white w-full mt-1">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Conectar WhatsApp
+                <ExternalLink className="w-3 h-3 ml-2 opacity-70" />
+              </Button>
+            </a>
           </div>
         </CardContent>
       </Card>
