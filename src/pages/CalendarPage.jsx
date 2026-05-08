@@ -115,14 +115,15 @@ export default function CalendarPage() {
     await Promise.all(updates);
 
     // Gera Receivables por hospital
-    for (const { hospital, source, total, dueDate, shifts: hshifts } of receivablePreview) {
+    for (const { hospital, source, total, totalBruto, taxRate, dueDate, shifts: hshifts } of receivablePreview) {
       const monthLabel = format(currentMonth, 'MMMM/yyyy', { locale: ptBR });
       const rec = await createReceivableMutation.mutateAsync({
         description: `${hospital.sigla} — Plantões ${monthLabel}`,
-        amount: total,
+        amount: totalBruto,
         net_amount: total,
         due_date: format(dueDate, 'yyyy-MM-dd'),
         income_source_id: hospital.income_source_id || source?.id || '',
+        tax_rate: taxRate || 0,
         status: 'pending',
         notes: `Fechamento automático: ${hshifts.length} plantão(s)`,
       });

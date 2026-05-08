@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { format, addDays, endOfMonth } from 'date-fns';
+import { format, addDays, startOfMonth, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 
@@ -26,7 +26,7 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   }));
 
   const doableShifts = shifts.filter(s => statuses[s.id] !== 'cancelled');
-  const totalValue = doableShifts.reduce((acc, s) => acc + (s.valor || 0), 0);
+  const totalValue = doableShifts.reduce((acc, s) => acc + (s.valor || 0), 0); // será recalculado por hospital com imposto no preview
 
   // Agrupar por hospital para gerar um Receivable por hospital
   const byHospital = doableShifts.reduce((acc, s) => {
@@ -38,11 +38,14 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   const receivablePreview = Object.entries(byHospital).map(([hid, hshifts]) => {
     const hospital = hospitals.find(h => h.id === hid);
     const source = sources.find(s => s.id === hospital?.income_source_id);
-    const total = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
-    // Due date = último dia do mês de competência + dias de atraso
+    const totalBruto = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
+    const taxRate = source?.default_tax_rate || 0;
+    const total = taxRate > 0 ? totalBruto * (1 - taxRate / 100) : totalBruto;
+    // Due date = 1º do mês seguinte ao de competência + dias de atraso
+    // Ex: competência abril → 1º de maio + 30 dias = 31 de maio ≈ início de junho
     const refDate = currentMonth || new Date(hshifts[0].date + 'T12:00:00');
-    const dueDate = addDays(endOfMonth(refDate), hospital?.dias_atraso || 0);
-    return { hospital, source, total, dueDate, shifts: hshifts };
+    const dueDate = addDays(startOfMonth(addMonths(refDate, 1)), hospital?.dias_atraso || 0);
+    return { hospital, source, total, totalBruto, taxRate, dueDate, shifts: hshifts };
   });
 
   return (
@@ -105,16 +108,23 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
               <p className="text-sm text-muted-foreground text-center py-3">Nenhum plantão confirmado.</p>
             ) : (
               <div className="space-y-2">
-                {receivablePreview.map(({ hospital, source, total, dueDate }) => (
-                  <div key={hospital?.id} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                {receivablePreview.map(({ hospital, source, total, totalBruto, taxRate, dueDate }) => (
+                  <div key={hospital?.id} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-emerald-800">{hospital?.name}</p>
                       <p className="text-xs text-emerald-600 mt-0.5">
                         Vencimento: {format(dueDate, 'dd/MM/yyyy')}
                         {source && ` · PJ: ${source.name}`}
+                        {taxRate > 0 && ` · ${taxRate}% imposto`}
                       </p>
+                      {taxRate > 0 && (
+                        <p className="text-xs text-emerald-500 mt-0.5">Bruto: {fmt(totalBruto)}</p>
+                      )}
                     </div>
-                    <span className="text-sm font-bold text-emerald-700">{fmt(total)}</span>
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-emerald-700">{fmt(total)}</span>
+                      {taxRate > 0 && <p className="text-xs text-emerald-500">líquido</p>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -123,8 +133,10 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
 
           {/* Total */}
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex justify-between items-center">
-            <span className="text-sm font-semibold">Total a Receber</span>
-            <span className="text-lg font-bold text-primary">{fmt(totalValue)}</span>
+            <span className="text-sm font-semibold">Total Líquido a Receber</span>
+            <span className="text-lg font-bold text-primary">
+              {fmt(receivablePreview.reduce((acc, r) => acc + r.total, 0))}
+            </span>
           </div>
         </div>
 
