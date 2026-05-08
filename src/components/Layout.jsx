@@ -51,7 +51,7 @@ export default function Layout() {
       </aside>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 flex">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 flex">
         {navItems.map(({ path, label, icon: Icon }) => (
           <Link
             key={path}
@@ -68,7 +68,7 @@ export default function Layout() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 pb-16 md:pb-0">
+      <main className="flex-1 sm:ml-64 pb-16 sm:pb-0">
         <Outlet />
       </main>
     </div>
