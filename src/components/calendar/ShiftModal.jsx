@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { format, addDays, addWeeks } from 'date-fns';
+import { format, addWeeks, eachWeekOfInterval, addMonths, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -31,15 +31,27 @@ export default function ShiftModal({ date, hospitals, onSave, onClose }) {
 
     const shifts = [];
     const base = { hospital_id: hospitalId, type: shiftType, shift_kind: shiftKind, status: 'scheduled' };
+    const startDate = new Date(date + 'T12:00:00');
 
-    const addShift = (d) => shifts.push({ ...base, date: d, valor: calcValor(hospital, d, shiftType, shiftKind) });
+    const addShift = (d) => {
+      const dateStr = format(d, 'yyyy-MM-dd');
+      shifts.push({ ...base, date: dateStr, valor: calcValor(hospital, dateStr, shiftType, shiftKind) });
+    };
 
-    addShift(date);
-
-    if (repeat === 'weekly') {
-      for (let i = 1; i <= 3; i++) addShift(format(addWeeks(new Date(date + 'T12:00:00'), i), 'yyyy-MM-dd'));
+    if (repeat === 'none') {
+      addShift(startDate);
     } else if (repeat === 'biweekly') {
-      addShift(format(addWeeks(new Date(date + 'T12:00:00'), 2), 'yyyy-MM-dd'));
+      // Apenas hoje + daqui 2 semanas
+      addShift(startDate);
+      addShift(addWeeks(startDate, 2));
+    } else if (repeat === 'weekly') {
+      // Semanal indefinido: gera 24 meses à frente
+      const endDate = addMonths(startDate, 24);
+      let current = startDate;
+      while (current <= endDate) {
+        addShift(current);
+        current = addWeeks(current, 1);
+      }
     }
 
     onSave(shifts);
@@ -97,8 +109,8 @@ export default function ShiftModal({ date, hospitals, onSave, onClose }) {
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Não repete (plantão único)</SelectItem>
-                <SelectItem value="biweekly">Quinzenal (+ 2 semanas)</SelectItem>
-                <SelectItem value="weekly">Semanal (+ 3 semanas)</SelectItem>
+                <SelectItem value="biweekly">Quinzenal (hoje + daqui 2 semanas)</SelectItem>
+                <SelectItem value="weekly">Semanal (todo semana, indefinidamente)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -113,8 +125,8 @@ export default function ShiftModal({ date, hospitals, onSave, onClose }) {
           {repeat !== 'none' && (
             <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
               {repeat === 'weekly'
-                ? 'Serão criados 4 plantões (hoje + 3 semanas seguintes)'
-                : 'Serão criados 2 plantões (hoje + daqui a 2 semanas)'}
+                ? 'Serão criados ~104 plantões (toda semana pelos próximos 2 anos). Cancele individualmente os que não ocorrerem.'
+                : 'Serão criados 2 plantões (hoje + daqui a 2 semanas).'}
             </p>
           )}
         </div>
