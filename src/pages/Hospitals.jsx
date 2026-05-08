@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Building2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Building2, ChevronDown, ChevronUp, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -22,7 +22,26 @@ export default function Hospitals() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [expanded, setExpanded] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const setEdit = (k, v) => setEditForm(p => ({ ...p, [k]: v }));
+
+  const startEdit = (h) => {
+    setEditingId(h.id);
+    setEditForm({
+      name: h.name || '',
+      sigla: h.sigla || '',
+      income_source_id: h.income_source_id || '',
+      payment_day: String(h.payment_day || 1),
+      payment_months_offset: String(h.payment_months_offset || 1),
+      valor_sd_semana: String(h.valor_sd_semana || ''),
+      valor_sn_semana: String(h.valor_sn_semana || ''),
+      valor_sd_fds: String(h.valor_sd_fds || ''),
+      valor_sn_fds: String(h.valor_sn_fds || ''),
+      valor_sobreaviso: String(h.valor_sobreaviso || ''),
+    });
+  };
 
   const { data: hospitals = [] } = useQuery({
     queryKey: ['hospitals'],
@@ -44,10 +63,36 @@ export default function Hospitals() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.Hospital.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hospitals'] });
+      setEditingId(null);
+      toast.success('Hospital atualizado!');
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Hospital.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hospitals'] }); toast.success('Removido'); },
   });
+
+  const handleUpdate = () => {
+    if (!editForm.name || !editForm.sigla) return toast.error('Nome e sigla são obrigatórios');
+    updateMutation.mutate({
+      id: editingId,
+      data: {
+        ...editForm,
+        payment_day: parseInt(editForm.payment_day) || 1,
+        payment_months_offset: parseInt(editForm.payment_months_offset) || 1,
+        valor_sd_semana: parseFloat(editForm.valor_sd_semana) || 0,
+        valor_sn_semana: parseFloat(editForm.valor_sn_semana) || 0,
+        valor_sd_fds: parseFloat(editForm.valor_sd_fds) || 0,
+        valor_sn_fds: parseFloat(editForm.valor_sn_fds) || 0,
+        valor_sobreaviso: parseFloat(editForm.valor_sobreaviso) || 0,
+      },
+    });
+  };
 
   const handleCreate = () => {
     if (!form.name || !form.sigla) return toast.error('Nome e sigla são obrigatórios');
@@ -166,6 +211,8 @@ export default function Hospitals() {
         {hospitals.map(h => {
           const pj = sources.find(s => s.id === h.income_source_id);
           const isExp = expanded === h.id;
+          const isEditing = editingId === h.id;
+
           return (
             <Card key={h.id} className="border-0 shadow-sm">
               <CardContent className="p-4">
@@ -187,6 +234,12 @@ export default function Hospitals() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost" size="icon" className="w-8 h-8"
+                      onClick={() => { if (isEditing) { setEditingId(null); } else { startEdit(h); setExpanded(null); } }}
+                    >
+                      {isEditing ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                    </Button>
                     <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setExpanded(isExp ? null : h.id)}>
                       {isExp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </Button>
@@ -196,7 +249,60 @@ export default function Hospitals() {
                   </div>
                 </div>
 
-                {isExp && (
+                {isEditing && (
+                  <div className="mt-4 pt-4 border-t border-border space-y-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2">
+                        <Label>Nome *</Label>
+                        <Input value={editForm.name} onChange={e => setEdit('name', e.target.value)} className="mt-1" />
+                      </div>
+                      <div>
+                        <Label>Sigla *</Label>
+                        <Input value={editForm.sigla} onChange={e => setEdit('sigla', e.target.value)} className="mt-1" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label>PJ de Recebimento</Label>
+                      <Select value={editForm.income_source_id} onValueChange={v => setEdit('income_source_id', v)}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a PJ..." /></SelectTrigger>
+                        <SelectContent>
+                          {pjSources.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Dia do pagamento</Label>
+                        <Input type="number" min="1" max="31" value={editForm.payment_day} onChange={e => setEdit('payment_day', e.target.value)} className="mt-1" />
+                      </div>
+                      <div>
+                        <Label>Meses após competência</Label>
+                        <Select value={editForm.payment_months_offset} onValueChange={v => setEdit('payment_months_offset', v)}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1 mês (mês seguinte)</SelectItem>
+                            <SelectItem value="2">2 meses</SelectItem>
+                            <SelectItem value="3">3 meses</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Valores dos Plantões</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><Label>SD Seg–Sex (R$)</Label><Input type="number" value={editForm.valor_sd_semana} onChange={e => setEdit('valor_sd_semana', e.target.value)} className="mt-1" /></div>
+                      <div><Label>SN Seg–Sex (R$)</Label><Input type="number" value={editForm.valor_sn_semana} onChange={e => setEdit('valor_sn_semana', e.target.value)} className="mt-1" /></div>
+                      <div><Label>SD Fim de Semana (R$)</Label><Input type="number" value={editForm.valor_sd_fds} onChange={e => setEdit('valor_sd_fds', e.target.value)} className="mt-1" /></div>
+                      <div><Label>SN Fim de Semana (R$)</Label><Input type="number" value={editForm.valor_sn_fds} onChange={e => setEdit('valor_sn_fds', e.target.value)} className="mt-1" /></div>
+                      <div><Label>Adicional Sobreaviso (R$)</Label><Input type="number" value={editForm.valor_sobreaviso} onChange={e => setEdit('valor_sobreaviso', e.target.value)} className="mt-1" /></div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button variant="outline" onClick={() => setEditingId(null)} className="flex-1">Cancelar</Button>
+                      <Button onClick={handleUpdate} disabled={updateMutation.isPending} className="flex-1">Salvar</Button>
+                    </div>
+                  </div>
+                )}
+
+                {!isEditing && isExp && (
                   <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-2 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">SD Seg–Sex</span><span className="font-medium">{fmt(h.valor_sd_semana)}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">SN Seg–Sex</span><span className="font-medium">{fmt(h.valor_sn_semana)}</span></div>
