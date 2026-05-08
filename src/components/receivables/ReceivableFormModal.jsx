@@ -54,6 +54,7 @@ export default function ReceivableFormModal({ incomeSources, onClose, onSaved })
             <Select value={form.income_source_id} onValueChange={handleSourceChange}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar (opcional)" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="google">🔵 Google</SelectItem>
                 {incomeSources.map(s => (
                   <SelectItem key={s.id} value={s.id}>{s.name} ({s.type.toUpperCase()})</SelectItem>
                 ))}

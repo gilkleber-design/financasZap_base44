@@ -4,8 +4,8 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2 } from 'lucide-react';
-import { format, isPast, isToday } from 'date-fns';
+import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import PayableFormModal from '@/components/payables/PayableFormModal';
@@ -27,6 +27,7 @@ const CATEGORY_LABELS = {
 
 export default function Payables() {
   const [showForm, setShowForm] = useState(false);
+  const [filterMonth, setFilterMonth] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: payables = [] } = useQuery({
@@ -50,7 +51,15 @@ export default function Payables() {
     return p.status;
   };
 
-  const totalPending = payables.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
+  const filtered = filterMonth
+    ? payables.filter(p => {
+        if (!p.due_date) return false;
+        const d = new Date(p.due_date + 'T12:00:00');
+        return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+      })
+    : payables;
+
+  const totalPending = filtered.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -58,7 +67,7 @@ export default function Payables() {
         <div>
           <h1 className="text-2xl font-sora font-bold">Contas a Pagar</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {payables.filter(p => p.status === 'pending').length} pendentes · {fmt(totalPending)} total
+            {filtered.filter(p => p.status === 'pending').length} pendentes · {fmt(totalPending)} total
           </p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -66,13 +75,38 @@ export default function Payables() {
         </Button>
       </div>
 
+      {/* Filtro de mês */}
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => setFilterMonth(filterMonth ? subMonths(filterMonth, 1) : subMonths(new Date(), 1))}>
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <Button
+          variant={filterMonth ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setFilterMonth(filterMonth ? null : new Date())}
+          className="min-w-[120px] text-sm capitalize"
+        >
+          {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Todos os meses'}
+        </Button>
+        {filterMonth && (
+          <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        )}
+        {filterMonth && (
+          <Button variant="ghost" size="sm" onClick={() => setFilterMonth(null)} className="text-muted-foreground text-xs">
+            Limpar
+          </Button>
+        )}
+      </div>
+
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">
           <div className="divide-y divide-border">
-            {payables.length === 0 && (
-              <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma conta cadastrada</p>
+            {filtered.length === 0 && (
+              <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma conta encontrada</p>
             )}
-            {payables.map(p => {
+            {filtered.map(p => {
               const status = getStatus(p);
               return (
                 <div key={p.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors">

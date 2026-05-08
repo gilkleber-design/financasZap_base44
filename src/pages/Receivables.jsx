@@ -4,8 +4,8 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2 } from 'lucide-react';
-import { format, isPast, isToday } from 'date-fns';
+import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import ReceivableFormModal from '@/components/receivables/ReceivableFormModal';
@@ -14,6 +14,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 
 export default function Receivables() {
   const [showForm, setShowForm] = useState(false);
+  const [filterMonth, setFilterMonth] = useState(null); // null = todos
   const queryClient = useQueryClient();
 
   const { data: receivables = [] } = useQuery({
@@ -36,13 +37,21 @@ export default function Receivables() {
     onSuccess: () => { queryClient.invalidateQueries(); toast.success('Removido'); },
   });
 
-  const totalPending = receivables.filter(r => r.status === 'pending').reduce((s, r) => s + (r.net_amount || r.amount), 0);
-
   const getStatus = (r) => {
     if (r.status === 'received') return 'received';
     if (r.due_date && isPast(new Date(r.due_date)) && !isToday(new Date(r.due_date))) return 'overdue';
     return r.status;
   };
+
+  const filtered = filterMonth
+    ? receivables.filter(r => {
+        if (!r.due_date) return false;
+        const d = new Date(r.due_date + 'T12:00:00');
+        return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+      })
+    : receivables;
+
+  const totalPending = filtered.filter(r => r.status === 'pending').reduce((s, r) => s + (r.net_amount || r.amount), 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -50,7 +59,7 @@ export default function Receivables() {
         <div>
           <h1 className="text-2xl font-sora font-bold">Contas a Receber</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {receivables.filter(r => r.status === 'pending').length} pendentes · {fmt(totalPending)} a receber
+            {filtered.filter(r => r.status === 'pending').length} pendentes · {fmt(totalPending)} a receber
           </p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -58,13 +67,38 @@ export default function Receivables() {
         </Button>
       </div>
 
+      {/* Filtro de mês */}
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => setFilterMonth(filterMonth ? subMonths(filterMonth, 1) : subMonths(new Date(), 1))}>
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <Button
+          variant={filterMonth ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setFilterMonth(filterMonth ? null : new Date())}
+          className="min-w-[120px] text-sm"
+        >
+          {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Todos os meses'}
+        </Button>
+        {filterMonth && (
+          <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        )}
+        {filterMonth && (
+          <Button variant="ghost" size="sm" onClick={() => setFilterMonth(null)} className="text-muted-foreground text-xs">
+            Limpar
+          </Button>
+        )}
+      </div>
+
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">
           <div className="divide-y divide-border">
-            {receivables.length === 0 && (
-              <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma conta cadastrada</p>
+            {filtered.length === 0 && (
+              <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma conta encontrada</p>
             )}
-            {receivables.map(r => {
+            {filtered.map(r => {
               const status = getStatus(r);
               const source = incomeSources.find(s => s.id === r.income_source_id);
               return (
