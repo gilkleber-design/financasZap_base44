@@ -13,6 +13,8 @@ import Receivables from '@/pages/Receivables';
 import Reports from '@/pages/Reports';
 import WhatsAppInput from '@/pages/WhatsAppInput';
 import Settings from '@/pages/Settings';
+import Hospitals from '@/pages/Hospitals';
+import CalendarPage from '@/pages/CalendarPage';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -44,6 +46,8 @@ const AuthenticatedApp = () => {
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/whatsapp" element={<WhatsAppInput />} />
         <Route path="/configuracoes" element={<Settings />} />
+        <Route path="/hospitais" element={<Hospitals />} />
+        <Route path="/calendario" element={<CalendarPage />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

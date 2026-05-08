@@ -1,0 +1,59 @@
+{
+  "name": "Shift",
+  "type": "object",
+  "properties": {
+    "hospital_id": {
+      "type": "string",
+      "description": "ID do hospital"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data do plant\u00e3o"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "SD",
+        "SN"
+      ],
+      "description": "Tipo: SD (diurno) ou SN (noturno)"
+    },
+    "shift_kind": {
+      "type": "string",
+      "enum": [
+        "regular",
+        "extra",
+        "sobreaviso"
+      ],
+      "default": "regular",
+      "description": "Natureza do plant\u00e3o"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "done",
+        "cancelled"
+      ],
+      "default": "scheduled",
+      "description": "Status do plant\u00e3o"
+    },
+    "valor": {
+      "type": "number",
+      "description": "Valor calculado do plant\u00e3o"
+    },
+    "receivable_id": {
+      "type": "string",
+      "description": "ID do Receivable gerado no fechamento"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "hospital_id",
+    "date",
+    "type"
+  ]
+}

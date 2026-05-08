@@ -1,0 +1,50 @@
+{
+  "name": "Hospital",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome do hospital/institui\u00e7\u00e3o"
+    },
+    "sigla": {
+      "type": "string",
+      "description": "Sigla (ex: HCB, HRAN)"
+    },
+    "income_source_id": {
+      "type": "string",
+      "description": "ID da PJ/fonte de renda que recebe por este hospital"
+    },
+    "valor_sd_semana": {
+      "type": "number",
+      "description": "Valor SD (diurno) segunda a sexta"
+    },
+    "valor_sn_semana": {
+      "type": "number",
+      "description": "Valor SN (noturno) segunda a sexta"
+    },
+    "valor_sd_fds": {
+      "type": "number",
+      "description": "Valor SD final de semana"
+    },
+    "valor_sn_fds": {
+      "type": "number",
+      "description": "Valor SN final de semana"
+    },
+    "valor_sobreaviso": {
+      "type": "number",
+      "description": "Adicional de sobreaviso"
+    },
+    "dias_atraso": {
+      "type": "number",
+      "description": "Dias de atraso esperado para pagamento (somado \u00e0 data do plant\u00e3o)"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "sigla"
+  ]
+}
