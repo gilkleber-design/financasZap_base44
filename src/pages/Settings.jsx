@@ -219,7 +219,10 @@ export default function Settings() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowAccountForm(false)} className="flex-1">Cancelar</Button>
-                  <Button size="sm" onClick={() => { if (!accountForm.name) return toast.error('Informe o nome'); createAccountMutation.mutate({ ...accountForm, active: true }); }} disabled={createAccountMutation.isPending} className="flex-1">Salvar</Button>
+                  <Button size="sm" onClick={() => {
+                    if (!accountForm.name) { toast.error('Informe o nome'); return; }
+                    createAccountMutation.mutate({ ...accountForm, active: true });
+                  }} disabled={createAccountMutation.isPending} className="flex-1">Salvar</Button>
                 </div>
               </div>
             )}
@@ -281,7 +284,10 @@ export default function Settings() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
-                  <Button size="sm" onClick={() => { if (!cardForm.name) return toast.error('Informe o nome'); createCardMutation.mutate({ ...cardForm, active: true }); }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
+                  <Button size="sm" onClick={() => {
+                    if (!cardForm.name) { toast.error('Informe o nome'); return; }
+                    createCardMutation.mutate({ ...cardForm, active: true });
+                  }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
                 </div>
               </div>
             )}
