@@ -2,17 +2,17 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { format, startOfMonth, addMonths } from 'date-fns';
+import { format, startOfMonth, addMonths, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-const kindLabel = { regular: 'Regular', extra: 'Extra', sobreaviso: 'Sobreaviso' };
+const kindLabel = { regular: '🫐 Regular', extra: '🍌 Extra', sobreaviso: '🍅 Sobreaviso' };
 const kindColor = {
   regular: 'bg-blue-100 text-blue-700',
   extra: 'bg-yellow-100 text-yellow-700',
-  sobreaviso: 'bg-orange-100 text-orange-700',
+  sobreaviso: 'bg-red-100 text-red-700',
 };
 
 export default function CloseMonthModal({ shifts, hospitals, sources, currentMonth, onClose, onConfirm }) {
@@ -26,31 +26,88 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   }));
 
   const doableShifts = shifts.filter(s => statuses[s.id] !== 'cancelled');
-  const totalValue = doableShifts.reduce((acc, s) => acc + (s.valor || 0), 0); // será recalculado por hospital com imposto no preview
 
-  // Agrupar por hospital para gerar um Receivable por hospital
+  // Agrupar shifts confirmados por hospital
   const byHospital = doableShifts.reduce((acc, s) => {
     if (!acc[s.hospital_id]) acc[s.hospital_id] = [];
     acc[s.hospital_id].push(s);
     return acc;
   }, {});
 
-  const receivablePreview = Object.entries(byHospital).map(([hid, hshifts]) => {
+  // Para cada hospital, calcular recebíveis que serão gerados
+  const receivablePreview = Object.entries(byHospital).flatMap(([hid, hshifts]) => {
     const hospital = hospitals.find(h => h.id === hid);
     const source = sources.find(s => s.id === hospital?.income_source_id);
-    const totalBruto = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
+    const isProducao = hospital?.remuneration_model === 'producao';
     const taxRate = source?.default_tax_rate || 0;
-    const total = taxRate > 0 ? totalBruto * (1 - taxRate / 100) : totalBruto;
-    // Due date = dia X do mês (competência + offset)
-    // Ex: dia 1, offset 2 → competência abril → 1º/junho
-    // Ex: dia 15, offset 1 → competência abril → 15/maio
+
     const refDate = currentMonth || new Date(hshifts[0].date + 'T12:00:00');
     const offset = hospital?.payment_months_offset ?? 1;
     const day = hospital?.payment_day || 1;
     const targetMonth = addMonths(startOfMonth(refDate), offset);
     const dueDate = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), day);
-    return { hospital, source, total, totalBruto, taxRate, dueDate, shifts: hshifts };
+
+    const monthLabel = format(refDate, 'MMMM/yyyy', { locale: ptBR });
+
+    if (isProducao) {
+      // Produção: um recebível por evento (shift)
+      return hshifts.map(s => {
+        const bruto = s.valor || 0;
+        const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
+        const eventDate = format(new Date(s.date + 'T12:00:00'), 'dd/MM/yyyy');
+        return {
+          hospital,
+          source,
+          total: liquido,
+          totalBruto: bruto,
+          taxRate,
+          dueDate,
+          shifts: [s],
+          label: `${hospital.sigla} — Evento ${eventDate}`,
+          isPdt: false,
+          isProducao: true,
+        };
+      });
+    } else {
+      // Plantão: soma todos os shifts do hospital
+      const totalBruto = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
+      const total = taxRate > 0 ? totalBruto * (1 - taxRate / 100) : totalBruto;
+      const result = [{
+        hospital,
+        source,
+        total,
+        totalBruto,
+        taxRate,
+        dueDate,
+        shifts: hshifts,
+        label: `${hospital.sigla} — Plantões ${monthLabel}`,
+        isPdt: false,
+        isProducao: false,
+      }];
+
+      // Se tem produtividade com data separada, adicionar registro PDT zerado
+      if (hospital?.has_productivity && hospital?.productivity_separate_date) {
+        const pdtDueDate = addDays(dueDate, 15);
+        result.push({
+          hospital,
+          source,
+          total: 0,
+          totalBruto: 0,
+          taxRate: 0,
+          dueDate: pdtDueDate,
+          shifts: hshifts,
+          label: `${hospital.sigla} PDT ${monthLabel}`,
+          isPdt: true,
+          isProducao: false,
+        });
+      }
+
+      return result;
+    }
   });
+
+  const grandTotal = receivablePreview.reduce((acc, r) => acc + r.total, 0);
+  const grandBruto = receivablePreview.reduce((acc, r) => acc + r.totalBruto, 0);
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -61,7 +118,7 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
 
         <div className="space-y-4 py-2">
           <p className="text-sm text-muted-foreground">
-            Revise os plantões abaixo. Clique em um para marcar como <strong>cancelado</strong> (não gerará recebível).
+            Revise os plantões. Clique para marcar como <strong>cancelado</strong> (não gerará recebível).
           </p>
 
           {/* Lista de plantões */}
@@ -73,14 +130,14 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
               const bruto = s.valor || 0;
               const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
               const cancelled = statuses[s.id] === 'cancelled';
+              const isProducao = hospital?.remuneration_model === 'producao';
+
               return (
                 <button
                   key={s.id}
                   onClick={() => toggle(s.id)}
                   className={`w-full text-left flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                    cancelled
-                      ? 'bg-muted/30 border-border opacity-50'
-                      : 'bg-card border-border hover:border-primary/30'
+                    cancelled ? 'bg-muted/30 border-border opacity-50' : 'bg-card border-border hover:border-primary/30'
                   }`}
                 >
                   <div className="flex-shrink-0">
@@ -91,8 +148,8 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{hospital?.sigla}</span>
-                      <Badge className={`text-xs py-0 h-4 px-1.5 border-0 ${kindColor[s.shift_kind]}`}>
-                        {s.type} {kindLabel[s.shift_kind]}
+                      <Badge className={`text-xs py-0 h-4 px-1.5 border-0 ${kindColor[s.shift_kind] || 'bg-gray-100 text-gray-600'}`}>
+                        {isProducao ? 'Produção' : `${s.type} ${kindLabel[s.shift_kind]}`}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -119,22 +176,36 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
               <p className="text-sm text-muted-foreground text-center py-3">Nenhum plantão confirmado.</p>
             ) : (
               <div className="space-y-2">
-                {receivablePreview.map(({ hospital, source, total, totalBruto, taxRate, dueDate }) => (
-                  <div key={hospital?.id} className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                {receivablePreview.map((r, i) => (
+                  <div
+                    key={i}
+                    className={`border rounded-xl p-3 flex items-center justify-between gap-3 ${
+                      r.isPdt
+                        ? 'bg-blue-50 border-blue-200'
+                        : r.isProducao
+                        ? 'bg-purple-50 border-purple-200'
+                        : 'bg-emerald-50 border-emerald-200'
+                    }`}
+                  >
                     <div>
-                      <p className="text-sm font-semibold text-emerald-800">{hospital?.name}</p>
-                      <p className="text-xs text-emerald-600 mt-0.5">
-                        Vencimento: {format(dueDate, 'dd/MM/yyyy')}
-                        {source && ` · PJ: ${source.name}`}
-                        {taxRate > 0 && ` · ${taxRate}% imposto`}
+                      <p className={`text-sm font-semibold ${r.isPdt ? 'text-blue-800' : r.isProducao ? 'text-purple-800' : 'text-emerald-800'}`}>
+                        {r.label}
+                        {r.isPdt && <span className="ml-2 text-xs font-normal text-blue-600">(PDT — aguarda valor)</span>}
+                      </p>
+                      <p className={`text-xs mt-0.5 ${r.isPdt ? 'text-blue-600' : r.isProducao ? 'text-purple-600' : 'text-emerald-600'}`}>
+                        Vencimento: {format(r.dueDate, 'dd/MM/yyyy')}
+                        {r.source && ` · PJ: ${r.source.name}`}
+                        {r.taxRate > 0 && ` · ${r.taxRate}% imposto`}
+                        {r.isPdt && ' (+15 dias do plantão)'}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-base font-bold text-emerald-700">{fmt(total)}</p>
-                      {taxRate > 0
-                        ? <p className="text-xs text-emerald-500">{fmt(totalBruto)} bruto</p>
-                        : <p className="text-xs text-emerald-500">líquido</p>
-                      }
+                      <p className={`text-base font-bold ${r.isPdt ? 'text-blue-400' : r.isProducao ? 'text-purple-700' : 'text-emerald-700'}`}>
+                        {r.isPdt ? 'R$ —' : fmt(r.total)}
+                      </p>
+                      {r.taxRate > 0 && !r.isPdt && (
+                        <p className={`text-xs ${r.isProducao ? 'text-purple-500' : 'text-emerald-500'}`}>{fmt(r.totalBruto)} bruto</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -146,13 +217,9 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex justify-between items-center">
             <span className="text-sm font-semibold">Total a Receber</span>
             <div className="text-right">
-              <p className="text-xl font-bold text-primary">
-                {fmt(receivablePreview.reduce((acc, r) => acc + r.total, 0))}
-              </p>
+              <p className="text-xl font-bold text-primary">{fmt(grandTotal)}</p>
               {receivablePreview.some(r => r.taxRate > 0) && (
-                <p className="text-xs text-muted-foreground">
-                  {fmt(receivablePreview.reduce((acc, r) => acc + r.totalBruto, 0))} bruto
-                </p>
+                <p className="text-xs text-muted-foreground">{fmt(grandBruto)} bruto</p>
               )}
             </div>
           </div>

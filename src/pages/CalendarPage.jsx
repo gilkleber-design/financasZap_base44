@@ -13,12 +13,14 @@ import ShiftDetailModal from '@/components/calendar/ShiftDetailModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+// Mirtilo=Azul, Banana=Amarelo, Tomate=Vermelho, Grafite=Cinza
 const kindStyle = {
   regular: 'bg-blue-100 text-blue-800 border-blue-200',
   extra: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  sobreaviso: 'bg-orange-100 text-orange-800 border-orange-200',
-  cancelled: 'bg-gray-100 text-gray-400 border-gray-200 line-through',
-  passed: 'bg-gray-100 text-gray-400 border-gray-200 italic',
+  sobreaviso: 'bg-red-100 text-red-800 border-red-200',
+  cancelled: 'bg-gray-200 text-gray-500 border-gray-300 line-through',
+  passed: 'bg-gray-200 text-gray-500 border-gray-300 italic',
+  producao: 'bg-purple-100 text-purple-800 border-purple-200',
 };
 
 export default function CalendarPage() {
@@ -211,13 +213,18 @@ export default function CalendarPage() {
                   {dayShifts.slice(0, 3).map(s => {
                     const h = hospitals.find(h => h.id === s.hospital_id);
                     const styleKey = s.status === 'cancelled' ? 'cancelled' : s.status === 'passed' ? 'passed' : s.shift_kind;
+                    const hospital = h;
+                    const isProducao = hospital?.remuneration_model === 'producao';
+                    const displayStyle = isProducao && styleKey !== 'cancelled' && styleKey !== 'passed'
+                      ? kindStyle.producao
+                      : kindStyle[styleKey];
                     return (
                       <div
                         key={s.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
-                        className={`text-xs px-1.5 py-0.5 rounded border truncate cursor-pointer hover:opacity-80 ${kindStyle[styleKey]}`}
+                        className={`text-xs px-1.5 py-0.5 rounded border truncate cursor-pointer hover:opacity-80 ${displayStyle}`}
                       >
-                        {h?.sigla} {s.type}
+                        {h?.sigla} {isProducao ? '📊' : s.type}
                         {s.status === 'passed' && ' ↗'}
                       </div>
                     );
@@ -234,16 +241,18 @@ export default function CalendarPage() {
 
       {/* Legenda */}
       <div className="flex flex-wrap gap-3 text-xs">
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-200 border border-blue-300" /><span>Regular</span></div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-yellow-200 border border-yellow-300" /><span>Extra</span></div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-orange-200 border border-orange-300" /><span>Sobreaviso</span></div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-200 border border-gray-300" /><span>Cancelado / Passado</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-200 border border-blue-300" /><span>🫐 Regular</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-yellow-200 border border-yellow-300" /><span>🍌 Extra</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-200 border border-red-300" /><span>🍅 Sobreaviso</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-purple-200 border border-purple-300" /><span>📊 Produção</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300 border border-gray-400" /><span>🩶 Cancelado / Passado</span></div>
       </div>
 
       {selectedDate && (
         <ShiftModal
           date={selectedDate}
           hospitals={hospitals}
+          sources={sources}
           existingShifts={shifts.filter(s => s.date === selectedDate)}
           onSave={handleSaveShifts}
           onCancelShift={handleCancelShift}
@@ -255,6 +264,7 @@ export default function CalendarPage() {
         <ShiftDetailModal
           shift={selectedShift}
           hospital={hospitals.find(h => h.id === selectedShift.hospital_id)}
+          source={sources.find(s => s.id === hospitals.find(h => h.id === selectedShift.hospital_id)?.income_source_id)}
           onClose={() => setSelectedShift(null)}
           onPass={handlePassShift}
           onDeleteFromHere={handleDeleteFromHere}
