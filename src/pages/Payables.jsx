@@ -9,6 +9,7 @@ import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import PayableFormModal from '@/components/payables/PayableFormModal';
+import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -27,6 +28,7 @@ const CATEGORY_LABELS = {
 
 export default function Payables() {
   const [showForm, setShowForm] = useState(false);
+  const [confirmingPayable, setConfirmingPayable] = useState(null);
   const [filterMonth, setFilterMonth] = useState(null);
   const [filterBy, setFilterBy] = useState('due_date');
   const queryClient = useQueryClient();
@@ -34,11 +36,6 @@ export default function Payables() {
   const { data: payables = [] } = useQuery({
     queryKey: ['payables'],
     queryFn: () => base44.entities.Payable.list('-due_date', 200),
-  });
-
-  const markPaidMutation = useMutation({
-    mutationFn: (id) => base44.entities.Payable.update(id, { status: 'paid' }),
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Marcado como pago!'); },
   });
 
   const deleteMutation = useMutation({
@@ -161,7 +158,7 @@ export default function Payables() {
                     </span>
                   </div>
                   {status !== 'paid' && (
-                    <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => markPaidMutation.mutate(p.id)}>
+                    <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingPayable(p)}>
                       <CheckCircle2 className="w-4 h-4" />
                     </Button>
                   )}
@@ -177,6 +174,13 @@ export default function Payables() {
 
       {showForm && (
         <PayableFormModal onClose={() => setShowForm(false)} onSaved={() => { queryClient.invalidateQueries(); setShowForm(false); }} />
+      )}
+
+      {confirmingPayable && (
+        <ConfirmPayableModal
+          payable={confirmingPayable}
+          onClose={() => { setConfirmingPayable(null); queryClient.invalidateQueries(); }}
+        />
       )}
     </div>
   );
