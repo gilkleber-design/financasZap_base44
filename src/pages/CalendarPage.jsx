@@ -198,15 +198,6 @@ export default function CalendarPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <span className="text-sm font-semibold min-w-[120px] text-center capitalize">
-            {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-          </span>
-          <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
           {monthShifts.some(s => s.status === 'done' && s.receivable_id) && (
             <Button
               variant="outline"
@@ -224,6 +215,17 @@ export default function CalendarPage() {
             <Lock className="w-4 h-4 mr-2" />
             Fechar Mês
           </Button>
+          <div className="flex items-center gap-1 ml-2">
+            <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-semibold min-w-[120px] text-center capitalize">
+              {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+            </span>
+            <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
