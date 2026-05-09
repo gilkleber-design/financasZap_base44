@@ -50,18 +50,19 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
     const monthLabel = format(refDate, 'MMMM/yyyy', { locale: ptBR });
 
     if (isProducao) {
-      // Produção: um recebível por evento (shift)
+      // Produção: um recebível por evento, vencimento = data do evento (D+0)
       return hshifts.map(s => {
         const bruto = s.valor || 0;
         const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
         const eventDate = format(new Date(s.date + 'T12:00:00'), 'dd/MM/yyyy');
+        const eventDueDate = new Date(s.date + 'T12:00:00');
         return {
           hospital,
           source,
           total: liquido,
           totalBruto: bruto,
           taxRate,
-          dueDate,
+          dueDate: eventDueDate,
           shifts: [s],
           label: `${hospital.sigla} — Evento ${eventDate}`,
           isPdt: false,

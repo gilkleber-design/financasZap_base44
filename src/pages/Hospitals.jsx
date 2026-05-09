@@ -81,25 +81,27 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
         </Select>
       </div>
 
-      {/* Pagamento */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Dia do pagamento</Label>
-          <Input type="number" min="1" max="31" value={form.payment_day} onChange={e => set('payment_day', e.target.value)} className="mt-1" placeholder="Ex: 1, 10, 15" />
+      {/* Pagamento — apenas para Plantão */}
+      {isPlantao && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Dia do pagamento</Label>
+            <Input type="number" min="1" max="31" value={form.payment_day} onChange={e => set('payment_day', e.target.value)} className="mt-1" placeholder="Ex: 1, 10, 15" />
+          </div>
+          <div>
+            <Label>Meses após competência</Label>
+            <Select value={String(form.payment_months_offset)} onValueChange={v => set('payment_months_offset', v)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">0 (mês atual)</SelectItem>
+                <SelectItem value="1">1 mês (mês seguinte)</SelectItem>
+                <SelectItem value="2">2 meses</SelectItem>
+                <SelectItem value="3">3 meses</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div>
-          <Label>Meses após competência</Label>
-          <Select value={String(form.payment_months_offset)} onValueChange={v => set('payment_months_offset', v)}>
-            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="0">0 (mês atual)</SelectItem>
-              <SelectItem value="1">1 mês (mês seguinte)</SelectItem>
-              <SelectItem value="2">2 meses</SelectItem>
-              <SelectItem value="3">3 meses</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      )}
 
       {/* Campos exclusivos de Plantão */}
       {isPlantao && (
