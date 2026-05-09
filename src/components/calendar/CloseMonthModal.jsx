@@ -159,7 +159,76 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
           <DialogTitle>Fechamento do Mês</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2 flex flex-col">
+          {/* Seção de receitas extras — sempre visível */}
+          <div className="border border-border rounded-xl p-4 bg-card space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Receitas Extras
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowExtraForm(!showExtraForm)}
+                className="text-xs h-6"
+              >
+                {showExtraForm ? '✕' : '+ Adicionar'}
+              </Button>
+            </div>
+
+            {showExtraForm && (
+              <div className="bg-accent/30 border border-border rounded-xl p-3 space-y-3">
+                <input
+                  type="text"
+                  placeholder="Descrição (ex: Bolsa Internato, Salário Professor)"
+                  value={extraForm.description}
+                  onChange={e => setExtraForm({ ...extraForm, description: e.target.value })}
+                  className="w-full px-2 py-1.5 text-sm rounded border border-input bg-background"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="number"
+                    placeholder="Valor"
+                    value={extraForm.amount}
+                    onChange={e => setExtraForm({ ...extraForm, amount: e.target.value })}
+                    className="px-2 py-1.5 text-sm rounded border border-input bg-background"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Imposto %"
+                    value={extraForm.taxRate}
+                    onChange={e => setExtraForm({ ...extraForm, taxRate: e.target.value })}
+                    className="px-2 py-1.5 text-sm rounded border border-input bg-background"
+                  />
+                  <Button size="sm" onClick={addExtraIncome} className="h-8">Adicionar</Button>
+                </div>
+              </div>
+            )}
+
+            {extraIncomes.length > 0 && (
+              <div className="space-y-2">
+                {extraIncomes.map((ei, idx) => (
+                  <div key={idx} className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-violet-800">{ei.description}</p>
+                      <p className="text-xs text-violet-600">{ei.taxRate > 0 ? `${ei.taxRate}% imposto` : 'Sem imposto'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-violet-700">{fmt(ei.netAmount)}</p>
+                      {ei.taxRate > 0 && <p className="text-xs text-violet-500">{fmt(ei.amount)} bruto</p>}
+                    </div>
+                    <button
+                      onClick={() => removeExtraIncome(idx)}
+                      className="text-red-500 hover:text-red-700 text-xs underline"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <p className="text-sm text-muted-foreground">
             Revise os plantões. Clique para marcar como <strong>cancelado</strong> (não gerará recebível).
           </p>
@@ -208,75 +277,6 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                 </button>
               );
             })}
-          </div>
-
-          {/* Seção de receitas extras */}
-          <div className="border-t border-border pt-4">
-           <div className="flex items-center justify-between mb-3">
-             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-               Receitas Extras
-             </p>
-             <Button
-               variant="ghost"
-               size="sm"
-               onClick={() => setShowExtraForm(!showExtraForm)}
-               className="text-xs h-6"
-             >
-               {showExtraForm ? '✕' : '+ Adicionar'}
-             </Button>
-           </div>
-
-           {showExtraForm && (
-             <div className="bg-accent/30 border border-border rounded-xl p-3 space-y-3 mb-3">
-               <input
-                 type="text"
-                 placeholder="Descrição (ex: Bolsa Internato)"
-                 value={extraForm.description}
-                 onChange={e => setExtraForm({ ...extraForm, description: e.target.value })}
-                 className="w-full px-2 py-1.5 text-sm rounded border border-input bg-background"
-               />
-               <div className="grid grid-cols-3 gap-2">
-                 <input
-                   type="number"
-                   placeholder="Valor"
-                   value={extraForm.amount}
-                   onChange={e => setExtraForm({ ...extraForm, amount: e.target.value })}
-                   className="px-2 py-1.5 text-sm rounded border border-input bg-background"
-                 />
-                 <input
-                   type="number"
-                   placeholder="Imposto %"
-                   value={extraForm.taxRate}
-                   onChange={e => setExtraForm({ ...extraForm, taxRate: e.target.value })}
-                   className="px-2 py-1.5 text-sm rounded border border-input bg-background"
-                 />
-                 <Button size="sm" onClick={addExtraIncome} className="h-8">Adicionar</Button>
-               </div>
-             </div>
-           )}
-
-           {extraIncomes.length > 0 && (
-             <div className="space-y-2 mb-3">
-               {extraIncomes.map((ei, idx) => (
-                 <div key={idx} className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center justify-between gap-3">
-                   <div>
-                     <p className="text-sm font-semibold text-violet-800">{ei.description}</p>
-                     <p className="text-xs text-violet-600">{ei.taxRate > 0 ? `${ei.taxRate}% imposto` : 'Sem imposto'}</p>
-                   </div>
-                   <div className="text-right">
-                     <p className="text-sm font-bold text-violet-700">{fmt(ei.netAmount)}</p>
-                     {ei.taxRate > 0 && <p className="text-xs text-violet-500">{fmt(ei.amount)} bruto</p>}
-                   </div>
-                   <button
-                     onClick={() => removeExtraIncome(idx)}
-                     className="text-red-500 hover:text-red-700 text-xs underline"
-                   >
-                     Remover
-                   </button>
-                 </div>
-               ))}
-             </div>
-           )}
           </div>
 
           {/* Preview de recebíveis */}
