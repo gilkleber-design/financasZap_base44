@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
+import ConfirmReceivableModal from '@/components/dashboard/ConfirmReceivableModal';
 import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -14,6 +15,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 
 export default function Receivables() {
   const [showForm, setShowForm] = useState(false);
+  const [confirmingReceivable, setConfirmingReceivable] = useState(null);
   const [filterMonth, setFilterMonth] = useState(null); // null = todos
   const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' ou 'competencia'
   const queryClient = useQueryClient();
@@ -28,10 +30,7 @@ export default function Receivables() {
     queryFn: () => base44.entities.IncomeSource.list(),
   });
 
-  const markReceivedMutation = useMutation({
-    mutationFn: (id) => base44.entities.Receivable.update(id, { status: 'received' }),
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Marcado como recebido!'); },
-  });
+
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Receivable.delete(id),
@@ -166,7 +165,7 @@ export default function Receivables() {
                     </span>
                   </div>
                   {status !== 'received' && (
-                    <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => markReceivedMutation.mutate(r.id)}>
+                    <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingReceivable(r)}>
                       <CheckCircle2 className="w-4 h-4" />
                     </Button>
                   )}
@@ -190,6 +189,16 @@ export default function Receivables() {
           incomeSources={incomeSources}
           onClose={() => setShowForm(false)}
           onSaved={() => { queryClient.invalidateQueries(); setShowForm(false); }}
+        />
+      )}
+
+      {confirmingReceivable && (
+        <ConfirmReceivableModal
+          receivable={confirmingReceivable}
+          onClose={() => {
+            setConfirmingReceivable(null);
+            queryClient.invalidateQueries();
+          }}
         />
       )}
     </div>
