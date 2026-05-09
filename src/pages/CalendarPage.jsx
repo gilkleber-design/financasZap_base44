@@ -124,7 +124,7 @@ export default function CalendarPage() {
       ));
       // Deleta os recebíveis gerados (em paralelo)
       await Promise.all(receivableIds.map(id => base44.entities.Receivable.delete(id)));
-      queryClient.invalidateQueries();
+      await queryClient.invalidateQueries();
       toast.success(`Mês reaberto! ${closedShifts.length} plantão(s) revertido(s) e ${receivableIds.length} conta(s) a receber removida(s).`);
     } finally {
       setReopening(false);
