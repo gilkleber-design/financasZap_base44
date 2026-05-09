@@ -14,8 +14,15 @@ function calcValor(hospital, date, shiftType, shiftKind) {
   if (shiftType === 'sobreaviso') return hospital.valor_sobreaviso || 0;
   const dow = new Date(date + 'T12:00:00').getDay();
   const isFds = dow === 0 || dow === 6;
-  if (shiftType === 'SD') return isFds ? (hospital.valor_sd_fds || 0) : (hospital.valor_sd_semana || 0);
-  return isFds ? (hospital.valor_sn_fds || 0) : (hospital.valor_sn_semana || 0);
+  let valor = 0;
+  if (shiftType === 'SD') valor = isFds ? (hospital.valor_sd_fds || 0) : (hospital.valor_sd_semana || 0);
+  else if (shiftType === 'SN') valor = isFds ? (hospital.valor_sn_fds || 0) : (hospital.valor_sn_semana || 0);
+  else if (shiftType === 'turno') {
+    const baseSd = isFds ? (hospital.valor_sd_fds || 0) : (hospital.valor_sd_semana || 0);
+    const baseSn = isFds ? (hospital.valor_sn_fds || 0) : (hospital.valor_sn_semana || 0);
+    valor = (baseSd + baseSn) / 2; // Média entre SD e SN
+  }
+  return valor;
 }
 
 function calcLiquido(bruto, source) {
@@ -32,7 +39,7 @@ const kindStyle = {
 
 export default function ShiftModal({ date, hospitals, sources = [], existingShifts = [], onSave, onClose, onCancelShift }) {
   const [hospitalId, setHospitalId] = useState('');
-  const [shiftType, setShiftType] = useState('SD'); // SD | SN | sobreaviso
+  const [shiftType, setShiftType] = useState('SD'); // SD | SN | sobreaviso | turno
   const [shiftKind, setShiftKind] = useState('regular'); // regular | extra | avista
   const [repeat, setRepeat] = useState('none');
   const [producaoValor, setProducaoValor] = useState('');
@@ -47,7 +54,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
 
   // Para salvar na entidade: shift_kind vira 'sobreaviso' quando tipo for sobreaviso
   const effectiveKind = isSobreaviso ? 'sobreaviso' : shiftKind;
-  const effectiveType = isSobreaviso ? 'SD' : shiftType; // tipo guardado na entidade (SD/SN), sobreaviso vai no kind
+  const effectiveType = isSobreaviso ? 'SD' : (shiftType === 'turno' ? 'SD' : shiftType); // tipo guardado na entidade (SD/SN), sobreaviso/turno vão no kind
 
   const bruto = isProducao
     ? (parseFloat(producaoValor) || 0)
@@ -76,7 +83,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
       shifts.push({ ...base, date: dateStr, valor: v, ...(notes ? { notes } : {}) });
     };
 
-    if (repeat === 'none' || isAvista || isSobreaviso) {
+    if (repeat === 'none' || isAvista || isSobreaviso || shiftType === 'turno') {
       addShift(startDate);
     } else if (repeat === 'biweekly') {
       const endDate = addMonths(startDate, 24);
@@ -141,21 +148,22 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
           </div>
 
           {hospital && (
-            <div className="grid grid-cols-2 gap-3">
-              {/* Tipo: SD / SN / Sobreaviso */}
-              {!isProducao && (
-                <div>
-                  <Label>Tipo</Label>
-                  <Select value={shiftType} onValueChange={v => { setShiftType(v); if (v === 'sobreaviso') setShiftKind('regular'); }}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="SD">SD (Diurno)</SelectItem>
-                      <SelectItem value="SN">SN (Noturno)</SelectItem>
-                      <SelectItem value="sobreaviso">🍅 Sobreaviso</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+           <div className="grid grid-cols-2 gap-3">
+             {/* Tipo: SD / SN / Sobreaviso / Turno */}
+             {!isProducao && (
+               <div>
+                 <Label>Tipo</Label>
+                 <Select value={shiftType} onValueChange={v => { setShiftType(v); if (v === 'sobreaviso') setShiftKind('regular'); }}>
+                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="SD">SD (Diurno)</SelectItem>
+                     <SelectItem value="SN">SN (Noturno)</SelectItem>
+                     <SelectItem value="turno">🔄 Turno (Meio período)</SelectItem>
+                     <SelectItem value="sobreaviso">🍅 Sobreaviso</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
+             )}
 
               {/* Natureza: Regular / Extra / À Vista */}
               <div className={isProducao ? 'col-span-2' : ''}>
