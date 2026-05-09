@@ -24,7 +24,8 @@
       "enum": [
         "regular",
         "extra",
-        "sobreaviso"
+        "sobreaviso",
+        "avista"
       ],
       "default": "regular",
       "description": "Natureza do plant\u00e3o"

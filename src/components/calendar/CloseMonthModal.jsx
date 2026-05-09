@@ -22,21 +22,21 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   const [statuses, setStatuses] = useState(() =>
     Object.fromEntries(shifts.map(s => [
       s.id,
-      (s.status === 'cancelled' || s.status === 'passed') ? s.status : 'done'
+      (s.status === 'cancelled' || s.status === 'passed' || s.shift_kind === 'avista') ? s.status : 'done'
     ]))
   );
 
   const toggle = (id) => {
     const shift = shifts.find(s => s.id === id);
-    // Não permite alterar plantões que já eram passed antes do fechamento
-    if (shift?.status === 'passed') return;
+    // Não permite alterar plantões que já eram passed/avista antes do fechamento
+    if (shift?.status === 'passed' || shift?.shift_kind === 'avista') return;
     setStatuses(prev => ({
       ...prev,
       [id]: prev[id] === 'cancelled' ? 'done' : 'cancelled',
     }));
   };
 
-  const doableShifts = shifts.filter(s => statuses[s.id] === 'done');
+  const doableShifts = shifts.filter(s => s.shift_kind !== 'avista' && statuses[s.id] === 'done');
 
   // Agrupar shifts confirmados por hospital
   const byHospital = doableShifts.reduce((acc, s) => {
@@ -133,9 +133,9 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
             Revise os plantões. Clique para marcar como <strong>cancelado</strong> (não gerará recebível).
           </p>
 
-          {/* Lista de plantões */}
+          {/* Lista de plantões — excluindo os "à vista" que já têm recebível próprio */}
           <div className="space-y-2">
-            {shifts.map(s => {
+            {shifts.filter(s => s.shift_kind !== 'avista').map(s => {
               const hospital = hospitals.find(h => h.id === s.hospital_id);
               const source = sources.find(src => src.id === hospital?.income_source_id);
               const taxRate = source?.default_tax_rate || 0;

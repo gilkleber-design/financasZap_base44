@@ -23,14 +23,15 @@ function calcLiquido(bruto, source) {
   return taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
 }
 
-// Cores por natureza (Mirtilo/Banana/Tomate/Grafite)
+// Cores por natureza (Mirtilo/Banana/Tomate/Grafite/Verde)
 const kindStyle = {
   regular: 'border-blue-300 bg-blue-50 text-blue-800',
   extra: 'border-yellow-300 bg-yellow-50 text-yellow-800',
   sobreaviso: 'border-red-300 bg-red-50 text-red-800',
+  avista: 'border-green-300 bg-green-50 text-green-800',
 };
 
-const kindLabel = { regular: '🫐 Regular', extra: '🍌 Extra', sobreaviso: '🍅 Sobreaviso' };
+const kindLabel = { regular: '🫐 Regular', extra: '🍌 Extra', sobreaviso: '🍅 Sobreaviso', avista: '💵 À Vista' };
 
 export default function ShiftModal({ date, hospitals, sources = [], existingShifts = [], onSave, onClose, onCancelShift }) {
   const [hospitalId, setHospitalId] = useState('');
@@ -38,6 +39,8 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
   const [shiftKind, setShiftKind] = useState('regular');
   const [repeat, setRepeat] = useState('none');
   const [producaoValor, setProducaoValor] = useState('');
+
+  const isAvista = shiftKind === 'avista';
 
   const hospital = hospitals.find(h => h.id === hospitalId);
   const source = hospital ? sources.find(s => s.id === hospital.income_source_id) : null;
@@ -60,7 +63,8 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
       hospital_id: hospitalId,
       type: shiftType,
       shift_kind: shiftKind,
-      status: 'scheduled',
+      // À vista: já nasce como done; demais: scheduled
+      status: isAvista ? 'done' : 'scheduled',
     };
     const startDate = new Date(date + 'T12:00:00');
 
@@ -70,7 +74,8 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
       shifts.push({ ...base, date: dateStr, valor: v });
     };
 
-    if (repeat === 'none') {
+    // À vista não permite repetição
+    if (repeat === 'none' || isAvista) {
       addShift(startDate);
     } else if (repeat === 'biweekly') {
       const endDate = addMonths(startDate, 24);
@@ -82,7 +87,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
       while (current <= endDate) { addShift(current); current = addWeeks(current, 1); }
     }
 
-    onSave(shifts);
+    onSave(shifts, { isAvista, hospital, source, bruto, liquido, taxRate, date });
   };
 
   return (
@@ -157,6 +162,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
                     <SelectItem value="regular">🫐 Regular</SelectItem>
                     <SelectItem value="extra">🍌 Extra</SelectItem>
                     <SelectItem value="sobreaviso">🍅 Sobreaviso</SelectItem>
+                    <SelectItem value="avista">💵 À Vista</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -177,7 +183,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
             </div>
           )}
 
-          {!isProducao && hospital && (
+          {!isProducao && !isAvista && hospital && (
             <div>
               <Label>Repetição</Label>
               <Select value={repeat} onValueChange={setRepeat}>
@@ -188,6 +194,12 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
                   <SelectItem value="weekly">Semanal (todo semana, indefinidamente)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {isAvista && hospital && (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-xs text-green-700">
+              💵 Plantão à vista: um recebível será gerado imediatamente com vencimento no dia do plantão. Ele <strong>não entra</strong> no fechamento do mês.
             </div>
           )}
 

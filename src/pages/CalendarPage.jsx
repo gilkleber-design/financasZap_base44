@@ -13,11 +13,12 @@ import ShiftDetailModal from '@/components/calendar/ShiftDetailModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-// Mirtilo=Azul, Banana=Amarelo, Tomate=Vermelho, Grafite=Cinza
+// Mirtilo=Azul, Banana=Amarelo, Tomate=Vermelho, Grafite=Cinza, Verde=À Vista
 const kindStyle = {
   regular: 'bg-blue-100 text-blue-800 border-blue-200',
   extra: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   sobreaviso: 'bg-red-100 text-red-800 border-red-200',
+  avista: 'bg-green-100 text-green-800 border-green-200',
   cancelled: 'bg-gray-200 text-gray-500 border-gray-300 line-through',
   passed: 'bg-gray-200 text-gray-500 border-gray-300 italic',
   producao: 'bg-purple-100 text-purple-800 border-purple-200',
@@ -74,8 +75,31 @@ export default function CalendarPage() {
   const monthShifts = shifts.filter(s => s.date >= monthStart && s.date <= monthEnd);
   const totalMonth = monthShifts.filter(s => s.status !== 'cancelled').reduce((acc, s) => acc + (s.valor || 0), 0);
 
-  const handleSaveShifts = (newShifts) => {
-    createShiftsMutation.mutate(newShifts);
+  const handleSaveShifts = async (newShifts, meta) => {
+    if (meta?.isAvista && newShifts.length === 1) {
+      // Cria o shift primeiro, depois gera o recebível e vincula
+      const [shiftData] = newShifts;
+      const shift = await base44.entities.Shift.create(shiftData);
+      const { hospital, source, bruto, liquido, taxRate, date } = meta;
+      const monthLabel = format(new Date(date + 'T12:00:00'), 'MMMM/yyyy', { locale: ptBR });
+      const rec = await base44.entities.Receivable.create({
+        description: `${hospital.sigla} — À Vista ${format(new Date(date + 'T12:00:00'), 'dd/MM/yyyy')}`,
+        amount: bruto,
+        net_amount: liquido,
+        due_date: date,
+        competencia: format(startOfMonth(new Date(date + 'T12:00:00')), 'yyyy-MM-dd'),
+        income_source_id: hospital.income_source_id || '',
+        tax_rate: taxRate || undefined,
+        status: 'pending',
+        notes: `Plantão à vista`,
+      });
+      await base44.entities.Shift.update(shift.id, { receivable_id: rec.id });
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['receivables'] });
+      toast.success('Plantão à vista criado! Conta a receber gerada.');
+    } else {
+      createShiftsMutation.mutate(newShifts);
+    }
     setSelectedDate(null);
   };
 
@@ -273,7 +297,10 @@ export default function CalendarPage() {
                     const styleKey = s.status === 'cancelled' ? 'cancelled' : s.status === 'passed' ? 'passed' : s.shift_kind;
                     const hospital = h;
                     const isProducao = hospital?.remuneration_model === 'producao';
-                    const displayStyle = isProducao && styleKey !== 'cancelled' && styleKey !== 'passed'
+                    const isAvista = s.shift_kind === 'avista';
+                    const displayStyle = isAvista && styleKey !== 'cancelled'
+                      ? kindStyle.avista
+                      : isProducao && styleKey !== 'cancelled' && styleKey !== 'passed'
                       ? kindStyle.producao
                       : kindStyle[styleKey];
                     return (
@@ -282,7 +309,7 @@ export default function CalendarPage() {
                         onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
                         className={`text-xs px-1.5 py-0.5 rounded border truncate cursor-pointer hover:opacity-80 ${displayStyle}`}
                       >
-                        {h?.sigla} {isProducao ? '📊' : s.type}
+                        {h?.sigla} {isAvista ? '💵' : isProducao ? '📊' : s.type}
                         {s.status === 'passed' && ' ↗'}
                       </div>
                     );
@@ -303,6 +330,7 @@ export default function CalendarPage() {
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-yellow-200 border border-yellow-300" /><span>🍌 Extra</span></div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-200 border border-red-300" /><span>🍅 Sobreaviso</span></div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-purple-200 border border-purple-300" /><span>📊 Produção</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-200 border border-green-300" /><span>💵 À Vista</span></div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300 border border-gray-400" /><span>🩶 Cancelado / Passado</span></div>
       </div>
 
