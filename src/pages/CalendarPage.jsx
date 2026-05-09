@@ -50,6 +50,11 @@ export default function CalendarPage() {
     queryFn: () => base44.entities.Shift.filter({ date: { $gte: monthStart, $lte: monthEnd } }, 'date'),
   });
 
+  const { data: receivables = [] } = useQuery({
+    queryKey: ['receivables', monthStart],
+    queryFn: () => base44.entities.Receivable.filter({ competencia: { $gte: monthStart, $lte: monthEnd } }),
+  });
+
   const createShiftsMutation = useMutation({
     mutationFn: (shiftList) => base44.entities.Shift.bulkCreate(shiftList),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shifts'] }); toast.success('Plantão(s) criado(s)!'); },
@@ -222,7 +227,7 @@ export default function CalendarPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {monthShifts.some(s => s.status === 'done' && s.receivable_id) && (
+          {monthShifts.some(s => s.status === 'done' && s.receivable_id) ? (
             <Button
               variant="outline"
               onClick={handleReopenMonth}
@@ -231,14 +236,15 @@ export default function CalendarPage() {
               <LockOpen className="w-4 h-4 mr-2" />
               {reopening ? 'Revertendo...' : 'Reabrir Mês'}
             </Button>
+          ) : (
+            <Button
+              onClick={() => setShowClose(true)}
+              disabled={monthShifts.filter(s => s.status === 'scheduled').length === 0}
+            >
+              <Lock className="w-4 h-4 mr-2" />
+              Fechar Mês
+            </Button>
           )}
-          <Button
-            onClick={() => setShowClose(true)}
-            disabled={monthShifts.filter(s => s.status === 'scheduled').length === 0}
-          >
-            <Lock className="w-4 h-4 mr-2" />
-            Fechar Mês
-          </Button>
           <div className="flex items-center gap-1 ml-2">
             <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
               <ChevronLeft className="w-4 h-4" />
