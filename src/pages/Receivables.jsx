@@ -18,6 +18,7 @@ export default function Receivables() {
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
   const [filterMonth, setFilterMonth] = useState(null); // null = todos
   const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' ou 'competencia'
+  const [filterStatus, setFilterStatus] = useState('open'); // 'open' = em aberto | 'received' = pagas | 'all' = todas
   const queryClient = useQueryClient();
 
   const { data: receivables = [] } = useQuery({
@@ -52,21 +53,26 @@ export default function Receivables() {
     return r.status;
   };
 
-  const filtered = filterMonth
-    ? receivables.filter(r => {
-        if (filterBy === 'due_date') {
-          if (!r.due_date) return false;
-          const d = new Date(r.due_date + 'T12:00:00');
-          return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
-        } else {
-          // competencia — usa campo dedicado, com fallback para due_date
-          const raw = r.competencia || r.due_date;
-          if (!raw) return false;
-          const d = new Date(raw + 'T12:00:00');
-          return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
-        }
-      })
-    : receivables;
+  const filtered = receivables
+    .filter(r => {
+      // filtro de status
+      if (filterStatus === 'open') return r.status !== 'received';
+      if (filterStatus === 'received') return r.status === 'received';
+      return true;
+    })
+    .filter(r => {
+      if (!filterMonth) return true;
+      if (filterBy === 'due_date') {
+        if (!r.due_date) return false;
+        const d = new Date(r.due_date + 'T12:00:00');
+        return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+      } else {
+        const raw = r.competencia || r.due_date;
+        if (!raw) return false;
+        const d = new Date(raw + 'T12:00:00');
+        return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+      }
+    });
 
   const totalPending = filtered.filter(r => r.status === 'pending').reduce((s, r) => s + (r.net_amount || r.amount), 0);
 
@@ -81,6 +87,34 @@ export default function Receivables() {
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="w-4 h-4 mr-2" /> Nova Conta
+        </Button>
+      </div>
+
+      {/* Filtro de status */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant={filterStatus === 'open' ? 'secondary' : 'outline'}
+          size="sm"
+          onClick={() => setFilterStatus('open')}
+          className="text-xs"
+        >
+          Em Aberto
+        </Button>
+        <Button
+          variant={filterStatus === 'received' ? 'secondary' : 'outline'}
+          size="sm"
+          onClick={() => setFilterStatus('received')}
+          className="text-xs"
+        >
+          Recebidas
+        </Button>
+        <Button
+          variant={filterStatus === 'all' ? 'secondary' : 'outline'}
+          size="sm"
+          onClick={() => setFilterStatus('all')}
+          className="text-xs"
+        >
+          Todas
         </Button>
       </div>
 
