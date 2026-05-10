@@ -255,12 +255,10 @@ export default function Receivables() {
               const status = getStatus(r);
               const source = incomeSources.find(s => s.id === r.income_source_id);
               return (
-                <div key={r.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors">
+                <div key={r.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
                   <div className={`w-2 h-10 rounded-full flex-shrink-0 ${status === 'received' ? 'bg-emerald-400' : status === 'overdue' ? 'bg-red-400' : 'bg-blue-400'}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{r.description}</p>
-                    </div>
+                    <p className="text-sm font-medium truncate">{r.description}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground">
                         {r.due_date ? format(new Date(r.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
@@ -268,28 +266,32 @@ export default function Receivables() {
                       {r.recurrent && !r._isPfTransaction && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">Recorrente</Badge>}
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
+                  {/* Botões entre descrição e valores */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {status !== 'received' && !r._isPfTransaction && (
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingReceivable(r)}>
+                        <CheckCircle2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {status === 'received' && !r._isPfTransaction && (
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500 hover:text-amber-700" title="Desfazer pagamento" onClick={() => undoPaymentMutation.mutate(r)}>
+                        <Undo2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {!r._isPfTransaction && (
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(r.id)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  {/* Valores sempre à direita */}
+                  <div className="text-right flex-shrink-0 min-w-[90px]">
                     <p className="text-sm font-semibold text-emerald-600">+{fmt(r.net_amount || r.amount)}</p>
                     {r.net_amount && r.net_amount < r.amount && <p className="text-xs text-muted-foreground/60">{fmt(r.amount)} bruto</p>}
                     <span className={`text-xs font-medium ${status === 'received' ? 'text-emerald-600' : status === 'overdue' ? 'text-red-500' : 'text-blue-500'}`}>
                       {status === 'received' ? 'Recebido' : status === 'overdue' ? 'Atrasado' : 'Aguardando'}
                     </span>
                   </div>
-                  {status !== 'received' && !r._isPfTransaction && (
-                    <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingReceivable(r)}>
-                      <CheckCircle2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                  {status === 'received' && !r._isPfTransaction && (
-                    <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500 hover:text-amber-700" title="Desfazer pagamento" onClick={() => undoPaymentMutation.mutate(r)}>
-                      <Undo2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                  {!r._isPfTransaction && (
-                    <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(r.id)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  )}
                 </div>
               );
             })}
