@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sparkles, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCategories } from '@/hooks/useCategories';
 
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   { value: 'moradia', label: 'Moradia' },
   { value: 'servicos', label: 'Serviços' },
   { value: 'alimentacao', label: 'Alimentação' },
@@ -28,8 +30,38 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
     notes: '',
   });
   const [saving, setSaving] = useState(false);
+  const [categorySuggestion, setCategorySuggestion] = useState(null);
+  const [suggestingCategory, setSuggestingCategory] = useState(false);
+  const suggestionFiredRef = useRef(false);
+  const { flatForSelect } = useCategories();
+  const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  // Sugere categoria via IA
+  useEffect(() => {
+    if (suggestionFiredRef.current) return;
+    if (!form.description || form.category) return;
+    if (categories.length === 0) return;
+
+    suggestionFiredRef.current = true;
+    setSuggestingCategory(true);
+
+    const categoryList = categories.map(c => `${c.label} (${c.value})`).join(', ');
+
+    base44.integrations.Core.InvokeLLM({
+      prompt: `Classifique esta despesa recorrente em uma das categorias abaixo.\n\nDescrição: "${form.description}"\n\nCategorias: ${categoryList}\n\nResponda APENAS com JSON: {"slug": "valor", "name": "Nome"}`,
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          name: { type: 'string' },
+        },
+      },
+    }).then(result => {
+      if (result?.slug) setCategorySuggestion(result);
+    }).finally(() => setSuggestingCategory(false));
+  }, [form.description, categories.length]);
 
   const handleSave = async () => {
     if (!form.description || !form.amount || !form.due_day || !form.category) {
@@ -58,6 +90,31 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
           <DialogTitle>Nova Despesa Recorrente</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {suggestingCategory && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+              Sugerindo categoria...
+            </div>
+          )}
+          {categorySuggestion && !suggestingCategory && (
+            <div className="bg-violet-50 border border-violet-200 rounded-xl px-3 py-2.5 flex items-center gap-3">
+              <Sparkles className="w-4 h-4 text-violet-500 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-violet-700 font-medium">Categoria sugerida</p>
+                <p className="text-sm font-semibold text-violet-900">{categorySuggestion.name}</p>
+              </div>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <Button size="sm" className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                  onClick={() => { set('category', categorySuggestion.slug); setCategorySuggestion(null); }}>
+                  Usar
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setCategorySuggestion(null)}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          )}
           <div>
             <Label>Descrição *</Label>
             <Input
@@ -93,12 +150,12 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
           </div>
           <div>
             <Label>Categoria *</Label>
-            <Select value={form.category} onValueChange={v => set('category', v)}>
+            <Select value={form.category} onValueChange={v => { set('category', v); setCategorySuggestion(null); }}>
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Selecionar categoria" />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map(c => (
+                {categories.map(c => (
                   <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                 ))}
               </SelectContent>
