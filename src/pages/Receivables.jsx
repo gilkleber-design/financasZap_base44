@@ -96,6 +96,12 @@ export default function Receivables() {
     ? [...receivables.filter(r => r.status === 'received'), ...pfTransactions]
     : [...receivables, ...pfTransactions];
 
+  // Mapa de receivable_id -> data real do pagamento (transaction.date)
+  const receivedDateMap = {};
+  transactions.forEach(t => {
+    if (t.receivable_id) receivedDateMap[t.receivable_id] = t.date;
+  });
+
   const filtered = allItems
     .filter(r => {
       // filtro de status
@@ -105,15 +111,30 @@ export default function Receivables() {
     })
     .filter(r => {
       if (!filterMonth) return true;
+      const mStart = startOfMonth(filterMonth);
+      const mEnd = endOfMonth(filterMonth);
+
+      // Para recebidas: filtrar pela data real do pagamento
+      if (filterStatus === 'received' || (filterStatus === 'all' && r.status === 'received')) {
+        // pfTransactions usam due_date como data de pagamento
+        const payDate = r._isPfTransaction
+          ? r.due_date
+          : (receivedDateMap[r.id] || r.due_date);
+        if (!payDate) return false;
+        const d = new Date(payDate + 'T12:00:00');
+        return d >= mStart && d <= mEnd;
+      }
+
+      // Para em aberto / todas não recebidas: filtro normal
       if (filterBy === 'due_date') {
         if (!r.due_date) return false;
         const d = new Date(r.due_date + 'T12:00:00');
-        return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+        return d >= mStart && d <= mEnd;
       } else {
         const raw = r.competencia || r.due_date;
         if (!raw) return false;
         const d = new Date(raw + 'T12:00:00');
-        return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+        return d >= mStart && d <= mEnd;
       }
     })
     .sort((a, b) => {
