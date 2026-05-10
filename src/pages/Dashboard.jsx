@@ -32,7 +32,7 @@ export default function Dashboard() {
 
   const { data: receivables = [] } = useQuery({
     queryKey: ['receivables'],
-    queryFn: () => base44.entities.Receivable.list('-due_date', 50),
+    queryFn: () => base44.entities.Receivable.list('-due_date', 500),
   });
 
   const { data: incomeSources = [] } = useQuery({

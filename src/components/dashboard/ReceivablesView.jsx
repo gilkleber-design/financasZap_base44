@@ -7,9 +7,8 @@ import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#f97316'];
 
-const now = new Date();
-
 export default function ReceivablesView({ receivables, incomeSources }) {
+  const now = new Date();
   const bySource = receivables.reduce((acc, r) => {
     const src = incomeSources.find(s => s.id === r.income_source_id);
     const label = src?.name || 'Outros';
