@@ -32,8 +32,6 @@ export default function Payables() {
   const [showForm, setShowForm] = useState(false);
   const [confirmingPayable, setConfirmingPayable] = useState(null);
   const [editingPayable, setEditingPayable] = useState(null);
-  const [displayMonth, setDisplayMonth] = useState(new Date());
-  const [filterMonth, setFilterMonth] = useState(new Date());
   const [deletingPayable, setDeletingPayable] = useState(null);
   const [deleteMode, setDeleteMode] = useState(null);
   const queryClient = useQueryClient();
@@ -92,15 +90,7 @@ export default function Payables() {
   const filtered = payables.filter(p => {
     if (!p.due_date) return false;
     const d = new Date(p.due_date + 'T12:00:00');
-    if (isNaN(d.getTime())) return false;
-    // Se filterMonth está setado, filtrar pelo mês específico
-    if (filterMonth) {
-      const mStart = startOfMonth(filterMonth);
-      const mEnd = endOfMonth(filterMonth);
-      return d >= mStart && d <= mEnd;
-    }
-    // Senão, mostrar todos os registros válidos
-    return true;
+    return !isNaN(d.getTime());
   });
 
   const totalPending = filtered.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
@@ -119,33 +109,7 @@ export default function Payables() {
         </Button>
       </div>
 
-      {/* Filtro de mês */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setDisplayMonth(subMonths(displayMonth, 1))}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setFilterMonth(displayMonth)}
-            className="min-w-[160px] text-sm capitalize"
-          >
-            {format(displayMonth, 'MMMM yyyy', { locale: ptBR })}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setDisplayMonth(addMonths(displayMonth, 1))}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={filterMonth ? 'outline' : 'secondary'}
-            size="sm"
-            onClick={() => setFilterMonth(null)}
-            className="text-xs"
-          >
-            Ano todo
-          </Button>
-        </div>
-      </div>
+
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">
