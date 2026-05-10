@@ -42,6 +42,7 @@ export default function Dashboard() {
 
   const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
+  const totalIncomeGross = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const balance = totalIncome - totalExpense;
 
@@ -70,6 +71,7 @@ export default function Dashboard() {
         <SummaryCard
           title="Receitas do Mês"
           value={totalIncome}
+          grossValue={totalIncomeGross}
           icon={TrendingUp}
           color="success"
         />

@@ -216,7 +216,7 @@ export default function Receivables() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-semibold text-emerald-600">+{fmt(r.net_amount || r.amount)}</p>
-                    {r.tax_rate > 0 && <p className="text-xs text-muted-foreground">Bruto: {fmt(r.amount)}</p>}
+                    {r.net_amount && r.net_amount < r.amount && <p className="text-xs text-muted-foreground/60">{fmt(r.amount)} bruto</p>}
                     <span className={`text-xs font-medium ${status === 'received' ? 'text-emerald-600' : status === 'overdue' ? 'text-red-500' : 'text-blue-500'}`}>
                       {status === 'received' ? 'Recebido' : status === 'overdue' ? 'Atrasado' : 'Aguardando'}
                     </span>

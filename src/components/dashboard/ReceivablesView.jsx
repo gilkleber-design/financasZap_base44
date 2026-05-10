@@ -115,7 +115,12 @@ export default function ReceivablesView({ receivables, incomeSources }) {
                           {isOverdue && <span className="text-red-500 ml-1">· Atrasado</span>}
                         </p>
                       </div>
-                      <span className="text-xs font-bold text-emerald-600 flex-shrink-0">{fmt(r.net_amount || r.amount)}</span>
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-xs font-bold text-emerald-600">{fmt(r.net_amount || r.amount)}</span>
+                        {r.net_amount && r.amount && r.net_amount < r.amount && (
+                          <p className="text-xs text-muted-foreground/60">{fmt(r.amount)} bruto</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })

@@ -8,8 +8,9 @@ const colorMap = {
   primary: 'text-primary bg-accent',
 };
 
-export default function SummaryCard({ title, value, icon: Icon, color = 'primary' }) {
-  const formatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+export default function SummaryCard({ title, value, grossValue, icon: Icon, color = 'primary' }) {
+  const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+  const showGross = grossValue && grossValue > value;
 
   return (
     <Card className="border-0 shadow-sm">
@@ -23,8 +24,11 @@ export default function SummaryCard({ title, value, icon: Icon, color = 'primary
               color === 'destructive' ? 'text-red-500' :
               color === 'warning' ? 'text-amber-600' : 'text-foreground'
             )}>
-              {formatted}
+              {fmt(value)}
             </p>
+            {showGross && (
+              <p className="text-xs text-muted-foreground/60 mt-0.5">{fmt(grossValue)} bruto</p>
+            )}
           </div>
           <div className={cn('p-2 rounded-lg', colorMap[color] || colorMap.primary)}>
             <Icon className="w-4 h-4" />
