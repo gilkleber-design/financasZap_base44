@@ -82,19 +82,19 @@ export default function Payables() {
   };
 
   const currentYear = new Date().getFullYear();
-  const filtered = filterMonth
-    ? payables.filter(p => {
-        if (!p.due_date) return false;
-        const d = new Date(p.due_date + 'T12:00:00');
-        if (d.getFullYear() !== currentYear) return false;
-        const mStart = startOfMonth(filterMonth);
-        const mEnd = endOfMonth(filterMonth);
-        return d >= mStart && d <= mEnd;
-      })
-    : payables.filter(p => {
-        if (!p.due_date) return false;
-        return new Date(p.due_date + 'T12:00:00').getFullYear() === currentYear;
-      });
+  const filtered = payables.filter(p => {
+    if (!p.due_date) return false;
+    const d = new Date(p.due_date + 'T12:00:00');
+    // Sempre filtrar pelo ano corrente
+    if (d.getFullYear() !== currentYear) return false;
+    // Se filterMonth está setado, filtrar pelo mês também
+    if (filterMonth) {
+      const mStart = startOfMonth(filterMonth);
+      const mEnd = endOfMonth(filterMonth);
+      return d >= mStart && d <= mEnd;
+    }
+    return true;
+  });
 
   const totalPending = filtered.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
 
@@ -115,49 +115,30 @@ export default function Payables() {
       {/* Filtro de mês */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setFilterMonth(filterMonth ? subMonths(filterMonth, 1) : subMonths(new Date(), 1))}>
+          <Button variant="outline" size="sm" onClick={() => setFilterMonth(subMonths(filterMonth, 1))}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <Button
-            variant={filterMonth ? 'secondary' : 'ghost'}
+            variant="secondary"
             size="sm"
-            onClick={() => setFilterMonth(filterMonth ? null : new Date())}
+            onClick={() => {}}
             className="min-w-[120px] text-sm capitalize"
+            disabled
           >
-            {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Todos os meses'}
+            {format(filterMonth, 'MMMM yyyy', { locale: ptBR })}
           </Button>
-          {filterMonth && (
-            <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          )}
-          {filterMonth && (
-            <Button variant="ghost" size="sm" onClick={() => setFilterMonth(null)} className="text-muted-foreground text-xs">
-              Limpar
-            </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFilterMonth(null)}
+            className="text-xs"
+          >
+            Ano todo
+          </Button>
         </div>
-        {filterMonth && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Filtrar por:</span>
-            <Button
-              variant={filterBy === 'due_date' ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setFilterBy('due_date')}
-              className="text-xs"
-            >
-              Data de Vencimento
-            </Button>
-            <Button
-              variant={filterBy === 'competencia' ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setFilterBy('competencia')}
-              className="text-xs"
-            >
-              Competência
-            </Button>
-          </div>
-        )}
       </div>
 
       <Card className="border-0 shadow-sm">
