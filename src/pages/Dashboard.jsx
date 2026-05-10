@@ -133,19 +133,7 @@ export default function Dashboard() {
       )}
 
       {activeView === 'receitas' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <ReceivablesView receivables={receivables} incomeSources={incomeSources} />
-          </div>
-          <div>
-            <PendingAlerts
-              payables={pendingPayables}
-              receivables={pendingReceivables}
-              mode="receitas"
-              onRefresh={() => queryClient.invalidateQueries()}
-            />
-          </div>
-        </div>
+        <ReceivablesView receivables={receivables} incomeSources={incomeSources} />
       )}
     </div>
   );
