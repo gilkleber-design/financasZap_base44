@@ -32,21 +32,17 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [categorySuggestion, setCategorySuggestion] = useState(null);
   const [suggestingCategory, setSuggestingCategory] = useState(false);
-  const suggestionFiredRef = useRef(false);
   const { flatForSelect } = useCategories();
   const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  // Sugere categoria via IA
-  useEffect(() => {
-    if (suggestionFiredRef.current) return;
+  // Sugere categoria ao sair do campo Descrição
+  const handleDescriptionBlur = async () => {
     if (!form.description || form.category) return;
     if (categories.length === 0) return;
 
-    suggestionFiredRef.current = true;
     setSuggestingCategory(true);
-
     const categoryList = categories.map(c => `${c.label} (${c.value})`).join(', ');
 
     base44.integrations.Core.InvokeLLM({
@@ -61,7 +57,7 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
     }).then(result => {
       if (result?.slug) setCategorySuggestion(result);
     }).finally(() => setSuggestingCategory(false));
-  }, [form.description, categories.length]);
+  };
 
   const handleSave = async () => {
     if (!form.description || !form.amount || !form.due_day || !form.category) {
@@ -120,6 +116,7 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
             <Input
               value={form.description}
               onChange={e => set('description', e.target.value)}
+              onBlur={handleDescriptionBlur}
               className="mt-1"
               placeholder="Ex: Aluguel, Netflix, Condomínio"
             />
