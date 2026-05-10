@@ -26,8 +26,9 @@ export default function PayableFormModal({ onClose, onSaved }) {
 
   const handleFifthBusinessDayToggle = (checked) => {
     set('fifth_business_day', checked);
-    if (checked && form.due_date) {
-      const fifthDay = getFifthBusinessDay(form.due_date);
+    if (checked) {
+      const dateToUse = form.due_date || new Date().toISOString().split('T')[0];
+      const fifthDay = getFifthBusinessDay(dateToUse);
       set('due_date', fifthDay);
     }
   };

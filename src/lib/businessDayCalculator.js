@@ -20,10 +20,9 @@ export function getFifthBusinessDay(dateInMonth) {
     // 0 = domingo, 1 = segunda, ..., 6 = sábado
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
       businessDayCount++;
+      if (businessDayCount === 5) break;
     }
-    if (businessDayCount < 5) {
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
+    currentDate.setDate(currentDate.getDate() + 1);
   }
 
   // Formata como yyyy-MM-dd
