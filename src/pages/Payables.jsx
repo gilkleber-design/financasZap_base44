@@ -8,6 +8,7 @@ import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-re
 import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import PayableFormModal from '@/components/payables/PayableFormModal';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 
@@ -31,6 +32,8 @@ export default function Payables() {
   const [confirmingPayable, setConfirmingPayable] = useState(null);
   const [filterMonth, setFilterMonth] = useState(null);
   const [filterBy, setFilterBy] = useState('due_date');
+  const [deletingPayable, setDeletingPayable] = useState(null);
+  const [deleteMode, setDeleteMode] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: payables = [] } = useQuery({
@@ -42,6 +45,33 @@ export default function Payables() {
     mutationFn: (id) => base44.entities.Payable.delete(id),
     onSuccess: () => { queryClient.invalidateQueries(); toast.success('Conta removida'); },
   });
+
+  const deletePayablesMutation = useMutation({
+    mutationFn: async (payable) => {
+      const allPayables = await base44.entities.Payable.list('-due_date', 500);
+      const toDelete = allPayables.filter(p => p.description === payable.description);
+
+      if (deleteMode === 'this') {
+        const next = toDelete.sort((a, b) => new Date(a.due_date) - new Date(b.due_date))[0];
+        if (next) await base44.entities.Payable.delete(next.id);
+      } else if (deleteMode === 'all') {
+        for (const p of toDelete) await base44.entities.Payable.delete(p.id);
+      } else if (deleteMode === 'forward') {
+        const now = new Date();
+        for (const p of toDelete) {
+          if (new Date(p.due_date) >= now) await base44.entities.Payable.delete(p.id);
+        }
+      }
+    },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Lançamentos removidos'); },
+  });
+
+  const handleDelete = async () => {
+    if (!deleteMode) return;
+    await deletePayablesMutation.mutateAsync(deletingPayable);
+    setDeletingPayable(null);
+    setDeleteMode(null);
+  };
 
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
@@ -162,7 +192,7 @@ export default function Payables() {
                       <CheckCircle2 className="w-4 h-4" />
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(p.id)}>
+                  <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => setDeletingPayable(p)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
@@ -181,6 +211,70 @@ export default function Payables() {
           payable={confirmingPayable}
           onClose={() => { setConfirmingPayable(null); queryClient.invalidateQueries(); }}
         />
+      )}
+
+      {deletingPayable && !deleteMode && (
+        <AlertDialog open onOpenChange={() => setDeletingPayable(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir "{deletingPayable.description}"?</AlertDialogTitle>
+              <AlertDialogDescription>Escolha como deseja proceder:</AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start text-left"
+                onClick={() => setDeleteMode('this')}
+              >
+                <span className="font-medium">Apenas este mês</span>
+                <span className="block text-xs text-muted-foreground">Remove só a próxima parcela</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-left"
+                onClick={() => setDeleteMode('forward')}
+              >
+                <span className="font-medium">Daqui em diante</span>
+                <span className="block text-xs text-muted-foreground">Mantém passadas, remove futuras</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-left text-red-500"
+                onClick={() => setDeleteMode('all')}
+              >
+                <span className="font-medium">Todas as parcelas</span>
+                <span className="block text-xs text-muted-foreground">Deleta todas as contas com esse nome</span>
+              </Button>
+            </div>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {deletingPayable && deleteMode && (
+        <AlertDialog open onOpenChange={() => { setDeletingPayable(null); setDeleteMode(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteMode === 'this' && 'Vai remover apenas a próxima parcela de "' + deletingPayable.description + '"'}
+                {deleteMode === 'forward' && 'Vai remover todos os lançamentos futuros de "' + deletingPayable.description + '"'}
+                {deleteMode === 'all' && 'Vai remover TODAS as parcelas de "' + deletingPayable.description + '"'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-2">
+              <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={handleDelete}
+                disabled={deletePayablesMutation.isPending}
+              >
+                Remover
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );
