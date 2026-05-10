@@ -1,22 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, AlertTriangle, Edit2, Save, Link2, X } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Edit2, Save, Link2, X, Sparkles, Loader2 } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
+import { useCategories } from '@/hooks/useCategories';
 
-const CATEGORIES = [
-  { value: 'alimentacao', label: 'Alimentação' },
-  { value: 'transporte', label: 'Transporte' },
-  { value: 'moradia', label: 'Moradia' },
-  { value: 'saude', label: 'Saúde' },
-  { value: 'educacao', label: 'Educação' },
-  { value: 'lazer', label: 'Lazer' },
-  { value: 'vestuario', label: 'Vestuário' },
-  { value: 'servicos', label: 'Serviços' },
-  { value: 'impostos', label: 'Impostos' },
+const INCOME_CATEGORIES = [
   { value: 'salario_clt', label: 'Salário CLT' },
   { value: 'receita_pj', label: 'Receita PJ' },
   { value: 'outros', label: 'Outros' },
@@ -37,8 +30,42 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
   const [paymentMethod, setPaymentMethod] = useState('');
   const [reconcileSuggestion, setReconcileSuggestion] = useState(null);
   const [reconcileDecided, setReconcileDecided] = useState(false);
+  const [categorySuggestion, setCategorySuggestion] = useState(null); // { slug, name }
+  const [suggestingCategory, setSuggestingCategory] = useState(false);
+  const suggestionFiredRef = useRef(false);
+
+  const { flatForSelect } = useCategories();
+  const expenseCategories = flatForSelect;
 
   const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }));
+
+  // Sugere categoria via IA quando a categoria não foi preenchida pela IA
+  useEffect(() => {
+    if (suggestionFiredRef.current) return;
+    if (form.type !== 'expense') return;
+    if (form.category && form.category !== 'outros') return; // IA já categorizou
+    if (!form.description || expenseCategories.length === 0) return;
+
+    suggestionFiredRef.current = true;
+    setSuggestingCategory(true);
+
+    const categoryList = expenseCategories.map(c => `${c.label.trim()} (${c.value})`).join(', ');
+
+    base44.integrations.Core.InvokeLLM({
+      prompt: `Você é um classificador financeiro. Dado a descrição de uma despesa, escolha a categoria mais adequada da lista abaixo.\n\nDescrição: "${form.description}"\n\nCategorias disponíveis:\n${categoryList}\n\nResponda SOMENTE com o JSON no formato exato: {"slug": "valor_da_categoria", "name": "Nome da Categoria"}. Sem explicações.`,
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          name: { type: 'string' },
+        },
+      },
+    }).then(result => {
+      if (result?.slug && result.slug !== form.category) {
+        setCategorySuggestion(result);
+      }
+    }).finally(() => setSuggestingCategory(false));
+  }, [form.description, form.type, expenseCategories.length]);
 
   // Detecta sugestão de conciliação ao montar ou quando descrição/tipo mudam
   useEffect(() => {
@@ -158,6 +185,33 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
           </div>
         )}
 
+        {/* Sugestão de categoria via IA */}
+        {suggestingCategory && form.type === 'expense' && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+            Sugerindo categoria...
+          </div>
+        )}
+        {categorySuggestion && !suggestingCategory && (
+          <div className="bg-violet-50 border border-violet-200 rounded-xl px-3 py-2.5 flex items-center gap-3">
+            <Sparkles className="w-4 h-4 text-violet-500 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-violet-700 font-medium">Categoria sugerida pela IA</p>
+              <p className="text-sm font-semibold text-violet-900">{categorySuggestion.name}</p>
+            </div>
+            <div className="flex gap-1.5 flex-shrink-0">
+              <Button size="sm" className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                onClick={() => { set('category', categorySuggestion.slug); setCategorySuggestion(null); }}>
+                Usar
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs"
+                onClick={() => setCategorySuggestion(null)}>
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <Label className="text-xs">Descrição</Label>
@@ -177,10 +231,13 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
 
           <div>
             <Label className="text-xs">Categoria</Label>
-            <Select value={form.category} onValueChange={v => set('category', v)}>
+            <Select value={form.category} onValueChange={v => { set('category', v); setCategorySuggestion(null); }}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                {form.type === 'expense'
+                  ? expenseCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)
+                  : INCOME_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)
+                }
               </SelectContent>
             </Select>
           </div>
