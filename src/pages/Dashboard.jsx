@@ -1,20 +1,24 @@
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { startOfMonth, endOfMonth, format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { TrendingUp, TrendingDown, Wallet, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { Button } from '@/components/ui/button';
 import SummaryCard from '@/components/dashboard/SummaryCard';
 import CategoryChart from '@/components/dashboard/CategoryChart';
 import RecentTransactions from '@/components/dashboard/RecentTransactions';
 import PendingAlerts from '@/components/dashboard/PendingAlerts';
+import ReceivablesView from '@/components/dashboard/ReceivablesView';
+import PayablesView from '@/components/dashboard/PayablesView';
 
 const now = new Date();
 const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
 const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
 
 export default function Dashboard() {
+  const [activeView, setActiveView] = useState('despesas'); // 'despesas' | 'receitas' | 'contas_pagar'
   const queryClient = useQueryClient();
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
@@ -29,6 +33,11 @@ export default function Dashboard() {
   const { data: receivables = [] } = useQuery({
     queryKey: ['receivables'],
     queryFn: () => base44.entities.Receivable.list('-due_date', 50),
+  });
+
+  const { data: incomeSources = [] } = useQuery({
+    queryKey: ['income_sources'],
+    queryFn: () => base44.entities.IncomeSource.list(),
   });
 
   const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
@@ -84,19 +93,57 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <CategoryChart data={categoryData} />
-          <RecentTransactions transactions={transactions.slice(0, 8)} />
-        </div>
-        <div>
-          <PendingAlerts
-            payables={pendingPayables}
-            receivables={pendingReceivables}
-            onRefresh={() => queryClient.invalidateQueries()}
-          />
-        </div>
+      {/* View toggle */}
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <Button
+          variant={activeView === 'despesas' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveView('despesas')}
+          className="text-xs"
+        >
+          📊 Despesas
+        </Button>
+        <Button
+          variant={activeView === 'receitas' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveView('receitas')}
+          className="text-xs"
+        >
+          💰 Receitas
+        </Button>
+        <Button
+          variant={activeView === 'contas_pagar' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveView('contas_pagar')}
+          className="text-xs"
+        >
+          📋 Contas a Pagar
+        </Button>
       </div>
+
+      {activeView === 'despesas' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <CategoryChart data={categoryData} />
+            <RecentTransactions transactions={transactions.slice(0, 8)} />
+          </div>
+          <div>
+            <PendingAlerts
+              payables={pendingPayables}
+              receivables={pendingReceivables}
+              onRefresh={() => queryClient.invalidateQueries()}
+            />
+          </div>
+        </div>
+      )}
+
+      {activeView === 'receitas' && (
+        <ReceivablesView receivables={receivables} incomeSources={incomeSources} />
+      )}
+
+      {activeView === 'contas_pagar' && (
+        <PayablesView payables={payables} />
+      )}
     </div>
   );
 }
