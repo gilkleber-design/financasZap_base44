@@ -32,7 +32,7 @@ export default function Payables() {
   const [showForm, setShowForm] = useState(false);
   const [confirmingPayable, setConfirmingPayable] = useState(null);
   const [editingPayable, setEditingPayable] = useState(null);
-  const [filterMonth, setFilterMonth] = useState(null);
+  const [filterMonth, setFilterMonth] = useState(new Date());
   const [filterBy, setFilterBy] = useState('due_date');
   const [deletingPayable, setDeletingPayable] = useState(null);
   const [deleteMode, setDeleteMode] = useState(null);
