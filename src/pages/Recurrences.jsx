@@ -76,7 +76,6 @@ export default function Recurrences() {
   const [showForm, setShowForm] = useState(false);
   const [editingRecurrence, setEditingRecurrence] = useState(null);
   const [deletingRecurrence, setDeletingRecurrence] = useState(null);
-  const [deleteMode, setDeleteMode] = useState(null); // 'this' | 'all' | 'forward'
   const queryClient = useQueryClient();
 
   const { data: recurrences = [], isLoading } = useQuery({
@@ -114,37 +113,16 @@ export default function Recurrences() {
     },
   });
 
-  const deletePayablesMutation = useMutation({
-    mutationFn: async (recurrence) => {
-      const payables = await base44.entities.Payable.list('-due_date', 500);
-      const toDelete = payables.filter(p => p.description === recurrence.description);
-
-      if (deleteMode === 'this') {
-        // Deletar apenas o próximo
-        const next = toDelete.sort((a, b) => new Date(a.due_date) - new Date(b.due_date))[0];
-        if (next) await base44.entities.Payable.delete(next.id);
-      } else if (deleteMode === 'all') {
-        // Deletar todos
-        for (const p of toDelete) await base44.entities.Payable.delete(p.id);
-      } else if (deleteMode === 'forward') {
-        // Deletar daquela pra frente (futuras)
-        const now = new Date();
-        for (const p of toDelete) {
-          if (new Date(p.due_date) >= now) await base44.entities.Payable.delete(p.id);
-        }
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['payables']);
-    },
-  });
-
   const handleDelete = async () => {
-    if (!deleteMode) return;
-    await deletePayablesMutation.mutateAsync(deletingRecurrence);
+    // Deleta todos os payables associados
+    const payables = await base44.entities.Payable.list('-due_date', 500);
+    const toDelete = payables.filter(p => p.description === deletingRecurrence.description);
+    for (const p of toDelete) await base44.entities.Payable.delete(p.id);
+    
+    // Deleta a recorrência
     await deleteMutation.mutateAsync(deletingRecurrence.id);
+    await queryClient.invalidateQueries(['payables']);
     setDeletingRecurrence(null);
-    setDeleteMode(null);
   };
 
   const handleCreated = async (recurrence) => {
@@ -303,53 +281,13 @@ export default function Recurrences() {
         />
       )}
 
-      {deletingRecurrence && !deleteMode && (
+      {deletingRecurrence && (
         <AlertDialog open onOpenChange={() => setDeletingRecurrence(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Excluir "{deletingRecurrence.description}"?</AlertDialogTitle>
-              <AlertDialogDescription>Escolha como deseja proceder:</AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left"
-                onClick={() => setDeleteMode('this')}
-              >
-                <span className="font-medium">Apenas este mês</span>
-                <span className="block text-xs text-muted-foreground">Remove só o próximo lançamento</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left"
-                onClick={() => setDeleteMode('forward')}
-              >
-                <span className="font-medium">Daqui em diante</span>
-                <span className="block text-xs text-muted-foreground">Mantém passados, remove futuros</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left text-red-500"
-                onClick={() => setDeleteMode('all')}
-              >
-                <span className="font-medium">Todos (remover recorrência)</span>
-                <span className="block text-xs text-muted-foreground">Deleta a recorrência e todos os lançamentos</span>
-              </Button>
-            </div>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-
-      {deletingRecurrence && deleteMode && (
-        <AlertDialog open onOpenChange={() => { setDeletingRecurrence(null); setDeleteMode(null); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+              <AlertDialogTitle>Remover recorrência?</AlertDialogTitle>
               <AlertDialogDescription>
-                {deleteMode === 'this' && 'Vai remover apenas o próximo lançamento de "' + deletingRecurrence.description + '"'}
-                {deleteMode === 'forward' && 'Vai remover todos os lançamentos futuros de "' + deletingRecurrence.description + '"'}
-                {deleteMode === 'all' && 'Vai remover a recorrência "' + deletingRecurrence.description + '" e TODOS os lançamentos associados'}
+                Isso vai deletar a recorrência "{deletingRecurrence.description}" e todos os lançamentos gerados associados.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="flex gap-2">
@@ -358,9 +296,9 @@ export default function Recurrences() {
                 variant="destructive"
                 className="flex-1"
                 onClick={handleDelete}
-                disabled={deletePayablesMutation.isPending || deleteMutation.isPending}
+                disabled={deleteMutation.isPending}
               >
-                {deleteMode === 'all' ? 'Remover Recorrência' : 'Remover Lançamentos'}
+                Remover
               </Button>
             </div>
           </AlertDialogContent>
