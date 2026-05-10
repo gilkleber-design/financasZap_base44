@@ -84,15 +84,18 @@ export default function Payables() {
   const currentYear = new Date().getFullYear();
   const filtered = filterMonth
     ? payables.filter(p => {
+        const mStart = startOfMonth(filterMonth);
+        const mEnd = endOfMonth(filterMonth);
         if (filterBy === 'due_date') {
           if (!p.due_date) return false;
           const d = new Date(p.due_date + 'T12:00:00');
-          return d.getFullYear() === currentYear && d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+          return d.getFullYear() === currentYear && d >= mStart && d <= mEnd;
         } else {
-          // competencia (created_date)
-          if (!p.created_date) return false;
-          const d = new Date(p.created_date);
-          return d.getFullYear() === currentYear && d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+          // competencia: usa due_date como fallback
+          const dateField = p.due_date;
+          if (!dateField) return false;
+          const d = new Date(dateField + 'T12:00:00');
+          return d.getFullYear() === currentYear && d >= mStart && d <= mEnd;
         }
       })
     : payables.filter(p => {
