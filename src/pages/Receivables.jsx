@@ -36,6 +36,29 @@ export default function Receivables() {
     queryFn: () => base44.entities.Hospital.list(),
   });
 
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: () => base44.entities.Transaction.list('-date', 500),
+  });
+
+  // Transactions de salário/bolsa que serão exibidas como "recebidas" na lista
+  const pfTransactions = transactions.filter(t =>
+    t.type === 'income' &&
+    (t.category === 'salario_clt' ||
+      t.description?.toLowerCase().includes('bolsa') ||
+      t.description?.toLowerCase().includes('salário') ||
+      t.description?.toLowerCase().includes('salario'))
+  ).map(t => ({
+    id: `tx-${t.id}`,
+    description: t.description,
+    amount: t.amount,
+    net_amount: t.net_amount || t.amount,
+    due_date: t.date,
+    competencia: t.date,
+    status: 'received',
+    _isPfTransaction: true,
+  }));
+
 
 
   const deleteMutation = useMutation({
@@ -66,7 +89,14 @@ export default function Receivables() {
     return src?.name || '';
   };
 
-  const filtered = receivables
+  // Mescla receivables com pfTransactions quando filtro for 'received' ou 'all'
+  const allItems = filterStatus === 'open'
+    ? receivables
+    : filterStatus === 'received'
+    ? [...receivables.filter(r => r.status === 'received'), ...pfTransactions]
+    : [...receivables, ...pfTransactions];
+
+  const filtered = allItems
     .filter(r => {
       // filtro de status
       if (filterStatus === 'open') return r.status !== 'received';
@@ -204,14 +234,12 @@ export default function Receivables() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium truncate">{r.description}</p>
-                      {r.recurrent && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">Recorrente</Badge>}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground">
-                        Previsto: {r.due_date ? format(new Date(r.due_date), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
+                        {r.due_date ? format(new Date(r.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                       </span>
-                      {source && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{source.name} ({source.type.toUpperCase()})</Badge>}
-                      {r.tax_rate > 0 && <Badge className="text-xs py-0 h-4 px-1.5 bg-amber-100 text-amber-700 border-0">IR {r.tax_rate}%</Badge>}
+                      {r.recurrent && !r._isPfTransaction && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">Recorrente</Badge>}
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -221,19 +249,21 @@ export default function Receivables() {
                       {status === 'received' ? 'Recebido' : status === 'overdue' ? 'Atrasado' : 'Aguardando'}
                     </span>
                   </div>
-                  {status !== 'received' && (
+                  {status !== 'received' && !r._isPfTransaction && (
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingReceivable(r)}>
                       <CheckCircle2 className="w-4 h-4" />
                     </Button>
                   )}
-                  {status === 'received' && (
+                  {status === 'received' && !r._isPfTransaction && (
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500 hover:text-amber-700" title="Desfazer pagamento" onClick={() => undoPaymentMutation.mutate(r)}>
                       <Undo2 className="w-4 h-4" />
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(r.id)}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  {!r._isPfTransaction && (
+                    <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(r.id)}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
               );
             })}
