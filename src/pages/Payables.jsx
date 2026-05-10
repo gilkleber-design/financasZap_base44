@@ -97,7 +97,7 @@ export default function Payables() {
       const mEnd = endOfMonth(filterMonth);
       return d >= mStart && d <= mEnd;
     }
-    return false;
+    return true;
   });
 
   const totalPending = filtered.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
