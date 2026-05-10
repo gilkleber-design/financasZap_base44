@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2 } from 'lucide-react';
+import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -17,6 +17,7 @@ const navItems = [
 
 export default function Layout() {
   const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -52,25 +53,75 @@ export default function Layout() {
         </nav>
       </aside>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 flex">
-        {navItems.map(({ path, label, icon: Icon }) => (
-          <Link
-            key={path}
-            to={path}
-            className={cn(
-              'flex-1 flex flex-col items-center justify-center py-2 gap-1 text-xs transition-colors',
-              location.pathname === path ? 'text-primary' : 'text-muted-foreground'
-            )}
+      {/* Mobile Top Bar */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar flex items-center justify-between px-4 h-14">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
+            <MessageSquare className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-sora font-bold text-white text-base">FinançasZap</span>
+        </div>
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="text-white p-1"
+          aria-label="Abrir menu"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      </header>
+
+      {/* Mobile Side Dock Overlay */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-50 flex"
+          onClick={() => setMobileOpen(false)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50" />
+
+          {/* Drawer */}
+          <aside
+            className="relative ml-auto w-72 h-full bg-sidebar flex flex-col shadow-2xl"
+            onClick={e => e.stopPropagation()}
           >
-            <Icon className="w-5 h-5" />
-            <span>{label.split(' ')[0]}</span>
-          </Link>
-        ))}
-      </nav>
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-sidebar-border">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
+                  <MessageSquare className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-sora font-bold text-white text-base">FinançasZap</span>
+              </div>
+              <button onClick={() => setMobileOpen(false)} className="text-sidebar-foreground/70 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Nav */}
+            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+              {navItems.map(({ path, label, icon: Icon }) => (
+                <Link
+                  key={path}
+                  to={path}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-150',
+                    location.pathname === path
+                      ? 'bg-sidebar-primary text-white'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          </aside>
+        </div>
+      )}
 
       {/* Main Content */}
-      <main className="flex-1 sm:ml-64 pb-16 sm:pb-0">
+      <main className="flex-1 md:ml-64 pt-14 md:pt-0">
         <Outlet />
       </main>
     </div>
