@@ -88,6 +88,7 @@ export default function Payables() {
   const filtered = payables.filter(p => {
     if (!p.due_date) return false;
     const d = new Date(p.due_date + 'T12:00:00');
+    if (isNaN(d.getTime())) return false;
     // Sempre filtrar pelo ano corrente
     if (d.getFullYear() !== currentYear) return false;
     // Se filterMonth está setado, filtrar pelo mês também
