@@ -94,8 +94,9 @@ Deno.serve(async (req) => {
       }
 
       // Cria o Payable consolidado "Fatura [CARTÃO]" no Contas a Pagar
+      const monthLabel = new Date(refMonthStr + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
       const invoicePayable = await base44.asServiceRole.entities.Payable.create({
-        description: `Fatura ${card.name}`,
+        description: `Fatura ${card.name} - ${monthLabel}`,
         amount: Math.round(totalAmount * 100) / 100,
         due_date: (dueDateStr || closingDateStr) + 'T12:00:00',
         competencia: dueDateStr || closingDateStr,

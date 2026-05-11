@@ -60,7 +60,7 @@ export default function Dashboard() {
   const pendingReceivables = receivables.filter(r => r.status === 'pending' && new Date(r.due_date).getFullYear() === currentYear);
 
   const expenseByCategory = monthTx
-    .filter(t => t.type === 'expense')
+    .filter(t => t.type === 'expense' && t.category !== 'transferencia_liquidacao')
     .reduce((acc, t) => {
       const cat = t.category || 'outros';
       acc[cat] = (acc[cat] || 0) + t.amount;

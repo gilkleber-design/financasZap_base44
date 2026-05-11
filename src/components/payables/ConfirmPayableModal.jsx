@@ -87,8 +87,8 @@ export default function ConfirmPayableModal({ payable, onClose }) {
 
     // Se é fatura de cartão, dispara a cascata de status nos itens individuais
     if (isCardInvoice) {
-      await base44.functions.invoke('cascadeCardInvoicePayment', {
-        payable_id: payable.id,
+      await base44.functions.invoke('cascadeInvoicePayment', {
+        invoicePayableId: payable.id,
       });
     }
 
