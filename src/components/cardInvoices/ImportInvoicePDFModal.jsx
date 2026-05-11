@@ -10,19 +10,6 @@ import { format } from 'date-fns';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-// Detecta parcelas na descrição (ex: "3/12", "Parcela 3 de 12", "3x de 12", etc.)
-function parseInstallment(description) {
-  const patterns = [
-    /(\d+)\s*\/\s*(\d+)/,
-    /parcela\s+(\d+)\s+de\s+(\d+)/i,
-    /(\d+)\s*x\s+de\s+(\d+)/i,
-  ];
-  for (const p of patterns) {
-    const m = description.match(p);
-    if (m) return { number: parseInt(m[1]), total: parseInt(m[2]) };
-  }
-  return null;
-}
 
 export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImported }) {
   const fileRef = useRef(null);
@@ -51,9 +38,6 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
       ...item,
       _id: i,
       selected: true,
-      amount: Math.abs(parseFloat(item.amount) || 0),
-      date: item.date || refMonth + '-01',
-      category: item.category || 'outros',
     }));
 
     setItems(extracted);
@@ -87,15 +71,11 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     // Agrupa parcelados pelo grupo de parcela (mesma descrição base)
     const groupMap = {};
     const payables = selected.map(it => {
-      const inst = it.installment_number && it.installment_total
-        ? { number: it.installment_number, total: it.installment_total }
-        : parseInstallment(it.description);
-
+      const hasInst = it.installment_number && it.installment_total;
       let installment_group_id = undefined;
-      if (inst) {
-        const baseKey = it.description.replace(/\d+\/\d+/, '').replace(/parcela\s+\d+\s+de\s+\d+/i, '').trim();
-        if (!groupMap[baseKey]) groupMap[baseKey] = genGroupId();
-        installment_group_id = groupMap[baseKey];
+      if (hasInst) {
+        if (!groupMap[it.description]) groupMap[it.description] = genGroupId();
+        installment_group_id = groupMap[it.description];
       }
 
       return {
@@ -109,10 +89,10 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         origin_type: 'card',
         payment_modality: 'card_invoice',
         recurrent: false,
-        ...(inst ? {
-          installment_number: inst.number,
-          installment_count: inst.total,
-          installment_total_amount: it.amount * inst.total,
+        ...(hasInst ? {
+          installment_number: it.installment_number,
+          installment_count: it.installment_total,
+          installment_total_amount: it.amount * it.installment_total,
           installment_group_id,
         } : {}),
       };
