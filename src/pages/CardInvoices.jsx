@@ -4,12 +4,13 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, RefreshCw, Pencil } from 'lucide-react';
+import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, RefreshCw, Pencil, Upload } from 'lucide-react';
 import { format, startOfMonth, addMonths, subMonths, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 import EditInvoiceItemsModal from '@/components/cardInvoices/EditInvoiceItemsModal';
+import ImportInvoicePDFModal from '@/components/cardInvoices/ImportInvoicePDFModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -29,7 +30,8 @@ const STATUS_ITEM_COLORS = {
 export default function CardInvoices() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [payingPayable, setPayingPayable] = useState(null);
-  const [editingInvoiceItems, setEditingInvoiceItems] = useState(null); // array de items
+  const [editingInvoiceItems, setEditingInvoiceItems] = useState(null);
+  const [importingCard, setImportingCard] = useState(null); // { card, refMonth }
   const queryClient = useQueryClient();
 
   const { data: cards = [] } = useQuery({
@@ -225,7 +227,16 @@ export default function CardInvoices() {
                 )}
 
                 {/* Ações */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setImportingCard({ card, refMonth: refMonthStr })}
+                  >
+                    <Upload className="w-3.5 h-3.5 mr-1.5" />
+                    Importar PDF
+                  </Button>
                   {items.length > 0 && (
                     <Button
                       variant="outline"
@@ -281,6 +292,15 @@ export default function CardInvoices() {
           items={editingInvoiceItems}
           onClose={() => setEditingInvoiceItems(null)}
           onSaved={() => { queryClient.invalidateQueries(); setEditingInvoiceItems(null); }}
+        />
+      )}
+
+      {importingCard && (
+        <ImportInvoicePDFModal
+          card={importingCard.card}
+          refMonth={importingCard.refMonth}
+          onClose={() => setImportingCard(null)}
+          onImported={() => { queryClient.invalidateQueries(); setImportingCard(null); }}
         />
       )}
     </div>
