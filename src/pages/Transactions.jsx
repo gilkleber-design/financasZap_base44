@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Trash2, CheckCircle2, Filter } from 'lucide-react';
+import { Plus, Search, Trash2, CheckCircle2, Pencil } from 'lucide-react';
+import EditTransactionModal from '@/components/transactions/EditTransactionModal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -23,6 +24,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 
 export default function Transactions() {
   const [showForm, setShowForm] = useState(false);
+  const [editingTx, setEditingTx] = useState(null);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -119,6 +121,10 @@ export default function Transactions() {
                     <p className="text-xs text-muted-foreground">IR: {fmt(tx.tax_amount)}</p>
                   )}
                 </div>
+                <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-primary flex-shrink-0"
+                  onClick={() => setEditingTx(tx)}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
                 <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500 flex-shrink-0"
                   onClick={() => deleteMutation.mutate(tx.id)}>
                   <Trash2 className="w-3.5 h-3.5" />
@@ -133,6 +139,13 @@ export default function Transactions() {
         <TransactionFormModal
           onClose={() => setShowForm(false)}
           onSaved={() => { queryClient.invalidateQueries(); setShowForm(false); }}
+        />
+      )}
+      {editingTx && (
+        <EditTransactionModal
+          transaction={editingTx}
+          onClose={() => setEditingTx(null)}
+          onSaved={() => { queryClient.invalidateQueries(); setEditingTx(null); }}
         />
       )}
     </div>
