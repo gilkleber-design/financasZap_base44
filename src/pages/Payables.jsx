@@ -286,7 +286,8 @@ export default function Payables() {
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
     if (p.status === 'scheduled') return 'scheduled';
-    if (p.status === 'provisioned' && p.origin_type === 'card') return 'provisioned'; // item de cartão aguardando fatura — nunca vence individualmente
+    // Qualquer item de cartão não-pago é tratado como provisionado — nunca vence individualmente (quem vence é a fatura)
+    if (p.origin_type === 'card' && !p.is_card_invoice_payable && p.status !== 'paid') return 'provisioned';
     if (p.due_date && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date))) return 'overdue';
     return p.status || 'pending';
   };
