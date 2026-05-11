@@ -40,63 +40,10 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     // Upload do PDF
     const { file_url } = await base44.integrations.Core.UploadFile({ file });
 
-    // Extrai lançamentos via LLM com visão
+    // Chama backend function para processar (sem timeout de browser)
     const refMonthLabel = format(new Date(refMonth + 'T12:00:00'), 'MMMM yyyy', { locale: ptBR });
-
-    // Primeiro extrai o texto do PDF como string para não depender só de visão
-    const textResult = await base44.integrations.Core.InvokeLLM({
-      prompt: `Leia este PDF de fatura de cartão de crédito e transcreva LITERALMENTE todo o conteúdo de texto que você conseguir ler, especialmente as linhas de lançamentos/compras com datas, descrições e valores. Não interprete, apenas transcreva o texto completo.`,
-      file_urls: [file_url],
-      model: 'claude_sonnet_4_6',
-    });
-
-    // Agora interpreta o texto extraído
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `Você é um assistente financeiro especializado em extrair lançamentos de faturas de cartão de crédito brasileiro.
-
-Abaixo está o texto extraído de uma fatura de cartão. Extraia TODOS os lançamentos/compras individuais.
-
-TEXTO DA FATURA:
-${textResult}
-
-Para cada lançamento extraia:
-- description: descrição completa da compra. Se houver indicativo de parcela na descrição (ex: "03/12", "Parc 3/12", "3 de 12"), MANTENHA na descrição e preencha installment_number e installment_total
-- amount: valor em reais como número positivo (ex: 129.90). Valores que aparecem como "129,90" converter para 129.90
-- date: data no formato YYYY-MM-DD. Se só tiver dia/mês, use o ano do mês de referência: ${refMonth}
-- installment_number: número da parcela atual (inteiro) — null se não parcelado
-- installment_total: total de parcelas (inteiro) — null se não parcelado  
-- category: escolha a mais adequada entre: alimentacao, transporte, moradia, saude, educacao, lazer, vestuario, servicos, impostos, outros
-
-REGRAS IMPORTANTES:
-- Inclua TODOS os lançamentos, mesmo os de valor pequeno
-- NÃO inclua: totais, subtotais, pagamentos anteriores, encargos, IOF, juros, taxas
-- NÃO inclua lançamentos com valor negativo (estornos/créditos)
-- Compras parceladas: cada linha da fatura é UMA parcela (não gere as parcelas futuras)
-- Mês de referência: ${refMonthLabel}
-
-Retorne JSON com array "items".`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          items: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                description: { type: 'string' },
-                amount: { type: 'number' },
-                date: { type: 'string' },
-                installment_number: { type: ['number', 'null'] },
-                installment_total: { type: ['number', 'null'] },
-                category: { type: 'string' },
-              },
-              required: ['description', 'amount', 'date', 'category'],
-            },
-          },
-        },
-        required: ['items'],
-      },
-    });
+    const response = await base44.functions.invoke('extractInvoiceItems', { file_url, refMonth, refMonthLabel });
+    const result = response.data;
 
     const extracted = (result?.items || []).map((item, i) => ({
       ...item,
