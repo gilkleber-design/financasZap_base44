@@ -15,7 +15,6 @@ import WhatsAppInput from '@/pages/WhatsAppInput';
 import Settings from '@/pages/Settings';
 import Hospitals from '@/pages/Hospitals';
 import CalendarPage from '@/pages/CalendarPage';
-import Recurrences from '@/pages/Recurrences';
 import CardInvoices from '@/pages/CardInvoices';
 
 const AuthenticatedApp = () => {
@@ -50,7 +49,6 @@ const AuthenticatedApp = () => {
         <Route path="/configuracoes" element={<Settings />} />
         <Route path="/hospitais" element={<Hospitals />} />
         <Route path="/calendario" element={<CalendarPage />} />
-        <Route path="/recorrencias" element={<Recurrences />} />
         <Route path="/faturas-cartao" element={<CardInvoices />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />

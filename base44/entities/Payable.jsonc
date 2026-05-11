@@ -51,6 +51,10 @@
       "default": false,
       "description": "Se \u00e9 recorrente (mensal)"
     },
+    "recurrence_id": {
+      "type": "string",
+      "description": "ID da Recorr\u00eancia-m\u00e3e que gerou este Payable (para despesas fixas)"
+    },
     "fifth_business_day": {
       "type": "boolean",
       "default": false,
