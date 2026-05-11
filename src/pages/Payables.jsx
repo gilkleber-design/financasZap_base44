@@ -53,8 +53,8 @@ export default function Payables() {
 
       if (deleteMode === 'this') {
         const next = toDelete.sort((a, b) => {
-          const dA = new Date(a.due_date + 'T12:00:00');
-          const dB = new Date(b.due_date + 'T12:00:00');
+          const dA = new Date(a.due_date);
+          const dB = new Date(b.due_date);
           return dA - dB;
         })[0];
         if (next) await base44.entities.Payable.delete(next.id);
@@ -63,7 +63,7 @@ export default function Payables() {
       } else if (deleteMode === 'forward') {
         const now = new Date();
         for (const p of toDelete) {
-          const d = new Date(p.due_date + 'T12:00:00');
+          const d = new Date(p.due_date);
           if (!isNaN(d.getTime()) && d >= now) await base44.entities.Payable.delete(p.id);
         }
       }
@@ -81,7 +81,7 @@ export default function Payables() {
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
     if (p.due_date) {
-      const d = new Date(p.due_date + 'T12:00:00');
+      const d = new Date(p.due_date);
       if (!isNaN(d.getTime()) && isPast(d) && !isToday(d)) return 'overdue';
     }
     return p.status;
@@ -89,7 +89,7 @@ export default function Payables() {
 
   const filtered = payables.filter(p => {
     if (!p.due_date) return false;
-    const d = new Date(p.due_date + 'T12:00:00');
+    const d = new Date(p.due_date);
     return !isNaN(d.getTime());
   });
 
@@ -131,7 +131,7 @@ export default function Payables() {
                       <div className="flex items-center gap-2 mt-0.5">
                        <span className="text-xs text-muted-foreground">
                          {(() => {
-                           const d = new Date(p.due_date + 'T12:00:00');
+                           const d = new Date(p.due_date);
                            return isNaN(d.getTime()) ? 'Venc: —' : `Venc: ${format(d, 'dd/MM/yyyy', { locale: ptBR })}`;
                          })()}
                        </span>
