@@ -225,7 +225,22 @@ export default function Receivables() {
                     <p className="text-sm font-medium truncate">{r.description}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground">
-                        {r.due_date ? format(new Date(r.due_date + (r.due_date.includes('T') ? '' : 'T12:00:00')), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
+                        {(() => {
+                          let dateStr;
+                          if (filterStatus === 'received') {
+                            if (filterBy === 'competencia') {
+                              dateStr = r.competencia || r.due_date;
+                            } else {
+                              dateStr = r._isPfTransaction ? r.due_date : (receivedDateMap[r.id] || r.due_date);
+                            }
+                          } else if (filterBy === 'competencia') {
+                            dateStr = r.competencia || r.due_date;
+                          } else {
+                            dateStr = r.due_date;
+                          }
+                          if (!dateStr) return '—';
+                          return format(new Date(dateStr + (dateStr.includes('T') ? '' : 'T12:00:00')), 'dd/MM/yyyy', { locale: ptBR });
+                        })()}
                       </span>
                       {r.recurrent && !r._isPfTransaction && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">Recorrente</Badge>}
                     </div>
