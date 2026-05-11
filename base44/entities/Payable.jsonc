@@ -32,6 +32,7 @@
         "vestuario",
         "servicos",
         "impostos",
+        "transferencia_liquidacao",
         "outros"
       ]
     },
@@ -41,10 +42,11 @@
         "pending",
         "paid",
         "overdue",
-        "scheduled"
+        "scheduled",
+        "provisioned"
       ],
       "default": "pending",
-      "description": "Status: pending, paid, overdue, scheduled (d\u00e9bito autom\u00e1tico agendado)"
+      "description": "Status: pending, paid, overdue, scheduled (d\u00e9bito autom\u00e1tico agendado), provisioned (item de cart\u00e3o aguardando fechamento de fatura)"
     },
     "recurrent": {
       "type": "boolean",
@@ -97,6 +99,15 @@
     "installment_group_id": {
       "type": "string",
       "description": "ID para agrupar parcelas da mesma compra"
+    },
+    "card_invoice_id": {
+      "type": "string",
+      "description": "ID da CardInvoice \u00e0 qual este item de cart\u00e3o pertence (para itens individuais provisionados)"
+    },
+    "is_card_invoice_payable": {
+      "type": "boolean",
+      "default": false,
+      "description": "True quando este Payable representa a fatura consolidada do cart\u00e3o (n\u00e3o um item individual)"
     },
     "transaction_id": {
       "type": "string",

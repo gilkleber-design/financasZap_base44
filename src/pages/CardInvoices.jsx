@@ -4,109 +4,30 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Wallet } from 'lucide-react';
+import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 import { format, startOfMonth, addMonths, subMonths, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 const STATUS_CONFIG = {
-  open:    { label: 'Aberta',   color: 'bg-blue-100 text-blue-700',   icon: Clock },
-  closed:  { label: 'Fechada',  color: 'bg-amber-100 text-amber-700', icon: AlertCircle },
+  open:    { label: 'Aberta',   color: 'bg-blue-100 text-blue-700',       icon: Clock },
+  closed:  { label: 'Fechada',  color: 'bg-amber-100 text-amber-700',     icon: AlertCircle },
   paid:    { label: 'Paga',     color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
-  overdue: { label: 'Vencida',  color: 'bg-red-100 text-red-700',     icon: AlertCircle },
+  overdue: { label: 'Vencida',  color: 'bg-red-100 text-red-700',         icon: AlertCircle },
 };
 
-function PayInvoiceModal({ invoice, card, accounts, onClose, onPaid }) {
-  const [form, setForm] = useState({ account_id: '', paid_date: format(new Date(), 'yyyy-MM-dd') });
-  const [saving, setSaving] = useState(false);
-  const queryClient = useQueryClient();
-
-  const handlePay = async () => {
-    if (!form.account_id) return toast.error('Selecione a conta corrente');
-    setSaving(true);
-
-    // Cria lançamento de despesa
-    const tx = await base44.entities.Transaction.create({
-      description: `Fatura ${card?.name || 'Cartão'} — ${format(new Date(invoice.month + 'T12:00:00'), 'MMM/yyyy', { locale: ptBR })}`,
-      amount: invoice.total_amount,
-      net_amount: invoice.total_amount,
-      type: 'expense',
-      category: 'servicos',
-      date: form.paid_date,
-      reconciled: true,
-      source: 'manual',
-      notes: `Pagamento de fatura de cartão — conta: ${form.account_id}`,
-    });
-
-    // Atualiza fatura
-    await base44.entities.CardInvoice.update(invoice.id, {
-      status: 'paid',
-      paid_date: form.paid_date,
-      paid_account_id: form.account_id,
-      transaction_id: tx.id,
-    });
-
-    await queryClient.invalidateQueries();
-    setSaving(false);
-    toast.success('Fatura paga com sucesso!');
-    onPaid();
-  };
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Pagar Fatura</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="bg-muted/30 rounded-xl p-3 space-y-1">
-            <p className="text-sm font-medium">{card?.name}</p>
-            <p className="text-xs text-muted-foreground capitalize">
-              {format(new Date(invoice.month + 'T12:00:00'), 'MMMM yyyy', { locale: ptBR })}
-            </p>
-            <p className="text-lg font-bold text-red-500">{fmt(invoice.total_amount)}</p>
-          </div>
-          <div>
-            <Label>Conta Corrente de Débito *</Label>
-            <Select value={form.account_id} onValueChange={v => setForm(p => ({ ...p, account_id: v }))}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="De qual conta será debitado?" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map(a => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}{a.bank ? ` — ${a.bank}` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Data do Pagamento *</Label>
-            <Input type="date" className="mt-1" value={form.paid_date} onChange={e => setForm(p => ({ ...p, paid_date: e.target.value }))} />
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
-          <Button onClick={handlePay} disabled={saving} className="flex-1">
-            {saving ? 'Processando...' : 'Confirmar Pagamento'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+const STATUS_ITEM_COLORS = {
+  provisioned: 'bg-blue-100 text-blue-700',
+  paid:        'bg-emerald-100 text-emerald-700',
+  pending:     'bg-amber-100 text-amber-700',
+};
 
 export default function CardInvoices() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedCard, setSelectedCard] = useState('');
-  const [payingInvoice, setPayingInvoice] = useState(null);
+  const [payingPayable, setPayingPayable] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: cards = [] } = useQuery({
@@ -133,44 +54,49 @@ export default function CardInvoices() {
 
   const mStart = startOfMonth(currentMonth);
   const mEnd = endOfMonth(currentMonth);
-  const monthStr = format(mStart, 'yyyy-MM-dd');
+  const refMonthStr = format(mStart, 'yyyy-MM');
 
-  // Para o mês/cartão selecionado, calcula despesas no cartão
-  const getCardPayables = (cardId) => {
+  // Itens individuais do cartão no mês (pela competência)
+  const getCardItems = (cardId) => {
     return payables.filter(p => {
       if (p.origin_id !== cardId || p.origin_type !== 'card') return false;
-      if (!p.due_date) return false;
-      const d = new Date(p.due_date.includes('T') ? p.due_date : p.due_date + 'T12:00:00');
-      return d >= mStart && d <= mEnd;
+      if (p.is_card_invoice_payable) return false;
+      const comp = p.competencia || p.due_date;
+      if (!comp) return false;
+      return comp.startsWith(refMonthStr);
     });
   };
 
-  const getInvoice = (cardId) => {
-    return invoices.find(inv => inv.card_id === cardId && inv.month && inv.month.startsWith(monthStr.slice(0, 7)));
+  // Payable consolidado "Fatura XXXXX" para o mês
+  const getInvoicePayable = (cardId) => {
+    return payables.find(p =>
+      p.origin_id === cardId &&
+      p.is_card_invoice_payable === true &&
+      (p.competencia || p.due_date || '').startsWith(refMonthStr)
+    );
   };
 
-  const createInvoiceMutation = useMutation({
-    mutationFn: async ({ cardId, total }) => {
-      const card = cards.find(c => c.id === cardId);
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth();
-      const closingDate = card?.closing_day
-        ? format(new Date(year, month, card.closing_day), 'yyyy-MM-dd')
-        : format(mEnd, 'yyyy-MM-dd');
-      const dueDate = card?.due_day
-        ? format(new Date(year, month + 1, card.due_day), 'yyyy-MM-dd')
-        : null;
+  const getInvoice = (cardId) => {
+    return invoices.find(inv => inv.card_id === cardId && inv.month && inv.month.startsWith(refMonthStr));
+  };
 
-      return base44.entities.CardInvoice.create({
-        card_id: cardId,
-        month: monthStr,
-        total_amount: total,
-        status: 'open',
-        closing_date: closingDate,
-        due_date: dueDate,
+  const generateMutation = useMutation({
+    mutationFn: async (cardId) => {
+      const result = await base44.functions.invoke('generateCardInvoices', {
+        forceCardId: cardId,
+        forceMonth: format(mStart, 'yyyy-MM') + '-01',
       });
+      return result.data;
     },
-    onSuccess: () => { queryClient.invalidateQueries(['card_invoices']); toast.success('Fatura gerada!'); },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries();
+      const r = data?.results?.[0];
+      if (r?.status === 'created') toast.success(`Fatura gerada! ${r.items} itens · ${fmt(r.total)}`);
+      else if (r?.status === 'already_exists') toast.info('Fatura já existe para este mês');
+      else if (r?.status === 'no_items') toast.info('Nenhum item provisionado para este mês');
+      else toast.success('Processado');
+    },
+    onError: () => toast.error('Erro ao gerar fatura'),
   });
 
   return (
@@ -178,7 +104,7 @@ export default function CardInvoices() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-sora font-bold">Faturas de Cartão</h1>
-          <p className="text-muted-foreground text-sm mt-1">Gerencie e quite as faturas dos seus cartões</p>
+          <p className="text-muted-foreground text-sm mt-1">Regime de competência — itens individuais agrupados por fatura</p>
         </div>
       </div>
 
@@ -205,10 +131,12 @@ export default function CardInvoices() {
 
       <div className="grid gap-4">
         {creditCards.map(card => {
-          const cardPayables = getCardPayables(card.id);
-          const total = cardPayables.reduce((s, p) => s + (p.amount || 0), 0);
+          const items = getCardItems(card.id);
+          const total = items.reduce((s, p) => s + (p.amount || 0), 0);
           const existingInvoice = getInvoice(card.id);
-          const StatusIcon = existingInvoice ? (STATUS_CONFIG[existingInvoice.status]?.icon || Clock) : Clock;
+          const invoicePayable = getInvoicePayable(card.id);
+          const invoiceStatus = existingInvoice?.status || (invoicePayable?.status === 'paid' ? 'paid' : null);
+          const StatusIcon = invoiceStatus ? (STATUS_CONFIG[invoiceStatus]?.icon || Clock) : null;
 
           return (
             <Card key={card.id} className="border-0 shadow-sm">
@@ -220,10 +148,10 @@ export default function CardInvoices() {
                     {card.bank && <span className="text-muted-foreground font-normal text-sm">— {card.bank}</span>}
                   </CardTitle>
                   <div className="flex items-center gap-2">
-                    {existingInvoice ? (
-                      <Badge className={`text-xs border-0 ${STATUS_CONFIG[existingInvoice.status]?.color}`}>
-                        <StatusIcon className="w-3 h-3 mr-1" />
-                        {STATUS_CONFIG[existingInvoice.status]?.label}
+                    {invoiceStatus ? (
+                      <Badge className={`text-xs border-0 ${STATUS_CONFIG[invoiceStatus]?.color}`}>
+                        {StatusIcon && <StatusIcon className="w-3 h-3 mr-1" />}
+                        {STATUS_CONFIG[invoiceStatus]?.label}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="text-xs">Sem fatura</Badge>
@@ -240,55 +168,83 @@ export default function CardInvoices() {
               </CardHeader>
               <CardContent className="space-y-3">
 
-                {/* Despesas do mês neste cartão */}
-                {cardPayables.length > 0 ? (
+                {/* Itens individuais */}
+                {items.length > 0 ? (
                   <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
-                    {cardPayables.map(p => (
+                    {items.map(p => (
                       <div key={p.id} className="flex items-center justify-between px-3 py-2">
-                        <p className="text-sm truncate flex-1">{p.description}</p>
-                        <span className="text-sm font-medium text-red-500 flex-shrink-0 ml-2">{fmt(p.amount)}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate">{p.description}</p>
+                          {p.competencia && (
+                            <p className="text-xs text-muted-foreground">
+                              Comp: {format(new Date(p.competencia + 'T12:00:00'), 'dd/MM/yyyy')}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                          <Badge className={`text-xs border-0 py-0 h-4 px-1.5 ${STATUS_ITEM_COLORS[p.status] || STATUS_ITEM_COLORS.pending}`}>
+                            {p.status === 'provisioned' ? 'Provisionado' : p.status === 'paid' ? 'Pago' : p.status}
+                          </Badge>
+                          <span className="text-sm font-medium text-red-500">{fmt(p.amount)}</span>
+                        </div>
                       </div>
                     ))}
                     <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
-                      <p className="text-sm font-semibold">Total da Fatura</p>
+                      <p className="text-sm font-semibold">Total</p>
                       <span className="text-sm font-bold text-red-500">{fmt(total)}</span>
                     </div>
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-3 bg-muted/20 rounded-lg">
-                    Nenhuma despesa provisionada neste cartão para o mês
+                    Nenhuma despesa provisionada para este mês
                   </p>
+                )}
+
+                {/* Fatura consolidada */}
+                {invoicePayable && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Fatura Consolidada</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{invoicePayable.description}</p>
+                      <p className="text-sm font-bold text-red-500">{fmt(invoicePayable.amount)}</p>
+                    </div>
+                    {invoicePayable.due_date && (
+                      <p className="text-xs text-muted-foreground">
+                        Vence: {format(new Date(invoicePayable.due_date.includes('T') ? invoicePayable.due_date : invoicePayable.due_date + 'T12:00:00'), 'dd/MM/yyyy')}
+                      </p>
+                    )}
+                    {invoicePayable.status === 'paid' && (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 rounded px-2 py-1 mt-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Paga · {accounts.find(a => a.id === existingInvoice?.paid_account_id)?.name || ''}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Ações */}
                 <div className="flex gap-2">
-                  {!existingInvoice && cardPayables.length > 0 && (
+                  {!invoicePayable && items.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="flex-1 text-xs"
-                      onClick={() => createInvoiceMutation.mutate({ cardId: card.id, total })}
-                      disabled={createInvoiceMutation.isPending}
+                      onClick={() => generateMutation.mutate(card.id)}
+                      disabled={generateMutation.isPending}
                     >
-                      Gerar Fatura
+                      <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${generateMutation.isPending ? 'animate-spin' : ''}`} />
+                      Fechar Fatura
                     </Button>
                   )}
-                  {existingInvoice && existingInvoice.status !== 'paid' && (
+                  {invoicePayable && invoicePayable.status !== 'paid' && (
                     <Button
                       size="sm"
                       className="flex-1 text-xs"
-                      onClick={() => setPayingInvoice({ invoice: existingInvoice, card })}
+                      onClick={() => setPayingPayable(invoicePayable)}
                     >
-                      <Wallet className="w-3.5 h-3.5 mr-1.5" />
-                      Quitar Fatura — {fmt(existingInvoice.total_amount)}
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                      Pagar Fatura — {fmt(invoicePayable.amount)}
                     </Button>
-                  )}
-                  {existingInvoice?.status === 'paid' && existingInvoice.paid_account_id && (
-                    <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2 flex-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Paga em {existingInvoice.paid_date ? format(new Date(existingInvoice.paid_date + 'T12:00:00'), 'dd/MM/yyyy') : '—'}
-                      {' '}· {accounts.find(a => a.id === existingInvoice.paid_account_id)?.name || 'Conta'}
-                    </div>
                   )}
                 </div>
               </CardContent>
@@ -297,13 +253,13 @@ export default function CardInvoices() {
         })}
       </div>
 
-      {payingInvoice && (
-        <PayInvoiceModal
-          invoice={payingInvoice.invoice}
-          card={payingInvoice.card}
-          accounts={accounts}
-          onClose={() => setPayingInvoice(null)}
-          onPaid={() => setPayingInvoice(null)}
+      {payingPayable && (
+        <ConfirmPayableModal
+          payable={payingPayable}
+          onClose={() => {
+            setPayingPayable(null);
+            queryClient.invalidateQueries();
+          }}
         />
       )}
     </div>

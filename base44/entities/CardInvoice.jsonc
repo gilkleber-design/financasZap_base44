@@ -45,6 +45,10 @@
       "type": "string",
       "description": "ID da Conta Corrente utilizada para pagar a fatura"
     },
+    "payable_id": {
+      "type": "string",
+      "description": "ID do Payable consolidado (Fatura [CART\u00c3O]) gerado no Contas a Pagar"
+    },
     "transaction_id": {
       "type": "string",
       "description": "ID do lan\u00e7amento que quitou a fatura"
