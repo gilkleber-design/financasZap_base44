@@ -122,26 +122,27 @@ REGRAS DE EXCLUSÃO — NÃO incluir:
 - Limite de crédito / limite disponível
 - Valores negativos (estornos)
 
-CAMPO description: copie o texto EXATO da descrição, incluindo padrões de parcela como "(03/12)" ou "03/12" no final
-CAMPO amount: valor em número decimal (ex: 10249.61), sempre positivo — converta vírgulas para pontos
-CAMPO date: data da compra em YYYY-MM-DD. Se aparecer só dia/mês (ex: "25/08"), use ${ref_month.substring(0,4)} como ano
-CAMPO category — use EXATAMENTE uma destas strings, seguindo as regras:
+IMPORTANTE: Você DEVE extrair a data real do início de cada linha (padrão DD/MM, ex: 26/12, 04/12).
+Se a linha começa com DD/MM, essa é a data real da compra.
+INFIRA o ano com base no ref_month: se ref_month é "2026-05", use ano 2025 para datas > 05/31 (compras do mês anterior) e 2026 para datas <= 05/31.
+
+CAMPOS:
+- description: Texto EXATO da descrição, sem data
+- amount: Número decimal (sempre positivo)
+- date: Data da COMPRA em YYYY-MM-DD (extraída do início da linha, com ano inferido)
+- category: Use regras de CategoryRule (ver banco de dados) ou padrões abaixo como fallback
+
+CATEGORIAS PADRÃO (fallback):
   * "transporte": UBER, 99, CABIFY, POSTO, SHELL, IPIRANGA, PETROBRAS, COMBUSTIVEL, LATAM, GOL, AZUL, PASSAGEM
-  * "servicos": GOOGLE, APPLE, CAPCUT, NETFLIX, SPOTIFY, AMAZON, YOUTUBE, DISNEY, PARAMOUNT, HBO, ADAPTA, assinaturas de software/app
-  * "saude": FARMACIA, DROGARIA, PAGUE MENOS, ULTRAFARMA, HAPVIDA, UNIMED, HOSPITAL, CLINICA, HOSPCOM, LABORATORIO, PLANO DE SAUDE, MENSALIDADE PLANO
-  * "alimentacao": MERCADO, SUPERMERCADO, CARREFOUR, IFOOD, RAPPI, UBER EATS, RESTAURANTE, LANCHONETE, PADARIA
+  * "servicos": GOOGLE, APPLE, CAPCUT, NETFLIX, SPOTIFY, AMAZON, YOUTUBE, DISNEY, PARAMOUNT, HBO, ADAPTA
+  * "saude": FARMACIA, DROGARIA, PAGUE MENOS, ULTRAFARMA, HOSPITAL, CLINICA, LABORATORIO, PLANO, MENSALIDADE
+  * "alimentacao": MERCADO, SUPERMERCADO, CARREFOUR, ATAKADAO, HIPERIDEAL, IFOOD, RAPPI, RESTAURANTE, LANCHONETE, PADARIA
   * "educacao": ESCOLA, UNIVERSIDADE, CURSO, UDEMY, ALURA, FACULDADE
-  * "impostos": IOF, TAXA, IMPOSTO, ENCARGO, MULTA, qualquer linha de imposto/taxa
+  * "impostos": IOF, TAXA, IMPOSTO, ENCARGO, MULTA, JUROS
   * "lazer": HOTEL, AIRBNB, CINEMA, TEATRO, SHOW, INGRESSO, BOOKING
   * "vestuario": ROUPA, CALCADO, ZARA, RENNER, RIACHUELO
   * "moradia": ALUGUEL, CONDOMINIO, ENERGIA, AGUA, GAS, INTERNET, TELEFONE
   * "outros": SOMENTE se não se encaixar em nenhuma categoria acima
-
-ATENÇÃO ESPECIAL:
-- "Mensalidade - Plano do" → categoria "saude"  
-- "Adapta Org" → categoria "servicos"
-- "Uber *TRIP" ou "Uber HELP.US" → categoria "transporte"
-- IOF de transação internacional → categoria "impostos"
 
 Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items": []}.`,
       response_json_schema: {

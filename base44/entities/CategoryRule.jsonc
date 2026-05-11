@@ -1,0 +1,44 @@
+{
+  "name": "CategoryRule",
+  "type": "object",
+  "properties": {
+    "keyword": {
+      "type": "string",
+      "description": "Palavra-chave para identificar a transa\u00e7\u00e3o (ex: POSTO, ATAKADAO, UBER)"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "alimentacao",
+        "transporte",
+        "moradia",
+        "saude",
+        "educacao",
+        "lazer",
+        "vestuario",
+        "servicos",
+        "impostos",
+        "outros"
+      ],
+      "description": "Categoria que ser\u00e1 atribu\u00edda quando a palavra-chave for encontrada"
+    },
+    "priority": {
+      "type": "number",
+      "default": 0,
+      "description": "Prioridade de match (n\u00fameros maiores s\u00e3o verificados primeiro)"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Se a regra est\u00e1 ativa"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00f5es sobre a regra"
+    }
+  },
+  "required": [
+    "keyword",
+    "category"
+  ]
+}

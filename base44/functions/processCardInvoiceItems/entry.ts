@@ -35,8 +35,16 @@ Deno.serve(async (req) => {
       return null;
     };
 
-    // Mapa de categorização refinada
-    const categoryMap = {
+    // Carrega regras customizadas de categorização do banco
+    let categoryRules = [];
+    try {
+      categoryRules = await base44.entities.CategoryRule.list('-priority', 100);
+    } catch {
+      // Se tabela não existe, usar mapa padrão
+    }
+
+    // Mapa de categorização padrão (fallback)
+    const defaultCategoryMap = {
       impostos: ['ENCARGOS', 'MULTA', 'JUROS', 'IOF', 'ANUIDADE', 'ADAPTAORG'],
       transporte: ['UBER', 'POSTO', 'AUTO POSTO', 'SHELL', 'ESTACIONAMENTO', 'LATAM', 'GOL', 'AZUL'],
       alimentacao: ['ATAKADAO', 'HIPERIDEAL', 'KIPAO', 'TRIGO', 'PARIS', 'MANAA', 'AM COMERCIO', 'CARREFOUR', 'IFOOD', 'RAPPI', 'RESTAURANTE', 'LANCHONETE', 'PADARIA', 'MC DONALDS', 'CHURRASCARIA', 'SVM COMERCIO', 'ORGANICO', 'LE BISCUIT', 'FORNARI', 'CSC VENDING', 'IFD'],
@@ -47,7 +55,17 @@ Deno.serve(async (req) => {
 
     const getCategory = (desc) => {
       const upper = (desc || '').toUpperCase();
-      for (const [cat, keywords] of Object.entries(categoryMap)) {
+      
+      // Verifica regras customizadas primeiro
+      const activeRules = categoryRules.filter(r => r.active !== false);
+      for (const rule of activeRules) {
+        if (upper.includes((rule.keyword || '').toUpperCase())) {
+          return rule.category;
+        }
+      }
+      
+      // Fallback para mapa padrão
+      for (const [cat, keywords] of Object.entries(defaultCategoryMap)) {
         if (cat === 'outros') continue;
         if (keywords.some(kw => upper.includes(kw))) return cat;
       }
