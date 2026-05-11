@@ -40,9 +40,11 @@
       "enum": [
         "pending",
         "paid",
-        "overdue"
+        "overdue",
+        "scheduled"
       ],
-      "default": "pending"
+      "default": "pending",
+      "description": "Status: pending, paid, overdue, scheduled (d\u00e9bito autom\u00e1tico agendado)"
     },
     "recurrent": {
       "type": "boolean",
@@ -53,6 +55,44 @@
       "type": "boolean",
       "default": false,
       "description": "Se o vencimento deve ser o 5\u00ba dia \u00fatil do m\u00eas"
+    },
+    "origin_id": {
+      "type": "string",
+      "description": "ID da conta (Account) ou cart\u00e3o (Card) de origem do pagamento"
+    },
+    "origin_type": {
+      "type": "string",
+      "enum": [
+        "account",
+        "card"
+      ],
+      "description": "Tipo da origem: 'account' para Conta Corrente, 'card' para Cart\u00e3o de Cr\u00e9dito"
+    },
+    "payment_modality": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "automatic_debit",
+        "card_invoice"
+      ],
+      "default": "manual",
+      "description": "Modalidade: manual, automatic_debit (d\u00e9bito autom\u00e1tico), card_invoice (fatura cart\u00e3o)"
+    },
+    "installment_total_amount": {
+      "type": "number",
+      "description": "Valor total da compra parcelada"
+    },
+    "installment_count": {
+      "type": "number",
+      "description": "N\u00famero total de parcelas"
+    },
+    "installment_number": {
+      "type": "number",
+      "description": "N\u00famero da parcela atual (ex: 3 de 12)"
+    },
+    "installment_group_id": {
+      "type": "string",
+      "description": "ID para agrupar parcelas da mesma compra"
     },
     "transaction_id": {
       "type": "string",

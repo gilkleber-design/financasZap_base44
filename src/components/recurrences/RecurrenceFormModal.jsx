@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sparkles, Loader2, X, Plus } from 'lucide-react';
+import { Sparkles, Loader2, X, Plus, CreditCard, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCategories } from '@/hooks/useCategories';
 import { Checkbox } from '@/components/ui/checkbox';
+import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
 
 const FALLBACK_CATEGORIES = [
   { value: 'moradia', label: 'Moradia' },
@@ -30,6 +31,9 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
     due_day: initial?.due_day || '',
     category: initial?.category || '',
     notes: initial?.notes || '',
+    origin_id: initial?.origin_id || '',
+    origin_type: initial?.origin_type || '',
+    payment_modality: initial?.payment_modality || 'manual',
   });
   const [saving, setSaving] = useState(false);
   const [categorySuggestion, setCategorySuggestion] = useState(null);
@@ -37,6 +41,7 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
   const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
   const { flatForSelect } = useCategories();
   const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
+  const { origins } = usePaymentOrigins();
   const queryClient = useQueryClient();
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -71,19 +76,24 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
     if (day < 1 || day > 31) return toast.error('Dia de vencimento inválido (1-31)');
 
     setSaving(true);
+    const extraFields = {
+      origin_id: form.origin_id || undefined,
+      origin_type: form.origin_type || undefined,
+      payment_modality: form.payment_modality || 'manual',
+    };
+
     if (initial) {
-      // Editar
       const updated = await base44.entities.Recurrence.update(initial.id, {
         description: form.description,
         amount: parseFloat(form.amount),
         due_day: day,
         category: form.category,
         notes: form.notes || undefined,
+        ...extraFields,
       });
       setSaving(false);
       onSaved(updated);
     } else {
-      // Criar novo
       const recurrence = await base44.entities.Recurrence.create({
         description: form.description,
         amount: parseFloat(form.amount),
@@ -91,6 +101,7 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
         category: form.category,
         notes: form.notes || undefined,
         active: true,
+        ...extraFields,
       });
       setSaving(false);
       onSaved(recurrence);
@@ -163,6 +174,61 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
               />
             </div>
           </div>
+          {/* Origem do pagamento */}
+          <div>
+            <Label>Origem do Pagamento</Label>
+            <Select value={form.origin_id} onValueChange={(value) => {
+              const origin = origins.find(o => o.id === value);
+              if (!origin) { set('origin_id', ''); set('origin_type', ''); return; }
+              set('origin_id', origin.id);
+              set('origin_type', origin.type);
+              if (origin.type === 'card') set('payment_modality', 'card_invoice');
+              else if (form.payment_modality === 'card_invoice') set('payment_modality', 'manual');
+            }}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Selecionar conta ou cartão..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— Nenhuma —</SelectItem>
+                {origins.filter(o => o.type === 'account').length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <Landmark className="w-3 h-3" /> Contas Correntes
+                    </div>
+                    {origins.filter(o => o.type === 'account').map(o => (
+                      <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
+                    ))}
+                  </>
+                )}
+                {origins.filter(o => o.type === 'card').length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <CreditCard className="w-3 h-3" /> Cartões de Crédito
+                    </div>
+                    {origins.filter(o => o.type === 'card').map(o => (
+                      <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
+                    ))}
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+            {form.origin_type === 'card' && (
+              <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">💳 Despesa provisionada na fatura do cartão</p>
+            )}
+            {form.origin_type === 'account' && (
+              <div className="mt-2">
+                <Label>Modalidade</Label>
+                <Select value={form.payment_modality} onValueChange={v => set('payment_modality', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="automatic_debit">Débito Automático</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
           <div>
             <Label>Categoria *</Label>
             <Select value={form.category} onValueChange={v => {

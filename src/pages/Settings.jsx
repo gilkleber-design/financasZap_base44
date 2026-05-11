@@ -19,7 +19,7 @@ export default function Settings() {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const [showCardForm, setShowCardForm] = useState(false);
-  const [cardForm, setCardForm] = useState({ name: '', type: 'credit', bank: '' });
+  const [cardForm, setCardForm] = useState({ name: '', type: 'credit', bank: '', closing_day: '', due_day: '' });
   const setCard = (k, v) => setCardForm(p => ({ ...p, [k]: v }));
 
   const [showAccountForm, setShowAccountForm] = useState(false);
@@ -288,12 +288,29 @@ export default function Settings() {
                     <Label>Banco</Label>
                     <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú" />
                   </div>
+                  {(cardForm.type === 'credit' || cardForm.type === 'both') && (
+                    <>
+                      <div>
+                        <Label>Dia de Fechamento</Label>
+                        <Input type="number" min={1} max={31} value={cardForm.closing_day} onChange={e => setCard('closing_day', e.target.value)} className="mt-1" placeholder="Ex: 28" />
+                      </div>
+                      <div>
+                        <Label>Dia de Vencimento</Label>
+                        <Input type="number" min={1} max={31} value={cardForm.due_day} onChange={e => setCard('due_day', e.target.value)} className="mt-1" placeholder="Ex: 7" />
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
                   <Button size="sm" onClick={() => {
                     if (!cardForm.name) { toast.error('Informe o nome'); return; }
-                    createCardMutation.mutate({ ...cardForm, active: true });
+                    createCardMutation.mutate({
+                      ...cardForm,
+                      closing_day: cardForm.closing_day ? parseInt(cardForm.closing_day) : undefined,
+                      due_day: cardForm.due_day ? parseInt(cardForm.due_day) : undefined,
+                      active: true,
+                    });
                   }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
                 </div>
               </div>
@@ -310,11 +327,13 @@ export default function Settings() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">{c.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
                         {c.type === 'credit' ? 'Crédito' : c.type === 'debit' ? 'Débito' : 'Crédito e Débito'}
                       </Badge>
                       {c.bank && <span className="text-xs text-muted-foreground">{c.bank}</span>}
+                      {c.closing_day && <span className="text-xs text-muted-foreground">Fecha dia {c.closing_day}</span>}
+                      {c.due_day && <span className="text-xs text-muted-foreground">Vence dia {c.due_day}</span>}
                     </div>
                   </div>
                 </div>

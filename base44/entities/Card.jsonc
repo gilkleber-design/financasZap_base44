@@ -19,6 +19,14 @@
       "type": "string",
       "description": "Banco/institui\u00e7\u00e3o emissora"
     },
+    "closing_day": {
+      "type": "number",
+      "description": "Dia do m\u00eas para fechamento da fatura (1-31)"
+    },
+    "due_day": {
+      "type": "number",
+      "description": "Dia do m\u00eas para vencimento da fatura (1-31)"
+    },
     "active": {
       "type": "boolean",
       "default": true

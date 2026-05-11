@@ -1,0 +1,60 @@
+{
+  "name": "CardInvoice",
+  "type": "object",
+  "properties": {
+    "card_id": {
+      "type": "string",
+      "description": "ID do cart\u00e3o de cr\u00e9dito"
+    },
+    "month": {
+      "type": "string",
+      "format": "date",
+      "description": "M\u00eas de refer\u00eancia da fatura (YYYY-MM-01)"
+    },
+    "total_amount": {
+      "type": "number",
+      "description": "Total da fatura (soma das despesas)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "closed",
+        "paid",
+        "overdue"
+      ],
+      "default": "open",
+      "description": "Status da fatura"
+    },
+    "closing_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data de fechamento da fatura"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data de vencimento da fatura"
+    },
+    "paid_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data em que a fatura foi paga"
+    },
+    "paid_account_id": {
+      "type": "string",
+      "description": "ID da Conta Corrente utilizada para pagar a fatura"
+    },
+    "transaction_id": {
+      "type": "string",
+      "description": "ID do lan\u00e7amento que quitou a fatura"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "card_id",
+    "month"
+  ]
+}
