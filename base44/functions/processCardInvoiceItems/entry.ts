@@ -105,31 +105,59 @@ Deno.serve(async (req) => {
       }
     });
 
-    // Criar Payables provisionados com parcelamento
-    const payables = deduped.map(item => {
-      const base = {
-        description: item.description,
-        amount: item.amount,
-        due_date: item.date ? new Date(item.date).toISOString().split('T')[0] + 'T12:00:00' : ref_month + '-01T12:00:00',
-        competencia: item.date ? new Date(item.date).toISOString().split('T')[0] : ref_month + '-01',
-        category: item.category || 'outros',
-        status: 'provisioned',
-        origin_id: card_id,
-        origin_type: 'card',
-        payment_modality: 'card_invoice',
-        recurrent: false,
-        notes: item.notes || undefined,
-      };
+    // Criar Payables provisionados com parcelamento (mês atual + futuros)
+    const payables = [];
+    const { addMonths } = await import('npm:date-fns@3.6.0');
 
-      // Se tem parcelamento, adicionar campos
-      if (item.installment) {
-        base.installment_number = item.installment.number;
-        base.installment_count = item.installment.total;
-        base.installment_total_amount = item.amount * item.installment.total;
-        base.installment_group_id = `${item.description}_${item.installment.total}`;
+    deduped.forEach(item => {
+      const baseDesc = item.description;
+      const groupId = `${baseDesc}_${item.installment?.total || 1}`;
+
+      if (item.installment && item.installment.total > 1) {
+        // Gerar todas as parcelas (atual + futuras)
+        const startNum = item.installment.number;
+        const totalInstallments = item.installment.total;
+        const monthlyAmount = item.amount;
+        const itemDate = new Date(item.date + 'T12:00:00');
+
+        for (let i = 0; i < (totalInstallments - startNum + 1); i++) {
+          const futureDate = addMonths(itemDate, i);
+          const futureDateStr = futureDate.toISOString().split('T')[0];
+
+          payables.push({
+            description: baseDesc,
+            amount: monthlyAmount,
+            due_date: futureDateStr + 'T12:00:00',
+            competencia: futureDateStr,
+            category: item.category || 'outros',
+            status: 'provisioned',
+            origin_id: card_id,
+            origin_type: 'card',
+            payment_modality: 'card_invoice',
+            recurrent: false,
+            installment_number: startNum + i,
+            installment_count: totalInstallments,
+            installment_total_amount: monthlyAmount * totalInstallments,
+            installment_group_id: groupId,
+            notes: item.notes || undefined,
+          });
+        }
+      } else {
+        // Sem parcelamento — criar apenas um lançamento
+        payables.push({
+          description: baseDesc,
+          amount: item.amount,
+          due_date: item.date ? new Date(item.date).toISOString().split('T')[0] + 'T12:00:00' : ref_month + '-01T12:00:00',
+          competencia: item.date ? new Date(item.date).toISOString().split('T')[0] : ref_month + '-01',
+          category: item.category || 'outros',
+          status: 'provisioned',
+          origin_id: card_id,
+          origin_type: 'card',
+          payment_modality: 'card_invoice',
+          recurrent: false,
+          notes: item.notes || undefined,
+        });
       }
-
-      return base;
     });
 
     await base44.entities.Payable.bulkCreate(payables);
