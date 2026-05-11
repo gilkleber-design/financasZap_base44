@@ -4,11 +4,11 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2, Undo2 } from 'lucide-react';
 import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths, isSameMonth, isSameYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import PayableFormModal from '@/components/payables/PayableFormModal';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 import EditPayableModal from '@/components/payables/EditPayableModal';
@@ -35,11 +35,18 @@ export default function Payables() {
   const [deletingPayable, setDeletingPayable] = useState(null);
   const [deleteMode, setDeleteMode] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [filterStatus, setFilterStatus] = useState('open'); // 'open' | 'overdue' | 'paid'
+  const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' | 'competencia'
   const queryClient = useQueryClient();
 
   const { data: payables = [] } = useQuery({
     queryKey: ['payables'],
     queryFn: () => base44.entities.Payable.list('-due_date', 200),
+  });
+
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: () => base44.entities.Transaction.list('-date', 500),
   });
 
   const deleteMutation = useMutation({
@@ -53,11 +60,7 @@ export default function Payables() {
       const toDelete = allPayables.filter(p => p.description === payable.description && p.due_date);
 
       if (deleteMode === 'this') {
-        const next = toDelete.sort((a, b) => {
-          const dA = new Date(a.due_date);
-          const dB = new Date(b.due_date);
-          return dA - dB;
-        })[0];
+        const next = toDelete.sort((a, b) => new Date(a.due_date) - new Date(b.due_date))[0];
         if (next) await base44.entities.Payable.delete(next.id);
       } else if (deleteMode === 'all') {
         for (const p of toDelete) await base44.entities.Payable.delete(p.id);
@@ -70,6 +73,14 @@ export default function Payables() {
       }
     },
     onSuccess: () => { queryClient.invalidateQueries(); toast.success('Lançamentos removidos'); },
+  });
+
+  const undoPaymentMutation = useMutation({
+    mutationFn: async (p) => {
+      if (p.transaction_id) await base44.entities.Transaction.delete(p.transaction_id);
+      await base44.entities.Payable.update(p.id, { status: 'pending', transaction_id: null });
+    },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Pagamento desfeito!'); },
   });
 
   const handleDelete = async () => {
@@ -88,42 +99,105 @@ export default function Payables() {
     return p.status;
   };
 
-  const filtered = payables.filter(p => {
-    if (!p.due_date) return false;
-    const d = new Date(p.due_date);
-    if (isNaN(d.getTime())) return false;
-    return isSameMonth(d, currentMonth) && isSameYear(d, currentMonth);
+  // Mapa de payable_id -> data real do pagamento
+  const paidDateMap = {};
+  transactions.forEach(t => {
+    if (t.payable_id) paidDateMap[t.payable_id] = t.date;
   });
 
-  const totalPending = filtered.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
+  const mStart = startOfMonth(currentMonth);
+  const mEnd = endOfMonth(currentMonth);
+
+  const filtered = payables.filter(p => {
+    // Filtro de status
+    const status = getStatus(p);
+    if (filterStatus === 'open') {
+      if (status === 'paid') return false;
+    } else if (filterStatus === 'overdue') {
+      if (status !== 'overdue') return false;
+    } else if (filterStatus === 'paid') {
+      if (status !== 'paid') return false;
+    }
+
+    // Para pagas: filtrar pela data real do pagamento
+    if (filterStatus === 'paid' || status === 'paid') {
+      const payDate = paidDateMap[p.id] || p.due_date;
+      if (!payDate) return false;
+      const d = new Date(payDate + (payDate.includes('T') ? '' : 'T12:00:00'));
+      return d >= mStart && d <= mEnd;
+    }
+
+    // Para em aberto / vencidas: filtrar por due_date ou competencia
+    const dateField = filterBy === 'competencia'
+      ? (p.competencia || p.due_date)
+      : p.due_date;
+
+    if (!dateField) return false;
+    const d = new Date(dateField + (dateField.includes('T') ? '' : 'T12:00:00'));
+    if (isNaN(d.getTime())) return false;
+    return d >= mStart && d <= mEnd;
+  });
+
+  const totalFiltered = filtered.reduce((s, p) => s + (p.amount || 0), 0);
+  const pendingCount = filtered.filter(p => getStatus(p) === 'pending').length;
+  const overdueCount = filtered.filter(p => getStatus(p) === 'overdue').length;
+
+  const subtitle = filterStatus === 'open'
+    ? `${pendingCount} pendentes · ${overdueCount} vencidas · ${fmt(totalFiltered)} total`
+    : filterStatus === 'overdue'
+    ? `${filtered.length} vencidas · ${fmt(totalFiltered)} em atraso`
+    : `${filtered.length} pagas · ${fmt(totalFiltered)} pago`;
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-sora font-bold">Contas a Pagar</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {filtered.filter(p => p.status === 'pending').length} pendentes · {fmt(totalPending)} total
-          </p>
+          <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="w-4 h-4 mr-2" /> Nova Conta
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-          <ChevronLeft className="w-4 h-4" />
+      {/* Filtro de status */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button variant={filterStatus === 'open' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('open')} className="text-xs">
+          Em Aberto
         </Button>
-        <span className="text-sm font-medium min-w-[140px] text-center capitalize">
-          {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-        </span>
-        <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-          <ChevronRight className="w-4 h-4" />
+        <Button variant={filterStatus === 'overdue' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('overdue')} className="text-xs">
+          Vencidas
+        </Button>
+        <Button variant={filterStatus === 'paid' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('paid')} className="text-xs">
+          Pagas
         </Button>
       </div>
 
-
+      {/* Filtro de mês + tipo de data */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <span className="text-sm font-medium min-w-[140px] text-center capitalize">
+            {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+          </span>
+          <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        {filterStatus !== 'paid' && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Filtrar por:</span>
+            <Button variant={filterBy === 'due_date' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('due_date')} className="text-xs">
+              Vencimento
+            </Button>
+            <Button variant={filterBy === 'competencia' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('competencia')} className="text-xs">
+              Competência
+            </Button>
+          </div>
+        )}
+      </div>
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">
@@ -154,15 +228,15 @@ export default function Payables() {
                     </div>
                     {p.due_date && (
                       <div className="flex items-center gap-2 mt-0.5">
-                       <span className="text-xs text-muted-foreground">
-                         {(() => {
-                           const d = new Date(p.due_date);
-                           return isNaN(d.getTime()) ? 'Venc: —' : `Venc: ${format(d, 'dd/MM/yyyy', { locale: ptBR })}`;
-                         })()}
-                       </span>
-                       {p.category && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{CATEGORY_LABELS[p.category] || p.category}</Badge>}
-                       </div>
-                       )}
+                        <span className="text-xs text-muted-foreground">
+                          {(() => {
+                            const d = new Date(p.due_date);
+                            return isNaN(d.getTime()) ? 'Venc: —' : `Venc: ${format(d, 'dd/MM/yyyy', { locale: ptBR })}`;
+                          })()}
+                        </span>
+                        {p.category && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{CATEGORY_LABELS[p.category] || p.category}</Badge>}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-semibold text-red-500">-{fmt(p.amount)}</p>
@@ -176,6 +250,11 @@ export default function Payables() {
                   {status !== 'paid' && (
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingPayable(p)}>
                       <CheckCircle2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {status === 'paid' && (
+                    <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500 hover:text-amber-700" title="Desfazer pagamento" onClick={() => undoPaymentMutation.mutate(p)}>
+                      <Undo2 className="w-4 h-4" />
                     </Button>
                   )}
                   <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => setDeletingPayable(p)}>
@@ -215,27 +294,15 @@ export default function Payables() {
               <AlertDialogDescription>Escolha como deseja proceder:</AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left"
-                onClick={() => setDeleteMode('this')}
-              >
+              <Button variant="outline" className="w-full justify-start text-left" onClick={() => setDeleteMode('this')}>
                 <span className="font-medium">Apenas este mês</span>
                 <span className="block text-xs text-muted-foreground">Remove só a próxima parcela</span>
               </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left"
-                onClick={() => setDeleteMode('forward')}
-              >
+              <Button variant="outline" className="w-full justify-start text-left" onClick={() => setDeleteMode('forward')}>
                 <span className="font-medium">Daqui em diante</span>
                 <span className="block text-xs text-muted-foreground">Mantém passadas, remove futuras</span>
               </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left text-red-500"
-                onClick={() => setDeleteMode('all')}
-              >
+              <Button variant="outline" className="w-full justify-start text-left text-red-500" onClick={() => setDeleteMode('all')}>
                 <span className="font-medium">Todas as parcelas</span>
                 <span className="block text-xs text-muted-foreground">Deleta todas as contas com esse nome</span>
               </Button>
@@ -258,12 +325,7 @@ export default function Payables() {
             </AlertDialogHeader>
             <div className="flex gap-2">
               <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={handleDelete}
-                disabled={deletePayablesMutation.isPending}
-              >
+              <Button variant="destructive" className="flex-1" onClick={handleDelete} disabled={deletePayablesMutation.isPending}>
                 Remover
               </Button>
             </div>

@@ -16,9 +16,9 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 export default function Receivables() {
   const [showForm, setShowForm] = useState(false);
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
-  const [filterMonth, setFilterMonth] = useState(null); // null = todos
-  const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' ou 'competencia'
-  const [filterStatus, setFilterStatus] = useState('open'); // 'open' = em aberto | 'received' = pagas | 'all' = todas
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [filterStatus, setFilterStatus] = useState('open'); // 'open' | 'overdue' | 'received'
+  const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' | 'competencia'
   const queryClient = useQueryClient();
 
   const { data: receivables = [] } = useQuery({
@@ -41,7 +41,32 @@ export default function Receivables() {
     queryFn: () => base44.entities.Transaction.list('-date', 500),
   });
 
-  // Transactions de salário/bolsa que serão exibidas como "recebidas" na lista
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.Receivable.delete(id),
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Removido'); },
+  });
+
+  const undoPaymentMutation = useMutation({
+    mutationFn: async (r) => {
+      if (r.transaction_id) await base44.entities.Transaction.delete(r.transaction_id);
+      await base44.entities.Receivable.update(r.id, { status: 'pending', transaction_id: null });
+    },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Pagamento desfeito!'); },
+  });
+
+  const getStatus = (r) => {
+    if (r.status === 'received') return 'received';
+    if (r.due_date && isPast(new Date(r.due_date)) && !isToday(new Date(r.due_date))) return 'overdue';
+    return r.status;
+  };
+
+  // Mapa de receivable_id -> data real do recebimento
+  const receivedDateMap = {};
+  transactions.forEach(t => {
+    if (t.receivable_id) receivedDateMap[t.receivable_id] = t.date;
+  });
+
+  // Transactions PF que aparecem como "recebidas"
   const pfTransactions = transactions.filter(t =>
     t.type === 'income' &&
     (t.category === 'salario_clt' ||
@@ -59,116 +84,70 @@ export default function Receivables() {
     _isPfTransaction: true,
   }));
 
+  const mStart = startOfMonth(currentMonth);
+  const mEnd = endOfMonth(currentMonth);
 
+  // Combina receivables com pfTransactions para o filtro "recebidas"
+  const allItems = filterStatus === 'received'
+    ? [...receivables, ...pfTransactions]
+    : receivables;
 
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Receivable.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Removido'); },
+  const filtered = allItems.filter(r => {
+    const status = getStatus(r);
+
+    // Filtro de status
+    if (filterStatus === 'open') {
+      if (status === 'received') return false;
+    } else if (filterStatus === 'overdue') {
+      if (status !== 'overdue') return false;
+    } else if (filterStatus === 'received') {
+      if (status !== 'received') return false;
+    }
+
+    // Para recebidas: filtrar pela data real do recebimento
+    if (filterStatus === 'received' || status === 'received') {
+      const payDate = r._isPfTransaction
+        ? r.due_date
+        : (receivedDateMap[r.id] || r.due_date);
+      if (!payDate) return false;
+      const d = new Date(payDate + (payDate.includes('T') ? '' : 'T12:00:00'));
+      return d >= mStart && d <= mEnd;
+    }
+
+    // Para em aberto / vencidas: filtrar por due_date ou competencia
+    const dateField = filterBy === 'competencia'
+      ? (r.competencia || r.due_date)
+      : r.due_date;
+
+    if (!dateField) return false;
+    const d = new Date(dateField + (dateField.includes('T') ? '' : 'T12:00:00'));
+    if (isNaN(d.getTime())) return false;
+    return d >= mStart && d <= mEnd;
+  }).sort((a, b) => {
+    const siglaA = (a.description.split('—')[0] || '').trim().toLowerCase();
+    const siglaB = (b.description.split('—')[0] || '').trim().toLowerCase();
+    if (siglaA !== siglaB) return siglaA.localeCompare(siglaB, 'pt-BR');
+    const cA = a.competencia || a.due_date || '';
+    const cB = b.competencia || b.due_date || '';
+    return cA.localeCompare(cB);
   });
 
-  const undoPaymentMutation = useMutation({
-    mutationFn: async (r) => {
-      // Remove o lançamento vinculado (se existir) e reverte o recebível para pending
-      if (r.transaction_id) await base44.entities.Transaction.delete(r.transaction_id);
-      await base44.entities.Receivable.update(r.id, { status: 'pending', transaction_id: null });
-    },
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Pagamento desfeito!'); },
-  });
+  const totalFiltered = filtered.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
+  const pendingCount = filtered.filter(r => getStatus(r) === 'pending').length;
+  const overdueCount = filtered.filter(r => getStatus(r) === 'overdue').length;
 
-  const getStatus = (r) => {
-    if (r.status === 'received') return 'received';
-    if (r.due_date && isPast(new Date(r.due_date)) && !isToday(new Date(r.due_date))) return 'overdue';
-    return r.status;
-  };
-
-  // Helper: nome do hospital para um recebível (via income_source_id)
-  const hospitalName = (r) => {
-    const hosp = hospitals.find(h => h.income_source_id === r.income_source_id);
-    if (hosp) return hosp.sigla || hosp.name;
-    const src = incomeSources.find(s => s.id === r.income_source_id);
-    return src?.name || '';
-  };
-
-  // Mescla receivables com pfTransactions quando filtro for 'received' ou 'all'
-  const allItems = filterStatus === 'open'
-    ? receivables
-    : filterStatus === 'received'
-    ? [...receivables.filter(r => r.status === 'received'), ...pfTransactions]
-    : [...receivables, ...pfTransactions];
-
-  // Mapa de receivable_id -> data real do pagamento (transaction.date)
-  const receivedDateMap = {};
-  transactions.forEach(t => {
-    if (t.receivable_id) receivedDateMap[t.receivable_id] = t.date;
-  });
-
-  const currentYear = new Date().getFullYear();
-  const filtered = allItems
-    .filter(r => {
-      // filtro de status
-      if (filterStatus === 'open') return r.status !== 'received';
-      if (filterStatus === 'received') return r.status === 'received';
-      return true;
-    })
-    .filter(r => {
-      if (!filterMonth) {
-        // Sem filtro de mês: mostrar apenas ano corrente
-        const dateField = r.due_date || r.competencia;
-        if (!dateField) return false;
-        return new Date(dateField).getFullYear() === currentYear;
-      }
-      const mStart = startOfMonth(filterMonth);
-      const mEnd = endOfMonth(filterMonth);
-
-      // Para recebidas: filtrar pela data real do pagamento
-      if (filterStatus === 'received' || (filterStatus === 'all' && r.status === 'received')) {
-        // pfTransactions usam due_date como data de pagamento
-        const payDate = r._isPfTransaction
-          ? r.due_date
-          : (receivedDateMap[r.id] || r.due_date);
-        if (!payDate) return false;
-        const d = new Date(payDate + 'T12:00:00');
-        return d.getFullYear() === currentYear && d >= mStart && d <= mEnd;
-      }
-
-      // Para em aberto / todas não recebidas: filtro normal
-      if (filterBy === 'due_date') {
-        if (!r.due_date) return false;
-        const d = new Date(r.due_date + 'T12:00:00');
-        return d.getFullYear() === currentYear && d >= mStart && d <= mEnd;
-      } else {
-        const raw = r.competencia || r.due_date;
-        if (!raw) return false;
-        const d = new Date(raw + 'T12:00:00');
-        return d.getFullYear() === currentYear && d >= mStart && d <= mEnd;
-      }
-    })
-    .sort((a, b) => {
-      // Extrai a sigla do hospital da descrição (tudo antes do " —")
-      const siglaA = (a.description.split('—')[0] || '').trim().toLowerCase();
-      const siglaB = (b.description.split('—')[0] || '').trim().toLowerCase();
-      if (siglaA !== siglaB) return siglaA.localeCompare(siglaB, 'pt-BR');
-      // depois por competência (ou due_date como fallback)
-      const cA = a.competencia || a.due_date || '';
-      const cB = b.competencia || b.due_date || '';
-      return cA.localeCompare(cB);
-    });
-
-  const totalPending = filtered.filter(r => r.status === 'pending').reduce((s, r) => s + (r.net_amount || r.amount), 0);
-  const totalFiltered = filtered.reduce((s, r) => s + (r.net_amount || r.amount), 0);
+  const subtitle = filterStatus === 'open'
+    ? `${pendingCount} pendentes · ${overdueCount} vencidas · ${fmt(totalFiltered)} total`
+    : filterStatus === 'overdue'
+    ? `${filtered.length} vencidas · ${fmt(totalFiltered)} em atraso`
+    : `${filtered.length} recebidos · ${fmt(totalFiltered)} recebido`;
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-sora font-bold">Contas a Receber</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {filterStatus === 'open'
-              ? `${filtered.length} pendentes · ${fmt(totalPending)} a receber`
-              : filterStatus === 'received'
-              ? `${filtered.length} recebidos · ${fmt(totalFiltered)} recebido`
-              : `${filtered.length} item(s) · ${fmt(totalFiltered)} total`}
-          </p>
+          <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="w-4 h-4 mr-2" /> Nova Conta
@@ -176,75 +155,38 @@ export default function Receivables() {
       </div>
 
       {/* Filtro de status */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant={filterStatus === 'open' ? 'secondary' : 'outline'}
-          size="sm"
-          onClick={() => setFilterStatus('open')}
-          className="text-xs"
-        >
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button variant={filterStatus === 'open' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('open')} className="text-xs">
           Em Aberto
         </Button>
-        <Button
-          variant={filterStatus === 'received' ? 'secondary' : 'outline'}
-          size="sm"
-          onClick={() => { setFilterStatus('received'); setFilterBy('competencia'); }}
-          className="text-xs"
-        >
-          Recebidas
+        <Button variant={filterStatus === 'overdue' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('overdue')} className="text-xs">
+          Vencidas
         </Button>
-        <Button
-          variant={filterStatus === 'all' ? 'secondary' : 'outline'}
-          size="sm"
-          onClick={() => setFilterStatus('all')}
-          className="text-xs"
-        >
-          Todas
+        <Button variant={filterStatus === 'received' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('received')} className="text-xs">
+          Recebidas
         </Button>
       </div>
 
-      {/* Filtro de mês */}
-      <div className="space-y-3">
+      {/* Filtro de mês + tipo de data */}
+      <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setFilterMonth(filterMonth ? subMonths(filterMonth, 1) : subMonths(new Date(), 1))}>
+          <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <Button
-            variant={filterMonth ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setFilterMonth(filterMonth ? null : new Date())}
-            className="min-w-[120px] text-sm"
-          >
-            {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Todos os meses'}
+          <span className="text-sm font-medium min-w-[140px] text-center capitalize">
+            {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+          </span>
+          <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+            <ChevronRight className="w-4 h-4" />
           </Button>
-          {filterMonth && (
-            <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          )}
-          {filterMonth && (
-            <Button variant="ghost" size="sm" onClick={() => setFilterMonth(null)} className="text-muted-foreground text-xs">
-              Limpar
-            </Button>
-          )}
         </div>
-        {filterMonth && filterStatus !== 'received' && (
+        {filterStatus !== 'received' && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Filtrar por:</span>
-            <Button
-              variant={filterBy === 'due_date' ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setFilterBy('due_date')}
-              className="text-xs"
-            >
-              Data de Vencimento
+            <Button variant={filterBy === 'due_date' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('due_date')} className="text-xs">
+              Vencimento
             </Button>
-            <Button
-              variant={filterBy === 'competencia' ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setFilterBy('competencia')}
-              className="text-xs"
-            >
+            <Button variant={filterBy === 'competencia' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('competencia')} className="text-xs">
               Competência
             </Button>
           </div>
@@ -259,7 +201,6 @@ export default function Receivables() {
             )}
             {filtered.map(r => {
               const status = getStatus(r);
-              const source = incomeSources.find(s => s.id === r.income_source_id);
               return (
                 <div key={r.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
                   <div className={`w-2 h-10 rounded-full flex-shrink-0 ${status === 'received' ? 'bg-emerald-400' : status === 'overdue' ? 'bg-red-400' : 'bg-blue-400'}`} />
@@ -267,12 +208,11 @@ export default function Receivables() {
                     <p className="text-sm font-medium truncate">{r.description}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground">
-                        {r.due_date ? format(new Date(r.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
+                        {r.due_date ? format(new Date(r.due_date + (r.due_date.includes('T') ? '' : 'T12:00:00')), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                       </span>
                       {r.recurrent && !r._isPfTransaction && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">Recorrente</Badge>}
                     </div>
                   </div>
-                  {/* Botões entre descrição e valores */}
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {status !== 'received' && !r._isPfTransaction && (
                       <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingReceivable(r)}>
@@ -280,7 +220,7 @@ export default function Receivables() {
                       </Button>
                     )}
                     {status === 'received' && !r._isPfTransaction && (
-                      <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500 hover:text-amber-700" title="Desfazer pagamento" onClick={() => undoPaymentMutation.mutate(r)}>
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500 hover:text-amber-700" title="Desfazer recebimento" onClick={() => undoPaymentMutation.mutate(r)}>
                         <Undo2 className="w-4 h-4" />
                       </Button>
                     )}
@@ -290,7 +230,6 @@ export default function Receivables() {
                       </Button>
                     )}
                   </div>
-                  {/* Valores sempre à direita */}
                   <div className="text-right flex-shrink-0 min-w-[90px]">
                     <p className="text-sm font-semibold text-emerald-600">+{fmt(r.net_amount || r.amount)}</p>
                     {r.net_amount && r.net_amount < r.amount && <p className="text-xs text-muted-foreground/60">{fmt(r.amount)} bruto</p>}

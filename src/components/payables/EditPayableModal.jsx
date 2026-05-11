@@ -23,6 +23,7 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
     description: payable?.description || '',
     amount: payable?.amount || '',
     due_date: payable?.due_date || '',
+    competencia: payable?.competencia || '',
     category: payable?.category || '',
     fifth_business_day: payable?.fifth_business_day || false,
     notes: payable?.notes || '',
@@ -48,41 +49,41 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
 
     setSaving(true);
 
+    const competencia = form.competencia || form.due_date;
+
     if (updateScope === 'this') {
-      // Atualiza apenas este lançamento
       await base44.entities.Payable.update(payable.id, {
         description: form.description,
         amount: parseFloat(form.amount),
         due_date: form.due_date,
+        competencia,
         category: form.category,
         fifth_business_day: form.fifth_business_day,
         notes: form.notes || undefined,
       });
     } else if (updateScope === 'all') {
-      // Atualiza todos com o mesmo nome
       const allPayables = await base44.entities.Payable.list('-due_date', 500);
       const toUpdate = allPayables.filter(p => p.description === payable.description);
-      
       for (const p of toUpdate) {
         await base44.entities.Payable.update(p.id, {
           description: form.description,
           amount: parseFloat(form.amount),
+          competencia: form.competencia || p.due_date,
           category: form.category,
           fifth_business_day: form.fifth_business_day,
           notes: form.notes || undefined,
         });
       }
     } else if (updateScope === 'forward') {
-      // Atualiza este e todos os futuros
       const allPayables = await base44.entities.Payable.list('-due_date', 500);
       const toUpdate = allPayables.filter(
         p => p.description === payable.description && new Date(p.due_date) >= new Date(payable.due_date)
       );
-      
       for (const p of toUpdate) {
         await base44.entities.Payable.update(p.id, {
           description: form.description,
           amount: parseFloat(form.amount),
+          competencia: form.competencia || p.due_date,
           category: form.category,
           fifth_business_day: form.fifth_business_day,
           notes: form.notes || undefined,
@@ -171,6 +172,17 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label>Competência (opcional)</Label>
+            <Input
+              type="date"
+              value={form.competencia}
+              onChange={e => set('competencia', e.target.value)}
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Se não preenchido, usa a data de vencimento</p>
           </div>
 
           <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-3">

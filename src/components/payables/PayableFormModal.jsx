@@ -18,7 +18,7 @@ const FALLBACK_CATEGORIES = [
 ];
 
 export default function PayableFormModal({ onClose, onSaved }) {
-  const [form, setForm] = useState({ description: '', amount: '', due_date: '', category: '', recurrent: false, notes: '' });
+  const [form, setForm] = useState({ description: '', amount: '', due_date: '', competencia: '', category: '', recurrent: false, notes: '' });
   const [saving, setSaving] = useState(false);
   const { flatForSelect } = useCategories();
   const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
@@ -31,6 +31,7 @@ export default function PayableFormModal({ onClose, onSaved }) {
     await base44.entities.Payable.create({ 
       ...form, 
       due_date: form.due_date + 'T12:00:00',
+      competencia: form.competencia || form.due_date,
       amount: parseFloat(form.amount), 
       status: 'pending' 
     });
@@ -64,6 +65,11 @@ export default function PayableFormModal({ onClose, onSaved }) {
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
               <SelectContent>{categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>Competência (opcional)</Label>
+            <Input type="date" value={form.competencia} onChange={e => set('competencia', e.target.value)} className="mt-1" placeholder="Padrão: data de vencimento" />
+            <p className="text-xs text-muted-foreground mt-1">Se não preenchido, usa a data de vencimento</p>
           </div>
           <div className="flex items-center justify-between">
             <Label>Recorrente (mensal)?</Label>
