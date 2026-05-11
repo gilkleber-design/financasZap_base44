@@ -95,7 +95,14 @@ export default function CardInvoices() {
     onSuccess: (data) => {
       queryClient.invalidateQueries();
       const r = data?.results?.[0];
-      if (r?.status === 'created') toast.success(`Fatura gerada! ${r.items} itens · ${fmt(r.total)}`);
+      if (r?.status === 'created') {
+        const invoicePayableId = r.invoicePayableId;
+        const payable = payables.find(p => p.id === invoicePayableId);
+        const dueDate = payable?.due_date 
+          ? format(new Date(payable.due_date.includes('T') ? payable.due_date : payable.due_date + 'T12:00:00'), 'dd/MM/yyyy')
+          : 'data não definida';
+        toast.success(`Fatura fechada! ${r.items} itens · ${fmt(r.total)} · Vence em ${dueDate}`);
+      }
       else if (r?.status === 'already_exists') toast.info('Fatura já existe para este mês');
       else if (r?.status === 'no_items') toast.info('Nenhum item provisionado para este mês');
       else toast.success('Processado');

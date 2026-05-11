@@ -4,18 +4,14 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Permite chamada manual por admin ou automação agendada (sem user)
-    let isAdmin = false;
+    // Permite chamada manual por qualquer usuário autenticado ou automação agendada (sem user)
     try {
       const user = await base44.auth.me();
-      isAdmin = user?.role === 'admin';
+      if (!user) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
     } catch (_) {
-      // chamada de automação agendada (sem session)
-      isAdmin = true;
-    }
-
-    if (!isAdmin) {
-      return Response.json({ error: 'Forbidden' }, { status: 403 });
+      // chamada de automação agendada (sem session) — permitida
     }
 
     const today = new Date();
