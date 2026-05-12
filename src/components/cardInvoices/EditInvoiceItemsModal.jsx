@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Pencil, Trash2, Check, X } from 'lucide-react';
 
@@ -14,6 +15,24 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
   const [editForm, setEditForm] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  const allSelected = items.length > 0 && selected.size === items.length;
+  const someSelected = selected.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(items.map(i => i.id)));
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const startEdit = (item) => {
     setEditingId(item.id);
@@ -47,12 +66,50 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
     onSaved();
   };
 
+  const bulkDelete = async () => {
+    setSaving(true);
+    await Promise.all([...selected].map(id => base44.entities.Payable.delete(id)));
+    setItems(prev => prev.filter(i => !selected.has(i.id)));
+    toast.success(`${selected.size} item(s) removido(s)`);
+    setSelected(new Set());
+    setConfirmBulkDelete(false);
+    setSaving(false);
+    onSaved();
+  };
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Itens da Fatura</DialogTitle>
         </DialogHeader>
+
+        {/* Barra de seleção */}
+        <div className="flex items-center justify-between pb-2 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
+            <span className="text-sm text-muted-foreground">
+              {someSelected ? `${selected.size} selecionado(s)` : 'Selecionar todos'}
+            </span>
+          </div>
+          {someSelected && !confirmBulkDelete && (
+            <Button size="sm" variant="destructive" className="text-xs h-7 gap-1" onClick={() => setConfirmBulkDelete(true)}>
+              <Trash2 className="w-3.5 h-3.5" />
+              Excluir selecionados
+            </Button>
+          )}
+          {confirmBulkDelete && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-600">Confirmar exclusão de {selected.size} item(s)?</span>
+              <Button size="sm" variant="destructive" className="text-xs h-7" onClick={bulkDelete} disabled={saving}>
+                Confirmar
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setConfirmBulkDelete(false)}>
+                Cancelar
+              </Button>
+            </div>
+          )}
+        </div>
 
         <div className="divide-y divide-border">
           {items.length === 0 && (
@@ -98,6 +155,7 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
+                  <Checkbox checked={selected.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{item.description}</p>
                     {item.competencia && (
