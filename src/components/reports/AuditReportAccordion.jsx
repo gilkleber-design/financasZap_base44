@@ -31,7 +31,7 @@ const sanitizeDescription = (desc) => {
   return cleaned;
 };
 
-export default function AuditReportAccordion({ payables = [], onRowClick, viewMode = 'category' }) {
+export default function AuditReportAccordion({ payables = [], onRowClick, viewMode = 'category', categories = [] }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [openCategories, setOpenCategories] = useState([]);
 
@@ -39,6 +39,7 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
   const organizedData = useMemo(() => {
     if (viewMode === 'subcategory') {
       // Modo subcategoria: lista todas as subcategorias como linhas principais
+      // Inclui todos os items, inclusive aqueles com parent_id
       const grouped = payables.reduce((acc, item) => {
         const cat = item.category || 'outros';
         if (!acc[cat]) acc[cat] = [];
@@ -67,8 +68,26 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
         }))
         .sort((a, b) => b.total - a.total);
     } else {
-      // Modo categoria (padrão): agrupa por categoria
-      const grouped = payables.reduce((acc, item) => {
+      // Modo categoria (padrão): agrupa por categoria, filtrando subcategorias
+      const catMap = {};
+      const subcatIds = new Set();
+      
+      categories.forEach(c => {
+        catMap[c.id] = c;
+        if (c.parent_id) {
+          subcatIds.add(c.id);
+        }
+      });
+
+      // Filtrar payables: excluir aqueles com category_id que aponta para uma subcategoria
+      const filteredPayables = payables.filter(p => {
+        if (p.category_id && subcatIds.has(p.category_id)) {
+          return false; // É uma subcategoria, exclui em modo "Por Categoria"
+        }
+        return true;
+      });
+
+      const grouped = filteredPayables.reduce((acc, item) => {
         const cat = item.category || 'outros';
         if (!acc[cat]) acc[cat] = [];
         acc[cat].push(item);
@@ -96,7 +115,7 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
         }))
         .sort((a, b) => b.total - a.total);
     }
-  }, [payables, searchTerm, viewMode]);
+  }, [payables, searchTerm, viewMode, categories]);
 
   // Auto-abrir categorias quando há busca
   const categoriesToOpen = useMemo(() => {

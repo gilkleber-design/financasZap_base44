@@ -38,6 +38,11 @@ export default function Reports() {
     queryFn: () => base44.entities.Payable.list('-due_date', 1000),
   });
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => base44.entities.Category.list('name', 100),
+  });
+
   const handlePayableClick = (payable) => {
     setSelectedPayable(payable);
     setDrawerOpen(true);
@@ -232,7 +237,12 @@ export default function Reports() {
               ))}
             </div>
           </div>
-          <AuditReportAccordion payables={filteredPayables} onRowClick={handlePayableClick} viewMode={reportViewMode} />
+          <AuditReportAccordion 
+            payables={filteredPayables} 
+            onRowClick={handlePayableClick} 
+            viewMode={reportViewMode}
+            categories={categories}
+          />
         </TabsContent>
       </Tabs>
 
