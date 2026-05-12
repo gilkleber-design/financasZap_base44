@@ -26,6 +26,7 @@ export default function Reports() {
   const [selectedPayable, setSelectedPayable] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [reportViewMode, setReportViewMode] = useState('category');
 
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
@@ -207,7 +208,7 @@ export default function Reports() {
         </TabsContent>
 
         <TabsContent value="audit" className="mt-6 space-y-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
@@ -217,8 +218,21 @@ export default function Reports() {
             <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
               <ChevronRight className="w-4 h-4" />
             </Button>
+            <div className="ml-auto flex gap-2">
+              {['category', 'subcategory'].map(mode => (
+                <Button
+                  key={mode}
+                  size="sm"
+                  variant={reportViewMode === mode ? 'secondary' : 'outline'}
+                  onClick={() => setReportViewMode(mode)}
+                  className="text-xs"
+                >
+                  {mode === 'category' ? 'Por Categoria' : 'Por Subcategoria'}
+                </Button>
+              ))}
+            </div>
           </div>
-          <AuditReportAccordion payables={filteredPayables} onRowClick={handlePayableClick} />
+          <AuditReportAccordion payables={filteredPayables} onRowClick={handlePayableClick} viewMode={reportViewMode} />
         </TabsContent>
       </Tabs>
 

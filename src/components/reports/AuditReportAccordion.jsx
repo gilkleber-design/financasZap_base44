@@ -31,51 +31,82 @@ const sanitizeDescription = (desc) => {
   return cleaned;
 };
 
-export default function AuditReportAccordion({ payables = [], onRowClick }) {
+export default function AuditReportAccordion({ payables = [], onRowClick, viewMode = 'category' }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [openCategories, setOpenCategories] = useState([]);
 
-  // Agrupar por categoria e filtrar
-  const categorizedData = useMemo(() => {
-    const grouped = payables.reduce((acc, item) => {
-      const cat = item.category || 'outros';
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(item);
-      return acc;
-    }, {});
+  // Agrupar por categoria/subcategoria conforme viewMode
+  const organizedData = useMemo(() => {
+    if (viewMode === 'subcategory') {
+      // Modo subcategoria: lista todas as subcategorias como linhas principais
+      const grouped = payables.reduce((acc, item) => {
+        const cat = item.category || 'outros';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(item);
+        return acc;
+      }, {});
 
-    // Filtrar por busca
-    const filtered = {};
-    Object.entries(grouped).forEach(([cat, items]) => {
-      const matchedItems = items.filter(item => {
-        const desc = sanitizeDescription(item.description).toLowerCase();
-        return desc.includes(searchTerm.toLowerCase());
+      const filtered = {};
+      Object.entries(grouped).forEach(([cat, items]) => {
+        const matchedItems = items.filter(item => {
+          const desc = sanitizeDescription(item.description).toLowerCase();
+          return desc.includes(searchTerm.toLowerCase());
+        });
+        if (matchedItems.length > 0) {
+          filtered[cat] = matchedItems;
+        }
       });
-      if (matchedItems.length > 0) {
-        filtered[cat] = matchedItems;
-      }
-    });
 
-    // Calcular totais e ordenar
-    return Object.entries(filtered)
-      .map(([cat, items]) => ({
-        category: cat,
-        label: CATEGORY_LABELS[cat] || cat,
-        items: items.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
-        total: items.reduce((s, i) => s + (i.amount || 0), 0),
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [payables, searchTerm]);
+      return Object.entries(filtered)
+        .map(([cat, items]) => ({
+          id: cat,
+          label: CATEGORY_LABELS[cat] || cat,
+          items: items.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
+          total: items.reduce((s, i) => s + (i.amount || 0), 0),
+          level: 0,
+        }))
+        .sort((a, b) => b.total - a.total);
+    } else {
+      // Modo categoria (padrão): agrupa por categoria
+      const grouped = payables.reduce((acc, item) => {
+        const cat = item.category || 'outros';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(item);
+        return acc;
+      }, {});
+
+      const filtered = {};
+      Object.entries(grouped).forEach(([cat, items]) => {
+        const matchedItems = items.filter(item => {
+          const desc = sanitizeDescription(item.description).toLowerCase();
+          return desc.includes(searchTerm.toLowerCase());
+        });
+        if (matchedItems.length > 0) {
+          filtered[cat] = matchedItems;
+        }
+      });
+
+      return Object.entries(filtered)
+        .map(([cat, items]) => ({
+          id: cat,
+          label: CATEGORY_LABELS[cat] || cat,
+          items: items.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
+          total: items.reduce((s, i) => s + (i.amount || 0), 0),
+          level: 0,
+        }))
+        .sort((a, b) => b.total - a.total);
+    }
+  }, [payables, searchTerm, viewMode]);
 
   // Auto-abrir categorias quando há busca
   const categoriesToOpen = useMemo(() => {
     if (!searchTerm) return [];
-    return categorizedData.map(c => c.category);
-  }, [searchTerm, categorizedData]);
+    return organizedData.map(c => c.id);
+  }, [searchTerm, organizedData]);
 
   const handleExportCSV = () => {
     const rows = [['Data', 'Descrição', 'Categoria', 'Valor', 'Parcelado']];
-    categorizedData.forEach(cat => {
+    organizedData.forEach(cat => {
       cat.items.forEach(item => {
         const installmentStr = item.installment_number ? `${item.installment_number}/${item.installment_total}` : '-';
         rows.push([
@@ -97,7 +128,7 @@ export default function AuditReportAccordion({ payables = [], onRowClick }) {
   };
 
   const handleExportJSON = () => {
-    const data = categorizedData.map(cat => ({
+    const data = organizedData.map(cat => ({
       categoria: cat.label,
       total: cat.total,
       itens: cat.items.map(item => ({
@@ -116,7 +147,17 @@ export default function AuditReportAccordion({ payables = [], onRowClick }) {
     link.click();
   };
 
-  const totalGeral = categorizedData.reduce((s, c) => s + c.total, 0);
+  const totalGeral = organizedData.reduce((s, c) => s + c.total, 0);
+
+  const getLevelClasses = (level) => {
+    if (level === 0) return 'bg-white';
+    if (level === 1) return 'bg-slate-50';
+    return 'bg-slate-100';
+  };
+
+  const getLevelIndent = (level) => {
+    return `pl-${level * 4}`;
+  };
 
   return (
     <div className="space-y-4">
@@ -140,7 +181,7 @@ export default function AuditReportAccordion({ payables = [], onRowClick }) {
         </div>
       </div>
 
-      {categorizedData.length === 0 ? (
+      {organizedData.length === 0 ? (
         <Card className="border-0 shadow-sm">
           <CardContent className="text-center py-8 text-muted-foreground">
             {searchTerm ? 'Nenhum resultado encontrado' : 'Nenhum lançamento registrado'}
@@ -157,11 +198,11 @@ export default function AuditReportAccordion({ payables = [], onRowClick }) {
             </CardHeader>
             <CardContent>
               <Accordion type="multiple" value={searchTerm ? categoriesToOpen : openCategories} onValueChange={setOpenCategories}>
-                {categorizedData.map((catData) => (
-                  <AccordionItem key={catData.category} value={catData.category} className="border-b">
+                {organizedData.map((catData) => (
+                  <AccordionItem key={catData.id} value={catData.id} className="border-b">
                     <AccordionTrigger className="hover:no-underline py-3">
                       <div className="flex items-center justify-between w-full pr-4">
-                        <div className="text-left flex-1">
+                        <div className={`text-left flex-1 ${getLevelIndent(catData.level)}`}>
                           <p className="font-medium">{catData.label}</p>
                           <p className="text-xs text-muted-foreground">{catData.items.length} item(ns)</p>
                         </div>

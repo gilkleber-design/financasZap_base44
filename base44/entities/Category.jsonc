@@ -4,7 +4,7 @@
   "properties": {
     "name": {
       "type": "string",
-      "description": "Nome da categoria"
+      "description": "Nome da categoria/subcategoria"
     },
     "slug": {
       "type": "string",
