@@ -50,29 +50,34 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
     });
 
     if (viewMode === 'subcategory') {
-      // Modo subcategoria: agrupa por enum category (não por category_id)
-      const grouped = payables.reduce((acc, item) => {
-        const cat = item.category || 'outros';
-        if (!acc[cat]) acc[cat] = [];
-        acc[cat].push(item);
-        return acc;
-      }, {});
+      // Modo subcategoria: agrupa APENAS por subcategorias personalizadas (category_id)
+      const grouped = {};
+      
+      payables.forEach(item => {
+        if (item.category_id && subcatIds.has(item.category_id)) {
+          // É um item de subcategoria
+          const catId = item.category_id;
+          if (!grouped[catId]) grouped[catId] = [];
+          grouped[catId].push(item);
+        }
+      });
 
+      // Filtrar por busca
       const filtered = {};
-      Object.entries(grouped).forEach(([cat, items]) => {
+      Object.entries(grouped).forEach(([catId, items]) => {
         const matchedItems = items.filter(item => {
           const desc = sanitizeDescription(item.description).toLowerCase();
           return desc.includes(searchTerm.toLowerCase());
         });
         if (matchedItems.length > 0) {
-          filtered[cat] = matchedItems;
+          filtered[catId] = matchedItems;
         }
       });
 
       return Object.entries(filtered)
-        .map(([cat, items]) => ({
-          id: cat,
-          label: CATEGORY_LABELS[cat] || cat,
+        .map(([catId, items]) => ({
+          id: catId,
+          label: catMap[catId]?.name || catId,
           items: items.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
           total: items.reduce((s, i) => s + (i.amount || 0), 0),
           level: 0,
@@ -80,21 +85,33 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
         }))
         .sort((a, b) => b.total - a.total);
     } else {
-      // Modo categoria: agrupa por enum + subcategorias organizadas
-      const grouped = payables.reduce((acc, item) => {
-        const cat = item.category || 'outros';
-        if (!acc[cat]) acc[cat] = [];
-        acc[cat].push(item);
-        return acc;
-      }, {});
+      // Modo categoria: agrupa por CATEGORIAS RAIZ e seus itens (enum + subcategorias filhas)
+      // Primeiro, agrupar por categoria raiz (parent_id ou enum)
+      const grouped = {};
+      
+      payables.forEach(item => {
+        let groupKey;
+        
+        if (item.category_id && subcatIds.has(item.category_id)) {
+          // É uma subcategoria: agrupar sob a categoria pai
+          groupKey = catToParent[item.category_id];
+        } else {
+          // É enum-based: usar category enum
+          groupKey = item.category || 'outros';
+        }
+        
+        if (!grouped[groupKey]) grouped[groupKey] = [];
+        grouped[groupKey].push(item);
+      });
 
+      // Processar cada categoria raiz
       return Object.entries(grouped)
-        .map(([enumCat, items]) => {
-          // Separar items: enum-based vs category_id-based
-          const enumItems = items.filter(i => !i.category_id || !subcatIds.has(i.category_id));
-          const subcategoryItems = items.filter(i => i.category_id && subcatIds.has(i.category_id));
+        .map(([groupKey, allItems]) => {
+          // Separar enum items vs category_id items (subcategorias)
+          const enumItems = allItems.filter(i => !i.category_id || !subcatIds.has(i.category_id));
+          const subcategoryItems = allItems.filter(i => i.category_id && subcatIds.has(i.category_id));
 
-          // Agrupar items de subcategoria por category_id
+          // Agrupar subcategory items por category_id
           const subcatGrouped = {};
           subcategoryItems.forEach(item => {
             const catId = item.category_id;
@@ -102,7 +119,7 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
             subcatGrouped[catId].push(item);
           });
 
-          // Criar subcategorias com seus itens filtrados
+          // Criar subcategorias com filtro de busca
           const subcategories = Object.entries(subcatGrouped)
             .map(([catId, subcatItems]) => {
               const matchedItems = subcatItems.filter(item => {
@@ -126,9 +143,12 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
             return desc.includes(searchTerm.toLowerCase());
           });
 
+          // Determinar label: se groupKey é UUID (categoria raiz), usar catMap; senão CATEGORY_LABELS
+          const label = catMap[groupKey]?.name || CATEGORY_LABELS[groupKey] || groupKey;
+
           return {
-            id: enumCat,
-            label: CATEGORY_LABELS[enumCat] || enumCat,
+            id: groupKey,
+            label,
             items: matchedEnumItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
             total: matchedEnumItems.reduce((s, i) => s + (i.amount || 0), 0),
             level: 0,
