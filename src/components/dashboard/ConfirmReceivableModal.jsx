@@ -16,7 +16,6 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
-  const [transactionId, setTransactionId] = useState(null);
 
   const initialAmount = receivable.net_amount || receivable.amount || 0;
   const fmtInitial = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(initialAmount);
@@ -76,7 +75,6 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
     });
 
     await queryClient.invalidateQueries();
-    setTransactionId(tx.id);
     setDone(true);
     setSaving(false);
   };

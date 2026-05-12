@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import ConfirmReceivableModal from '@/components/dashboard/ConfirmReceivableModal';
 import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,6 +17,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 export default function Receivables() {
   const [showForm, setShowForm] = useState(false);
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
+  const [deletingReceivable, setDeletingReceivable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [filterStatus, setFilterStatus] = useState('open'); // 'open' | 'overdue' | 'received'
   const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' | 'competencia' | 'payment_date'
@@ -43,7 +45,7 @@ export default function Receivables() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Receivable.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Removido'); },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Removido'); setDeletingReceivable(null); },
   });
 
   const undoPaymentMutation = useMutation({
@@ -257,7 +259,7 @@ export default function Receivables() {
                       </Button>
                     )}
                     {!r._isPfTransaction && (
-                      <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(r.id)}>
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => setDeletingReceivable(r)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     )}
@@ -292,6 +294,28 @@ export default function Receivables() {
             queryClient.invalidateQueries();
           }}
         />
+      )}
+
+      {deletingReceivable && (
+        <AlertDialog open onOpenChange={() => setDeletingReceivable(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir conta a receber?</AlertDialogTitle>
+              <AlertDialogDescription>
+                "{deletingReceivable.description}"
+                {deletingReceivable.status === 'received' && (
+                  <span className="block mt-1 text-amber-600 font-medium">⚠️ Esta conta já foi recebida. O lançamento vinculado NÃO será removido automaticamente.</span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-2">
+              <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
+              <Button variant="destructive" className="flex-1" onClick={() => deleteMutation.mutate(deletingReceivable.id)} disabled={deleteMutation.isPending}>
+                {deleteMutation.isPending ? 'Removendo...' : 'Excluir'}
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );

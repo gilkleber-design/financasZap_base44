@@ -4,7 +4,8 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, RefreshCw, Pencil, Upload } from 'lucide-react';
+import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, RefreshCw, Pencil, Upload, Undo2 } from 'lucide-react';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { format, startOfMonth, addMonths, subMonths, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -32,6 +33,7 @@ export default function CardInvoices() {
   const [payingPayable, setPayingPayable] = useState(null);
   const [editingInvoiceItems, setEditingInvoiceItems] = useState(null);
   const [importingCard, setImportingCard] = useState(null); // { card, refMonth }
+  const [reopeningInvoice, setReopeningInvoice] = useState(null); // { invoice, invoicePayable }
   const queryClient = useQueryClient();
 
   const { data: cards = [] } = useQuery({
@@ -127,6 +129,28 @@ export default function CardInvoices() {
       else toast.success('Processado');
     },
     onError: () => toast.error('Erro ao gerar fatura'),
+  });
+
+  const reopenInvoiceMutation = useMutation({
+    mutationFn: async ({ invoice, invoicePayable }) => {
+      // Remove o payable consolidado
+      if (invoicePayable?.id) await base44.entities.Payable.delete(invoicePayable.id);
+      // Remove o CardInvoice
+      if (invoice?.id) await base44.entities.CardInvoice.delete(invoice.id);
+      // Reverte itens vinculados para 'provisioned'
+      if (invoice?.id) {
+        const items = await base44.entities.Payable.filter({ card_invoice_id: invoice.id }, '-due_date', 500);
+        await Promise.all(items.map(item =>
+          base44.entities.Payable.update(item.id, { card_invoice_id: null, status: item.status === 'paid' ? 'provisioned' : item.status })
+        ));
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      setReopeningInvoice(null);
+      toast.success('Fatura reaberta! Itens retornaram para provisionado.');
+    },
+    onError: () => toast.error('Erro ao reabrir fatura'),
   });
 
   return (
@@ -287,14 +311,25 @@ export default function CardInvoices() {
                     </Button>
                   )}
                   {invoicePayable && invoicePayable.status !== 'paid' && (
-                    <Button
-                      size="sm"
-                      className="flex-1 text-xs"
-                      onClick={() => setPayingPayable(invoicePayable)}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-                      Pagar Fatura — {fmt(invoicePayable.amount)}
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => setPayingPayable(invoicePayable)}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                        Pagar Fatura — {fmt(invoicePayable.amount)}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs text-amber-600 border-amber-300 hover:bg-amber-50"
+                        onClick={() => setReopeningInvoice({ invoice: existingInvoice, invoicePayable })}
+                      >
+                        <Undo2 className="w-3.5 h-3.5 mr-1.5" />
+                        Reabrir
+                      </Button>
+                    </>
                   )}
                 </div>
               </CardContent>
@@ -328,6 +363,33 @@ export default function CardInvoices() {
           onClose={() => setImportingCard(null)}
           onImported={() => { queryClient.invalidateQueries(); setImportingCard(null); }}
         />
+      )}
+
+      {reopeningInvoice && (
+        <AlertDialog open onOpenChange={() => setReopeningInvoice(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reabrir fatura?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A fatura consolidada será removida e os itens voltarão para "provisionado". Você poderá fechar novamente depois.
+                {reopeningInvoice.invoice?.status === 'paid' && (
+                  <span className="block mt-2 text-red-600 font-medium">⚠️ Esta fatura já foi marcada como PAGA. Reabrir irá remover o registro de pagamento, mas o lançamento de despesa NÃO será excluído automaticamente.</span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-2">
+              <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={() => reopenInvoiceMutation.mutate(reopeningInvoice)}
+                disabled={reopenInvoiceMutation.isPending}
+              >
+                {reopenInvoiceMutation.isPending ? 'Reabrindo...' : 'Reabrir Fatura'}
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );

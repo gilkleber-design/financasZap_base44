@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Lock, LockOpen } from 'lucide-react';
 import { toast } from 'sonner';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import ShiftModal from '@/components/calendar/ShiftModal';
 import CloseMonthModal from '@/components/calendar/CloseMonthModal';
 import ShiftDetailModal from '@/components/calendar/ShiftDetailModal';
@@ -30,6 +31,7 @@ export default function CalendarPage() {
   const [selectedShift, setSelectedShift] = useState(null);
   const [showClose, setShowClose] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [confirmReopen, setConfirmReopen] = useState(false); // confirmação de reabrir mês
   const queryClient = useQueryClient();
 
   const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
@@ -152,30 +154,22 @@ export default function CalendarPage() {
   };
 
   // Reabrir mês: verifica pagamentos já realizados antes de reverter
-  const handleReopenMonth = async () => {
+  const executeReopenMonth = async () => {
+    setConfirmReopen(false);
     setReopening(true);
     try {
       const closedShifts = monthShifts.filter(s => s.status === 'done' && s.receivable_id);
       const receivableIds = [...new Set(closedShifts.map(s => s.receivable_id).filter(Boolean))];
 
       // Busca os recebíveis vinculados para checar se já foram pagos
-      const receivables = await Promise.all(receivableIds.map(id => base44.entities.Receivable.filter({ id })));
-      const flatReceivables = receivables.flat();
+      const allReceivables = await Promise.all(receivableIds.map(id => base44.entities.Receivable.filter({ id })));
+      const flatReceivables = allReceivables.flat();
       const paidReceivables = flatReceivables.filter(r => r.status === 'received' || r.transaction_id);
 
+      // Deleta lançamentos de receita vinculados aos recebíveis pagos
       if (paidReceivables.length > 0) {
-        const names = paidReceivables.map(r => `• ${r.description}`).join('\n');
-        const ok = window.confirm(
-          `⚠️ Atenção! ${paidReceivables.length} conta(s) a receber já foram marcadas como pagas:\n\n${names}\n\nReabrir o mês irá deletar essas contas E os lançamentos de receita vinculados.\n\nDeseja continuar mesmo assim?`
-        );
-        if (!ok) { setReopening(false); return; }
-
-        // Deleta os lançamentos de receita vinculados aos recebíveis pagos
         const txIds = paidReceivables.map(r => r.transaction_id).filter(Boolean);
         await Promise.all(txIds.map(id => base44.entities.Transaction.delete(id)));
-      } else {
-        const ok = window.confirm('Isso irá reverter todos os plantões fechados para "agendado" e deletar as contas a receber geradas no fechamento. Confirmar?');
-        if (!ok) { setReopening(false); return; }
       }
 
       // Reverte plantões para scheduled
@@ -242,7 +236,7 @@ export default function CalendarPage() {
           {isMonthClosed ? (
             <Button
               variant="outline"
-              onClick={handleReopenMonth}
+              onClick={() => setConfirmReopen(true)}
               disabled={reopening}
             >
               <LockOpen className="w-4 h-4 mr-2" />
@@ -373,6 +367,26 @@ export default function CalendarPage() {
           onPass={handlePassShift}
           onDeleteFromHere={handleDeleteFromHere}
         />
+      )}
+
+      {confirmReopen && (
+        <AlertDialog open onOpenChange={() => setConfirmReopen(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reabrir mês?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Todos os plantões fechados voltarão para "agendado" e as contas a receber geradas serão removidas.
+                Se alguma já foi recebida, o lançamento de receita também será excluído.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-2">
+              <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
+              <Button variant="destructive" className="flex-1" onClick={executeReopenMonth}>
+                Reabrir Mesmo Assim
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {showClose && (

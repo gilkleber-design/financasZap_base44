@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import TransactionFormModal from '@/components/transactions/TransactionFormModal';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 const CATEGORY_LABELS = {
   alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
@@ -25,6 +26,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 export default function Transactions() {
   const [showForm, setShowForm] = useState(false);
   const [editingTx, setEditingTx] = useState(null);
+  const [deletingTx, setDeletingTx] = useState(null);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -37,7 +39,7 @@ export default function Transactions() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Transaction.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Lançamento removido'); },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Lançamento removido'); setDeletingTx(null); },
   });
 
   const currentYear = new Date().getFullYear();
@@ -118,7 +120,7 @@ export default function Transactions() {
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>
                 <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500 flex-shrink-0"
-                  onClick={() => deleteMutation.mutate(tx.id)}>
+                  onClick={() => setDeletingTx(tx)}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
                 <div className="text-right flex-shrink-0 min-w-[90px]">
@@ -147,6 +149,26 @@ export default function Transactions() {
           onClose={() => setEditingTx(null)}
           onSaved={() => { queryClient.invalidateQueries(); setEditingTx(null); }}
         />
+      )}
+
+      {deletingTx && (
+        <AlertDialog open onOpenChange={() => setDeletingTx(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+              <AlertDialogDescription>
+                "{deletingTx.description}" — {deletingTx.date ? format(new Date(deletingTx.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}
+                {deletingTx.reconciled && <span className="block mt-1 text-amber-600 font-medium">⚠️ Este lançamento está conciliado com uma conta. A conciliação será desfeita.</span>}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-2">
+              <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
+              <Button variant="destructive" className="flex-1" onClick={() => deleteMutation.mutate(deletingTx.id)} disabled={deleteMutation.isPending}>
+                {deleteMutation.isPending ? 'Removendo...' : 'Excluir'}
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );
