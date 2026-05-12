@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
         description: `Fatura ${card.name} - ${monthLabel}`,
         amount: Math.round(totalAmount * 100) / 100,
         due_date: (dueDateStr || closingDateStr) + 'T12:00:00',
-        competencia: dueDateStr || closingDateStr,
+        competencia: refMonth, // mês de referência da fatura (YYYY-MM-01)
         category: 'transferencia_liquidacao',
         status: 'pending',
         payment_modality: 'card_invoice',
