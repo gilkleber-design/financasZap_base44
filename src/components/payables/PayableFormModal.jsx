@@ -25,7 +25,7 @@ const FALLBACK_CATEGORIES = [
 export default function PayableFormModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
     description: '', amount: '', due_date: '', competencia: '',
-    category: '', recurrent: false, notes: '',
+    category: '', category_id: '', recurrent: false, notes: '',
     origin_id: '', origin_type: '',
     payment_modality: 'manual',
     // Parcelamento
@@ -78,7 +78,7 @@ export default function PayableFormModal({ onClose, onSaved }) {
           amount: Math.round(installmentAmount * 100) / 100,
           due_date: dueDateStr + 'T12:00:00',
           competencia: dueDateStr,
-          category: form.category || undefined,
+          ...(form.category_id ? { category_id: form.category_id } : { category: form.category || undefined }),
           status: 'pending',
           recurrent: false,
           origin_id: form.origin_id || undefined,
@@ -94,23 +94,23 @@ export default function PayableFormModal({ onClose, onSaved }) {
       await base44.entities.Payable.bulkCreate(payables);
       toast.success(`${payables.length} parcelas criadas!`);
     } else {
-      // Lançamento único
-      const isAutoDebit = form.payment_modality === 'automatic_debit';
-      await base44.entities.Payable.create({
-        description: form.description,
-        amount: parseFloat(form.amount),
-        due_date: form.due_date + 'T12:00:00',
-        competencia: form.competencia || form.due_date,
-        category: form.category || undefined,
-        status: isAutoDebit ? 'scheduled' : 'pending',
-        recurrent: form.recurrent,
-        origin_id: form.origin_id || undefined,
-        origin_type: form.origin_type || undefined,
-        payment_modality: form.payment_modality,
-        notes: form.notes || undefined,
-      });
-      toast.success('Conta a pagar criada!');
-    }
+       // Lançamento único
+       const isAutoDebit = form.payment_modality === 'automatic_debit';
+       await base44.entities.Payable.create({
+         description: form.description,
+         amount: parseFloat(form.amount),
+         due_date: form.due_date + 'T12:00:00',
+         competencia: form.competencia || form.due_date,
+         ...(form.category_id ? { category_id: form.category_id } : { category: form.category || undefined }),
+         status: isAutoDebit ? 'scheduled' : 'pending',
+         recurrent: form.recurrent,
+         origin_id: form.origin_id || undefined,
+         origin_type: form.origin_type || undefined,
+         payment_modality: form.payment_modality,
+         notes: form.notes || undefined,
+       });
+       toast.success('Conta a pagar criada!');
+     }
 
     setSaving(false);
     onSaved();
@@ -202,9 +202,21 @@ export default function PayableFormModal({ onClose, onSaved }) {
 
           <div>
             <Label>Categoria</Label>
-            <Select value={form.category} onValueChange={v => set('category', v)}>
+            <Select 
+              value={form.category_id ? `cat_${form.category_id}` : form.category} 
+              onValueChange={v => {
+                if (v.startsWith('cat_')) {
+                  set('category_id', v.slice(4));
+                  set('category', '');
+                } else {
+                  set('category', v);
+                  set('category_id', '');
+                }
+              }}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>{categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
 

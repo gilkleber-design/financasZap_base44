@@ -31,12 +31,32 @@ export function useCategories() {
     return CATEGORY_COLORS[slug] || CATEGORY_COLORS.outros;
   };
 
+  // Flat list com todas as categorias (padrão + personalizadas)
+  const flatForSelect = [
+    // Padrões enum
+    { value: 'alimentacao', label: 'Alimentação' },
+    { value: 'transporte', label: 'Transporte' },
+    { value: 'moradia', label: 'Moradia' },
+    { value: 'saude', label: 'Saúde' },
+    { value: 'educacao', label: 'Educação' },
+    { value: 'lazer', label: 'Lazer' },
+    { value: 'vestuario', label: 'Vestuário' },
+    { value: 'servicos', label: 'Serviços' },
+    { value: 'impostos', label: 'Impostos' },
+    { value: 'outros', label: 'Outros' },
+    // Personalizadas (com prefix cat_ para distinguir)
+    ...categories
+      .filter(c => c.active !== false)
+      .map(c => ({ value: `cat_${c.id}`, label: c.parent_id ? `  → ${c.name}` : c.name })),
+  ];
+
   return {
     categories,
     roots,
     getChildren,
     getCategoryLabel,
     getCategoryColor,
+    flatForSelect,
     isLoading,
   };
 }

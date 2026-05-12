@@ -44,7 +44,14 @@ Deno.serve(async (req) => {
       subCategories[subData.slug] = subCat;
     }
 
-    // Buscar payables com descrições que indicam "Empregada Doméstica"
+    // Buscar TODAS as categorias novamente para mapear completo
+    categories = await base44.entities.Category.list('name', 200);
+    const categoryMap = {};
+    categories.forEach(c => {
+      if (c.slug) categoryMap[c.slug] = c.id;
+    });
+
+    // Buscar payables com descrições que indicam subcategorias
     const payables = await base44.entities.Payable.list('-due_date', 1000);
     let updated = 0;
 
@@ -53,21 +60,32 @@ Deno.serve(async (req) => {
       let newCategoryId = null;
       const desc = (payable.description || '').toLowerCase();
 
-      // Detectar padrão para "Salário da Empregada"
+      // Padrão: Salário Empregada Doméstica
       if (desc.includes('salário') && (desc.includes('empregada') || desc.includes('doméstica'))) {
         newCategoryId = subCategories['salario_domestica'].id;
         shouldUpdate = true;
       } else if (desc.includes('salário') && !desc.includes('clt') && !desc.includes('empresa')) {
-        // Fallback: qualquer "salário" que não seja CLT ou empresarial
+        // Fallback: "salário" que não é CLT (assume ser empregada doméstica)
         newCategoryId = subCategories['salario_domestica'].id;
         shouldUpdate = true;
       }
 
-      // Detectar padrão para "Encargos Sociais"
-      if (desc.includes('encargo') || (desc.includes('inss') && desc.includes('empregada')) || 
-          (desc.includes('fgts') && desc.includes('empregada'))) {
+      // Padrão: Encargos/INSS/FGTS de Empregada Doméstica
+      if (!shouldUpdate && (desc.includes('encargo') || 
+          (desc.includes('inss') && (desc.includes('empregada') || desc.includes('doméstica'))) ||
+          (desc.includes('fgts') && (desc.includes('empregada') || desc.includes('doméstica'))) ||
+          desc.includes('darf'))) {
         newCategoryId = subCategories['encargos_domestica'].id;
         shouldUpdate = true;
+      }
+
+      // Padrão: Extra / Diária
+      if (!shouldUpdate && (desc.includes('extra') || desc.includes('diária') || desc.includes('diaria'))) {
+        const extraCat = categoryMap['extra_diaria'];
+        if (extraCat) {
+          newCategoryId = extraCat;
+          shouldUpdate = true;
+        }
       }
 
       if (shouldUpdate && newCategoryId) {
