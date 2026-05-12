@@ -44,27 +44,28 @@ Deno.serve(async (req) => {
       subCategories[subData.slug] = subCat;
     }
 
-    // Remapear payables que têm category='salario_clt' ou 'servicos' com descrição contendo "salário" ou "encargo"
+    // Buscar payables com descrições que indicam "Empregada Doméstica"
     const payables = await base44.entities.Payable.list('-due_date', 1000);
     let updated = 0;
 
     for (const payable of payables) {
       let shouldUpdate = false;
       let newCategoryId = null;
+      const desc = (payable.description || '').toLowerCase();
 
       // Detectar padrão para "Salário da Empregada"
-      if ((payable.category === 'salario_clt' || payable.category === 'servicos') &&
-          payable.description && payable.description.toLowerCase().includes('salário')) {
+      if (desc.includes('salário') && (desc.includes('empregada') || desc.includes('doméstica'))) {
+        newCategoryId = subCategories['salario_domestica'].id;
+        shouldUpdate = true;
+      } else if (desc.includes('salário') && !desc.includes('clt') && !desc.includes('empresa')) {
+        // Fallback: qualquer "salário" que não seja CLT ou empresarial
         newCategoryId = subCategories['salario_domestica'].id;
         shouldUpdate = true;
       }
 
       // Detectar padrão para "Encargos Sociais"
-      if ((payable.category === 'servicos' || payable.category === 'impostos') &&
-          payable.description && 
-          (payable.description.toLowerCase().includes('encargo') || 
-           payable.description.toLowerCase().includes('inss') ||
-           payable.description.toLowerCase().includes('fgts'))) {
+      if (desc.includes('encargo') || (desc.includes('inss') && desc.includes('empregada')) || 
+          (desc.includes('fgts') && desc.includes('empregada'))) {
         newCategoryId = subCategories['encargos_domestica'].id;
         shouldUpdate = true;
       }
