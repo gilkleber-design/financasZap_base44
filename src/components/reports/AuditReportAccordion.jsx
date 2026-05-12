@@ -53,12 +53,15 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
     payables.forEach(item => {
       let rootKey;
       
-      if (item.category_id && parentMap[item.category_id]) {
-        // É uma subcategoria: agrupar sob categoria pai
-        rootKey = parentMap[item.category_id];
-      } else if (item.category_id) {
-        // É categoria raiz personalizada
-        rootKey = item.category_id;
+      if (item.category_id) {
+        const catData = catMap[item.category_id];
+        if (catData?.parent_id) {
+          // É uma subcategoria: agrupar sob categoria pai
+          rootKey = catData.parent_id;
+        } else {
+          // É categoria raiz personalizada
+          rootKey = item.category_id;
+        }
       } else {
         // É enum-based
         rootKey = item.category || 'outros';
@@ -76,10 +79,16 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
         const enumItems = [];
         
         items.forEach(item => {
-          if (item.category_id && parentMap[item.category_id] === rootKey) {
-            // É subcategoria desta raiz
-            if (!bySubcat[item.category_id]) bySubcat[item.category_id] = [];
-            bySubcat[item.category_id].push(item);
+          if (item.category_id) {
+            const catData = catMap[item.category_id];
+            if (catData?.parent_id === rootKey) {
+              // É subcategoria desta raiz
+              if (!bySubcat[item.category_id]) bySubcat[item.category_id] = [];
+              bySubcat[item.category_id].push(item);
+            } else {
+              // É item enum ou outra raiz, não de subcategoria
+              enumItems.push(item);
+            }
           } else {
             // É item direto sem category_id
             enumItems.push(item);
