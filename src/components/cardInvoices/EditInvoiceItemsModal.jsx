@@ -88,7 +88,7 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
   };
 
   const requestDelete = (item) => {
-    if (item.installment_group_id) {
+    if (item.installment_group_id || item.recurrence_id) {
       setDeletingItem(item);
       setDeletingId(null);
     } else {
@@ -119,6 +119,32 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
       toDelete = groupItems;
     } else if (mode === 'from_here') {
       toDelete = groupItems.filter(i => (i.installment_number || 0) >= (deletingItem.installment_number || 0));
+    } else {
+      toDelete = [deletingItem];
+    }
+
+    await Promise.all(toDelete.map(i => base44.entities.Payable.delete(i.id)));
+    const deletedIds = new Set(toDelete.map(i => i.id));
+    setItems(prev => prev.filter(i => !deletedIds.has(i.id)));
+    toast.success(`${toDelete.length} lançamento(s) removido(s)`);
+    setSaving(false);
+    setDeletingItem(null);
+    setDeleteMode(null);
+    onSaved();
+  };
+
+  const deleteRecurrences = async (mode) => {
+    if (!deletingItem) return;
+    setSaving(true);
+
+    // Busca todos os payables da mesma recorrência
+    const recItems = await base44.entities.Payable.filter({ recurrence_id: deletingItem.recurrence_id }, 'due_date', 500);
+
+    let toDelete;
+    if (mode === 'all') {
+      toDelete = recItems;
+    } else if (mode === 'from_here') {
+      toDelete = recItems.filter(i => i.due_date >= deletingItem.due_date);
     } else {
       toDelete = [deletingItem];
     }
@@ -259,8 +285,8 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
           ))}
         </div>
 
-        {/* Modal de exclusão de parcelas */}
-        {deletingItem && (
+        {/* Painel de exclusão de parcelas */}
+        {deletingItem && deletingItem.installment_group_id && (
           <div className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3">
             <p className="text-sm font-medium text-red-800">
               Excluir <strong>{deletingItem.description}</strong>
@@ -278,6 +304,30 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
               </Button>
               <Button size="sm" variant="destructive" className="text-xs justify-start" onClick={() => deleteInstallments('all')} disabled={saving}>
                 Todas as parcelas desta compra
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => { setDeletingItem(null); setDeleteMode(null); }}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Painel de exclusão de compras fixas/recorrentes */}
+        {deletingItem && deletingItem.recurrence_id && !deletingItem.installment_group_id && (
+          <div className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-medium text-red-800">
+              Excluir <strong>{deletingItem.description}</strong>
+            </p>
+            <p className="text-xs text-red-600">Esta é uma despesa fixa/recorrente. O que deseja excluir?</p>
+            <div className="flex flex-col gap-2">
+              <Button size="sm" variant="destructive" className="text-xs justify-start" onClick={() => deleteRecurrences('single')} disabled={saving}>
+                Apenas este lançamento
+              </Button>
+              <Button size="sm" variant="destructive" className="text-xs justify-start" onClick={() => deleteRecurrences('from_here')} disabled={saving}>
+                Este e os próximos
+              </Button>
+              <Button size="sm" variant="destructive" className="text-xs justify-start" onClick={() => deleteRecurrences('all')} disabled={saving}>
+                Todas as ocorrências
               </Button>
               <Button size="sm" variant="outline" className="text-xs" onClick={() => { setDeletingItem(null); setDeleteMode(null); }}>
                 Cancelar
