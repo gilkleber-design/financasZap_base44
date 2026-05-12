@@ -4,10 +4,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Pencil, Trash2, Check, X } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+const CATEGORIES = [
+  { value: 'alimentacao',            label: 'Alimentação' },
+  { value: 'transporte',             label: 'Transporte' },
+  { value: 'moradia',                label: 'Moradia' },
+  { value: 'saude',                  label: 'Saúde' },
+  { value: 'educacao',               label: 'Educação' },
+  { value: 'lazer',                  label: 'Lazer' },
+  { value: 'vestuario',              label: 'Vestuário' },
+  { value: 'servicos',               label: 'Serviços' },
+  { value: 'impostos',               label: 'Impostos' },
+  { value: 'transferencia_liquidacao', label: 'Transferência/Liquidação' },
+  { value: 'outros',                 label: 'Outros' },
+];
+
+const categoryLabel = (slug) => CATEGORIES.find(c => c.value === slug)?.label || slug || '—';
 
 export default function EditInvoiceItemsModal({ items: initialItems, onClose, onSaved }) {
   const [items, setItems] = useState(initialItems);
@@ -36,7 +54,7 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
 
   const startEdit = (item) => {
     setEditingId(item.id);
-    setEditForm({ description: item.description, amount: item.amount });
+    setEditForm({ description: item.description, amount: item.amount, category: item.category || 'outros' });
   };
 
   const cancelEdit = () => {
@@ -47,8 +65,19 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
   const saveEdit = async (item) => {
     if (!editForm.description || !editForm.amount) return toast.error('Preencha os campos');
     setSaving(true);
-    const updated = { ...item, description: editForm.description, amount: parseFloat(editForm.amount), status: item.status === 'paid' ? 'paid' : 'provisioned' };
-    await base44.entities.Payable.update(item.id, { description: updated.description, amount: updated.amount, status: updated.status });
+    const updated = {
+      ...item,
+      description: editForm.description,
+      amount: parseFloat(editForm.amount),
+      category: editForm.category,
+      status: item.status === 'paid' ? 'paid' : 'provisioned',
+    };
+    await base44.entities.Payable.update(item.id, {
+      description: updated.description,
+      amount: updated.amount,
+      category: updated.category,
+      status: updated.status,
+    });
     setItems(prev => prev.map(i => i.id === item.id ? updated : i));
     toast.success('Item atualizado');
     setSaving(false);
@@ -131,13 +160,25 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
                       value={editForm.amount}
                       onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
                       placeholder="Valor"
-                      className="text-sm"
+                      className="text-sm w-28 flex-shrink-0"
                     />
-                    <Button size="icon" className="w-9 h-9 flex-shrink-0" onClick={() => saveEdit(item)} disabled={saving}>
-                      <Check className="w-4 h-4" />
+                    <Select value={editForm.category} onValueChange={v => setEditForm(f => ({ ...f, category: v }))}>
+                      <SelectTrigger className="text-sm flex-1 h-9">
+                        <SelectValue placeholder="Categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map(c => (
+                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" className="h-8" onClick={() => saveEdit(item)} disabled={saving}>
+                      <Check className="w-4 h-4 mr-1" /> Salvar
                     </Button>
-                    <Button size="icon" variant="outline" className="w-9 h-9 flex-shrink-0" onClick={cancelEdit}>
-                      <X className="w-4 h-4" />
+                    <Button size="sm" variant="outline" className="h-8" onClick={cancelEdit}>
+                      <X className="w-4 h-4 mr-1" /> Cancelar
                     </Button>
                   </div>
                 </div>
@@ -158,9 +199,14 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
                   <Checkbox checked={selected.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{item.description}</p>
-                    {item.competencia && (
-                      <p className="text-xs text-muted-foreground">Comp: {item.competencia.slice(0, 7)}</p>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {item.category && (
+                        <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{categoryLabel(item.category)}</Badge>
+                      )}
+                      {item.competencia && (
+                        <span className="text-xs text-muted-foreground">Comp: {item.competencia.slice(0, 7)}</span>
+                      )}
+                    </div>
                   </div>
                   <span className="text-sm font-semibold text-red-500 flex-shrink-0">{fmt(item.amount)}</span>
                   <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-primary flex-shrink-0" onClick={() => startEdit(item)}>

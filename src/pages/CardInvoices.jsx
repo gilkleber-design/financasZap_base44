@@ -352,7 +352,7 @@ export default function CardInvoices() {
         <EditInvoiceItemsModal
           items={editingInvoiceItems}
           onClose={() => setEditingInvoiceItems(null)}
-          onSaved={() => { queryClient.invalidateQueries(); setEditingInvoiceItems(null); }}
+          onSaved={() => queryClient.invalidateQueries()}
         />
       )}
 
