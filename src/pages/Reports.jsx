@@ -3,9 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import AuditReportAccordion from '@/components/reports/AuditReportAccordion';
 import PayableDetailDrawer from '@/components/reports/PayableDetailDrawer';
 
@@ -23,7 +25,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 export default function Reports() {
   const [selectedPayable, setSelectedPayable] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
@@ -41,16 +43,14 @@ export default function Reports() {
   };
 
   // Filtrar payables pelo mês selecionado
+  const mStart = startOfMonth(currentMonth);
+  const mEnd = endOfMonth(currentMonth);
+  const selectedMonthStr = format(currentMonth, 'yyyy-MM');
+  
   const filteredPayables = payables.filter(p => {
     const payableMonth = format(new Date(p.due_date), 'yyyy-MM');
-    return payableMonth === selectedMonth;
+    return payableMonth === selectedMonthStr;
   });
-
-  // Gerar lista de últimos 12 meses para seleção
-  const monthOptions = Array.from({ length: 12 }, (_, i) => {
-    const d = subMonths(new Date(), i);
-    return format(d, 'yyyy-MM');
-  }).reverse();
 
   // Last 6 months data (current year only)
   const currentYear = new Date().getFullYear();
@@ -207,19 +207,16 @@ export default function Reports() {
         </TabsContent>
 
         <TabsContent value="audit" className="mt-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">Mês:</label>
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="h-9 px-3 rounded-md border border-input bg-background text-sm"
-            >
-              {monthOptions.map(month => (
-                <option key={month} value={month}>
-                  {format(new Date(month + '-01'), 'MMMM/yyyy', { locale: ptBR })}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-medium min-w-[140px] text-center capitalize">
+              {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+            </span>
+            <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
           </div>
           <AuditReportAccordion payables={filteredPayables} onRowClick={handlePayableClick} />
         </TabsContent>
