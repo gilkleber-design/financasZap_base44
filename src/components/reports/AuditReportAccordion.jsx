@@ -2,9 +2,8 @@ import { useState, useMemo } from 'react';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { format } from 'date-fns';
 
 const CATEGORY_LABELS = {
@@ -18,8 +17,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 
 const sanitizeDescription = (desc) => {
   if (!desc) return desc;
-  const cleaned = desc.replace(/\s+(SAO PAULO|SALVADOR|CURITIBA|VITORIA|RIO DE JANEIRO|BELO HORIZONTE|BRASILIA|FORTALEZA|RECIFE|MANAUS|PORTO ALEGRE|BRA|BR)$/gi, '').trim();
-  return cleaned;
+  return desc.replace(/\s+(SAO PAULO|SALVADOR|CURITIBA|VITORIA|RIO DE JANEIRO|BELO HORIZONTE|BRASILIA|FORTALEZA|RECIFE|MANAUS|PORTO ALEGRE|BRA|BR)$/gi, '').trim();
 };
 
 export default function AuditReportAccordion({ payables = [], onRowClick, categories = [] }) {
@@ -31,29 +29,23 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
     categories.forEach(c => { catMap[c.id] = c; });
 
     const groups = {};
+    const subcategoryIdsFound = new Set();
 
+    // 1. Mapeamento e Agrupamento
     payables.forEach(item => {
-      // 1. Identificar a "Raiz" e a "Sub"
-      let rootId = 'outros';
-      let subId = null;
-
-      if (item.category_id && catMap[item.category_id]) {
-        const cat = catMap[item.category_id];
-        if (cat.parent_id) {
-          rootId = cat.parent_id;
-          subId = item.category_id;
-        } else {
-          rootId = item.category_id;
-        }
-      } else {
-        rootId = item.category || 'outros';
-      }
-
-      // 2. Filtrar por busca
       const desc = sanitizeDescription(item.description).toLowerCase();
       if (searchTerm && !desc.includes(searchTerm.toLowerCase())) return;
 
-      // 3. Estruturar objeto
+      let rootId = item.category_id || item.category || 'outros';
+      let subId = null;
+
+      const currentCat = catMap[item.category_id];
+      if (currentCat && currentCat.parent_id) {
+        rootId = currentCat.parent_id;
+        subId = item.category_id;
+        subcategoryIdsFound.add(subId); // Marca para expulsar do nível 1
+      }
+
       if (!groups[rootId]) {
         groups[rootId] = { 
           id: rootId, 
@@ -81,7 +73,10 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
       groups[rootId].total += (item.amount || 0);
     });
 
-    return Object.values(groups).sort((a, b) => b.total - a.total);
+    // 2. Filtro de Hierarquia: Remove subcategorias da raiz
+    return Object.values(groups)
+      .filter(group => !subcategoryIdsFound.has(group.id))
+      .sort((a, b) => b.total - a.total);
   }, [payables, searchTerm, categories]);
 
   const totalGeral = organizedData.reduce((s, c) => s + c.total, 0);
@@ -101,7 +96,11 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
       </div>
 
       {organizedData.length === 0 ? (
-        <Card className="border-0 shadow-sm"><CardContent className="py-8 text-center text-muted-foreground">Nenhum lançamento encontrado.</CardContent></Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Nenhum lançamento encontrado.
+          </CardContent>
+        </Card>
       ) : (
         <Card className="border-0 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between">
@@ -119,15 +118,19 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-6">
-                    {/* Itens Diretos (Sem Subcategoria) */}
-                    {cat.items.length > 0 && <TableRender items={cat.items} onRowClick={onRowClick} />}
+                    {/* Lançamentos Diretos na Categoria Pai */}
+                    {cat.items.length > 0 && (
+                      <div className="mb-4">
+                        <TableRender items={cat.items} onRowClick={onRowClick} />
+                      </div>
+                    )}
 
-                    {/* Subcategorias aninhadas */}
+                    {/* Subcategorias Aninhadas */}
                     {Object.values(cat.subcategories).map(sub => (
-                      <div key={sub.id} className="mt-4 ml-4 border-l-4 border-slate-200 pl-4 bg-slate-50/50 p-3 rounded-r-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm font-bold text-slate-600">{sub.label}</span>
-                          <Badge variant="outline" className="text-xs">{fmt(sub.total)}</Badge>
+                      <div key={sub.id} className="mt-4 ml-6 border-l-4 border-slate-200 pl-4 bg-slate-50/80 p-4 rounded-r-xl shadow-sm">
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-sm font-bold text-slate-600 uppercase tracking-tight">{sub.label}</span>
+                          <Badge variant="outline" className="text-[10px] bg-white">{fmt(sub.total)}</Badge>
                         </div>
                         <TableRender items={sub.items} onRowClick={onRowClick} isSub />
                       </div>
@@ -147,21 +150,25 @@ function TableRender({ items, onRowClick, isSub = false }) {
   return (
     <div className="overflow-x-auto">
       <table className={`w-full ${isSub ? 'text-[11px]' : 'text-xs'}`}>
-        <thead className="text-muted-foreground border-b">
+        <thead className="text-muted-foreground border-b bg-slate-50/50">
           <tr>
-            <th className="text-left py-2 font-medium">Data</th>
-            <th className="text-left py-2 font-medium">Descrição</th>
-            <th className="text-right py-2 font-medium">Valor</th>
-            <th className="text-center py-2 font-medium w-16">Parcela</th>
+            <th className="text-left py-2 px-2 font-medium">Data</th>
+            <th className="text-left py-2 px-2 font-medium">Descrição</th>
+            <th className="text-right py-2 px-2 font-medium">Valor</th>
+            <th className="text-center py-2 px-2 font-medium w-16">Parcela</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {items.map(item => (
-            <tr key={item.id} onClick={() => onRowClick(item)} className="hover:bg-slate-100/50 cursor-pointer transition-colors">
-              <td className="py-2">{format(new Date(item.due_date), 'dd/MM/yyyy')}</td>
-              <td className="py-2 font-medium text-slate-700">{sanitizeDescription(item.description)}</td>
-              <td className="py-2 text-right font-bold">{fmt(item.amount)}</td>
-              <td className="py-2 text-center text-[10px]">
+            <tr 
+              key={item.id} 
+              onClick={() => onRowClick(item)} 
+              className="hover:bg-primary/5 cursor-pointer transition-colors"
+            >
+              <td className="py-2 px-2">{format(new Date(item.due_date), 'dd/MM/yyyy')}</td>
+              <td className="py-2 px-2 font-medium text-slate-700">{sanitizeDescription(item.description)}</td>
+              <td className="py-2 px-2 text-right font-bold text-slate-900">{fmt(item.amount)}</td>
+              <td className="py-2 px-2 text-center text-[10px]">
                 {item.installment_number ? `${item.installment_number}/${item.installment_count || item.installment_total}` : '-'}
               </td>
             </tr>
