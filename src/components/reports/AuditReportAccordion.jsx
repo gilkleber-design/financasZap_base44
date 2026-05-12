@@ -31,135 +31,101 @@ const sanitizeDescription = (desc) => {
   return cleaned;
 };
 
-export default function AuditReportAccordion({ payables = [], onRowClick, viewMode = 'category', categories = [] }) {
+export default function AuditReportAccordion({ payables = [], onRowClick, categories = [] }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [openCategories, setOpenCategories] = useState([]);
 
-  // Agrupar por categoria/subcategoria conforme viewMode
+  // Agrupamento multinível: Categoria Raiz > Subcategorias > Transações
   const organizedData = useMemo(() => {
     const catMap = {};
-    const subcatIds = new Set();
-    const catToParent = {}; // Mapear subcategoria -> categoria pai
+    const parentMap = {}; // parent_id -> categoria raiz
     
     categories.forEach(c => {
       catMap[c.id] = c;
       if (c.parent_id) {
-        subcatIds.add(c.id);
-        catToParent[c.id] = c.parent_id;
+        parentMap[c.id] = c.parent_id;
       }
     });
 
-    if (viewMode === 'subcategory') {
-      // Modo subcategoria: agrupa APENAS por subcategorias personalizadas (category_id)
-      const grouped = {};
+    // Agrupar por categoria raiz
+    const byRoot = {};
+    
+    payables.forEach(item => {
+      let rootKey;
       
-      payables.forEach(item => {
-        if (item.category_id && subcatIds.has(item.category_id)) {
-          // É um item de subcategoria
-          const catId = item.category_id;
-          if (!grouped[catId]) grouped[catId] = [];
-          grouped[catId].push(item);
-        }
-      });
+      if (item.category_id && parentMap[item.category_id]) {
+        // É uma subcategoria: agrupar sob categoria pai
+        rootKey = parentMap[item.category_id];
+      } else if (item.category_id) {
+        // É categoria raiz personalizada
+        rootKey = item.category_id;
+      } else {
+        // É enum-based
+        rootKey = item.category || 'outros';
+      }
+      
+      if (!byRoot[rootKey]) byRoot[rootKey] = [];
+      byRoot[rootKey].push(item);
+    });
 
-      // Filtrar por busca
-      const filtered = {};
-      Object.entries(grouped).forEach(([catId, items]) => {
-        const matchedItems = items.filter(item => {
+    // Processar cada categoria raiz
+    return Object.entries(byRoot)
+      .map(([rootKey, items]) => {
+        // Agrupar items por subcategoria (category_id)
+        const bySubcat = {};
+        const enumItems = [];
+        
+        items.forEach(item => {
+          if (item.category_id && parentMap[item.category_id] === rootKey) {
+            // É subcategoria desta raiz
+            if (!bySubcat[item.category_id]) bySubcat[item.category_id] = [];
+            bySubcat[item.category_id].push(item);
+          } else {
+            // É item direto sem category_id
+            enumItems.push(item);
+          }
+        });
+
+        // Criar subcategorias
+        const subcategories = Object.entries(bySubcat)
+          .map(([subcatId, subcatItems]) => {
+            const matchedItems = subcatItems.filter(item => {
+              const desc = sanitizeDescription(item.description).toLowerCase();
+              return desc.includes(searchTerm.toLowerCase());
+            });
+            return matchedItems.length > 0 ? {
+              id: subcatId,
+              label: catMap[subcatId]?.name || subcatId,
+              items: matchedItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
+              total: matchedItems.reduce((s, i) => s + (i.amount || 0), 0),
+            } : null;
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.total - a.total);
+
+        // Filtrar enum items
+        const matchedEnumItems = enumItems.filter(item => {
           const desc = sanitizeDescription(item.description).toLowerCase();
           return desc.includes(searchTerm.toLowerCase());
         });
-        if (matchedItems.length > 0) {
-          filtered[catId] = matchedItems;
-        }
-      });
 
-      return Object.entries(filtered)
-        .map(([catId, items]) => ({
-          id: catId,
-          label: catMap[catId]?.name || catId,
-          items: items.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
-          total: items.reduce((s, i) => s + (i.amount || 0), 0),
-          level: 0,
-          subcategories: [],
-        }))
-        .sort((a, b) => b.total - a.total);
-    } else {
-      // Modo categoria: agrupa por CATEGORIAS RAIZ e seus itens (enum + subcategorias filhas)
-      // Primeiro, agrupar por categoria raiz (parent_id ou enum)
-      const grouped = {};
-      
-      payables.forEach(item => {
-        let groupKey;
-        
-        if (item.category_id && subcatIds.has(item.category_id)) {
-          // É uma subcategoria: agrupar sob a categoria pai
-          groupKey = catToParent[item.category_id];
-        } else {
-          // É enum-based: usar category enum
-          groupKey = item.category || 'outros';
-        }
-        
-        if (!grouped[groupKey]) grouped[groupKey] = [];
-        grouped[groupKey].push(item);
-      });
+        // Label da raiz
+        const label = catMap[rootKey]?.name || CATEGORY_LABELS[rootKey] || rootKey;
 
-      // Processar cada categoria raiz
-      return Object.entries(grouped)
-        .map(([groupKey, allItems]) => {
-          // Separar enum items vs category_id items (subcategorias)
-          const enumItems = allItems.filter(i => !i.category_id || !subcatIds.has(i.category_id));
-          const subcategoryItems = allItems.filter(i => i.category_id && subcatIds.has(i.category_id));
+        const totalEnum = matchedEnumItems.reduce((s, i) => s + (i.amount || 0), 0);
+        const totalSubcats = subcategories.reduce((s, sc) => s + sc.total, 0);
 
-          // Agrupar subcategory items por category_id
-          const subcatGrouped = {};
-          subcategoryItems.forEach(item => {
-            const catId = item.category_id;
-            if (!subcatGrouped[catId]) subcatGrouped[catId] = [];
-            subcatGrouped[catId].push(item);
-          });
-
-          // Criar subcategorias com filtro de busca
-          const subcategories = Object.entries(subcatGrouped)
-            .map(([catId, subcatItems]) => {
-              const matchedItems = subcatItems.filter(item => {
-                const desc = sanitizeDescription(item.description).toLowerCase();
-                return desc.includes(searchTerm.toLowerCase());
-              });
-              return matchedItems.length > 0 ? {
-                id: catId,
-                label: catMap[catId]?.name || catId,
-                items: matchedItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
-                total: matchedItems.reduce((s, i) => s + (i.amount || 0), 0),
-                level: 1,
-              } : null;
-            })
-            .filter(Boolean)
-            .sort((a, b) => b.total - a.total);
-
-          // Filtrar enum items
-          const matchedEnumItems = enumItems.filter(item => {
-            const desc = sanitizeDescription(item.description).toLowerCase();
-            return desc.includes(searchTerm.toLowerCase());
-          });
-
-          // Determinar label: se groupKey é UUID (categoria raiz), usar catMap; senão CATEGORY_LABELS
-          const label = catMap[groupKey]?.name || CATEGORY_LABELS[groupKey] || groupKey;
-
-          return {
-            id: groupKey,
-            label,
-            items: matchedEnumItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
-            total: matchedEnumItems.reduce((s, i) => s + (i.amount || 0), 0),
-            level: 0,
-            subcategories,
-            subcategoryTotal: subcategories.reduce((s, sc) => s + sc.total, 0),
-          };
-        })
-        .filter(cat => cat.items.length > 0 || cat.subcategories.length > 0)
-        .sort((a, b) => (b.total + b.subcategoryTotal) - (a.total + a.subcategoryTotal));
-    }
-  }, [payables, searchTerm, viewMode, categories]);
+        return {
+          id: rootKey,
+          label,
+          items: matchedEnumItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
+          total: totalEnum + totalSubcats,
+          subcategories,
+        };
+      })
+      .filter(cat => cat.items.length > 0 || cat.subcategories.length > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [payables, searchTerm, categories]);
 
   // Auto-abrir categorias quando há busca
   const categoriesToOpen = useMemo(() => {
