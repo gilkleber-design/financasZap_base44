@@ -244,6 +244,7 @@ export default function Hospitals() {
   };
 
   const pjSources = sources.filter(s => s.type === 'pj');
+  const sortedHospitals = [...hospitals].sort((a, b) => (a.sigla || '').localeCompare(b.sigla || ''));
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
@@ -279,7 +280,7 @@ export default function Hospitals() {
         {hospitals.length === 0 && !showForm && (
           <p className="text-center text-sm text-muted-foreground py-8">Nenhum hospital cadastrado ainda.</p>
         )}
-        {hospitals.map(h => {
+        {sortedHospitals.map(h => {
           const pj = sources.find(s => s.id === h.income_source_id);
           const isExp = expanded === h.id;
           const isEditing = editingId === h.id;
