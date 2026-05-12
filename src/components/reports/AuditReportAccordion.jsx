@@ -37,6 +37,9 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
 
   // Agrupamento multinível: Categoria Raiz > Subcategorias > Transações
   const organizedData = useMemo(() => {
+    console.log('DEBUG:', { payables: payables.length, categories: categories.length, 
+      payablesSample: payables.slice(0, 3).map(p => ({ id: p.id, cat_id: p.category_id, cat: p.category })) });
+    
     const catMap = {};
     const parentMap = {}; // parent_id -> categoria raiz
     
@@ -46,6 +49,7 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
         parentMap[c.id] = c.parent_id;
       }
     });
+    console.log('DEBUG catMap:', catMap);
 
     // Agrupar por categoria raiz
     const byRoot = {};
