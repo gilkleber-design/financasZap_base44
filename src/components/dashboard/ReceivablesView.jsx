@@ -26,14 +26,14 @@ export default function ReceivablesView({ receivables, incomeSources, transactio
   const totalReceived = receivedThisMonth.reduce((t, tx) => t + (tx.net_amount || tx.amount || 0), 0);
   const totalOverdue = overdue.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
 
-  // Tabela por PJ: recebido no mês + projetado (pending/overdue)
+  // Tabela por PJ: recebido no mês (via Transactions) + projetado (Receivables pending)
   const pjSources = incomeSources.filter(s => s.type === 'pj');
 
   const pjTableData = pjSources.map(src => {
     const srcReceivables = receivables.filter(r => r.income_source_id === src.id);
-    const receivedMonth = srcReceivables
-      .filter(r => r.status === 'received' && r.due_date >= monthStart && r.due_date <= monthEnd)
-      .reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
+    const receivedMonth = transactions
+      .filter(t => t.type === 'income' && t.income_source_id === src.id && t.date >= monthStart && t.date <= monthEnd)
+      .reduce((s, t) => s + (t.net_amount || t.amount || 0), 0);
     const projected = srcReceivables
       .filter(r => r.status !== 'received')
       .reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
@@ -41,7 +41,7 @@ export default function ReceivablesView({ receivables, incomeSources, transactio
     return { src, receivedMonth, projected, darf };
   }).filter(row => row.receivedMonth > 0 || row.projected > 0);
 
-  // Card PF: salário + bolsa internato recebidos no mês
+  // Card PF: salário + bolsa recebidos no mês (via Transactions)
   const pfTransactions = transactions.filter(
     t => t.type === 'income' &&
     t.date >= monthStart && t.date <= monthEnd &&
