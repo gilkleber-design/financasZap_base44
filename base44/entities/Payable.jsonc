@@ -15,6 +15,11 @@
       "format": "date",
       "description": "Data de vencimento"
     },
+    "purchase_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data original da compra (usado em parcelas de cart\u00e3o)"
+    },
     "competencia": {
       "type": "string",
       "format": "date",

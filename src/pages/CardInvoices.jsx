@@ -229,9 +229,9 @@ export default function CardInvoices() {
                       <div key={p.id} className="flex items-center justify-between px-3 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm truncate">{p.description}</p>
-                          {p.due_date && (
+                          {(p.purchase_date || p.due_date) && (
                             <p className="text-xs text-muted-foreground">
-                              Data compra: {format(new Date(p.due_date.includes('T') ? p.due_date : p.due_date + 'T12:00:00'), 'dd/MM/yyyy')}
+                              Data compra: {format(new Date((p.purchase_date || p.due_date).includes('T') ? (p.purchase_date || p.due_date) : (p.purchase_date || p.due_date) + 'T12:00:00'), 'dd/MM/yyyy')}
                             </p>
                           )}
                         </div>

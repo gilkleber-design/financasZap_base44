@@ -120,6 +120,8 @@ Deno.serve(async (req) => {
         const monthlyAmount = item.amount;
         const itemDate = new Date(item.date + 'T12:00:00');
 
+        const purchaseDateStr = itemDate.toISOString().split('T')[0];
+
         for (let i = 0; i < (totalInstallments - startNum + 1); i++) {
           const futureDate = addMonths(itemDate, i);
           const futureDateStr = futureDate.toISOString().split('T')[0];
@@ -128,6 +130,7 @@ Deno.serve(async (req) => {
             description: baseDesc,
             amount: monthlyAmount,
             due_date: futureDateStr + 'T12:00:00',
+            purchase_date: purchaseDateStr,
             competencia: futureDateStr,
             category: item.category || 'outros',
             status: 'provisioned',
