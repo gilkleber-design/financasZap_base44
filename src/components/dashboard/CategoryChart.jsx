@@ -45,7 +45,7 @@ export default function CategoryChart({ data }) {
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={sorted} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis type="number" />
+            <XAxis type="number" hide />
             <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 12 }} />
             <Tooltip formatter={(v) => fmt(v)} />
             <Bar dataKey="value" fill="hsl(var(--chart-1))" radius={[0, 8, 8, 0]} />
