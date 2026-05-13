@@ -54,16 +54,26 @@ export default function CardInvoices() {
 
   const generateMutation = useMutation({
     mutationFn: async (cardId) => {
-      return await base44.functions.invoke('generateCardInvoices', { 
+      const res = await base44.functions.invoke('generateCardInvoices', { 
         forceCardId: cardId, 
         forceMonth: format(mStart, 'yyyy-MM') + '-01' 
       });
+      return res.data;
     },
-    onSuccess: () => { 
+    onSuccess: (data) => { 
+      const result = data?.results?.[0];
+      if (result?.status === 'no_items') {
+        toast.info('Nenhum item encontrado para fechar.');
+      } else {
+        toast.success('Fatura fechada!'); 
+      }
       queryClient.invalidateQueries(); 
       setPendingClosureCardId(null);
-      toast.success('Fatura fechada!'); 
     },
+    onError: () => {
+      toast.error('Erro ao fechar fatura');
+      setPendingClosureCardId(null);
+    }
   });
 
   const reopenInvoiceMutation = useMutation({
@@ -96,8 +106,6 @@ export default function CardInvoices() {
           const invoicePayable = getInvoicePayable(card.id);
           const existingInvoice = getInvoice(card.id);
           
-          // REGRA DE OURO: O status da badge deve vir do PAYABLE consolidado, não apenas do registro da fatura.
-          // Se o payable existe e está pago, status = 'paid'. Se existe e não está pago, status = 'closed'.
           const invoiceStatus = invoicePayable 
             ? (invoicePayable.status === 'paid' ? 'paid' : 'closed') 
             : (existingInvoice ? 'closed' : null);
@@ -139,20 +147,18 @@ export default function CardInvoices() {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {/* BOTAO FECHAR: Se não existe o consolidado ainda */}
                       {!invoicePayable && items.length > 0 && (
-                        <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-primary" onClick={() => setPendingClosureCardId(card.id)}>
+                        <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-primary hover:bg-primary/10" onClick={() => setPendingClosureCardId(card.id)}>
                           FECHAR FATURA
                         </Button>
                       )}
 
-                      {/* BOTOES REABRIR E PAGAR: Só aparecem se a fatura NÃO estiver paga */}
                       {invoicePayable && invoicePayable.status !== 'paid' && (
                         <>
-                          <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-amber-600" onClick={() => setPendingReopenData({ invoice: existingInvoice, invoicePayable })}>
+                          <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-amber-600 hover:bg-amber-50" onClick={() => setPendingReopenData({ invoice: existingInvoice, invoicePayable })}>
                             <Undo2 className="w-3 h-3 mr-1" /> REABRIR
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-emerald-600" onClick={() => setPayingPayable(invoicePayable)}>
+                          <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50" onClick={() => setPayingPayable(invoicePayable)}>
                             PAGAR AGORA
                           </Button>
                         </>
@@ -166,7 +172,7 @@ export default function CardInvoices() {
 
                   <CollapsibleContent className="bg-slate-50/20 p-4">
                     <div className="bg-white rounded-lg border divide-y overflow-hidden shadow-sm">
-                      {items.map(p => (
+                      {items.length > 0 ? items.map(p => (
                         <div key={p.id} className="flex justify-between px-4 py-2.5 text-sm hover:bg-slate-50">
                           <div className="flex flex-col">
                             <span className="text-slate-700 font-medium">{p.description}</span>
@@ -176,7 +182,9 @@ export default function CardInvoices() {
                           </div>
                           <span className="font-bold text-slate-900">{fmt(p.amount)}</span>
                         </div>
-                      ))}
+                      )) : (
+                        <p className="p-4 text-center text-xs text-muted-foreground uppercase font-bold tracking-widest">Nenhum lançamento</p>
+                      )}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
@@ -186,7 +194,6 @@ export default function CardInvoices() {
         })}
       </div>
 
-      {/* Modais de Confirmação e Importação */}
       <AlertDialog open={!!pendingClosureCardId} onOpenChange={() => setPendingClosureCardId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -195,7 +202,9 @@ export default function CardInvoices() {
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
             <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
-            <Button className="flex-1 bg-primary text-white font-bold h-10" onClick={() => generateMutation.mutate(pendingClosureCardId)}>FECHAR AGORA</Button>
+            <Button className="flex-1 bg-primary text-white font-bold h-10" onClick={() => generateMutation.mutate(pendingClosureCardId)} disabled={generateMutation.isPending}>
+              {generateMutation.isPending ? 'PROCESSANDO...' : 'FECHAR AGORA'}
+            </Button>
           </div>
         </AlertDialogContent>
       </AlertDialog>
@@ -208,7 +217,9 @@ export default function CardInvoices() {
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
             <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
-            <Button variant="destructive" className="flex-1 font-bold h-10" onClick={() => reopenInvoiceMutation.mutate(pendingReopenData)}>REABRIR AGORA</Button>
+            <Button variant="destructive" className="flex-1 font-bold h-10" onClick={() => reopenInvoiceMutation.mutate(pendingReopenData)} disabled={reopenInvoiceMutation.isPending}>
+              {reopenInvoiceMutation.isPending ? 'REABRINDO...' : 'REABRIR AGORA'}
+            </Button>
           </div>
         </AlertDialogContent>
       </AlertDialog>
