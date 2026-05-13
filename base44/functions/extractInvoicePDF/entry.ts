@@ -94,11 +94,15 @@ REGRAS CRÍTICAS DE INCLUSÃO — inclua TUDO que tiver valor:
 - Compras parceladas — incluir cada parcela que aparece na fatura como item separado
 - Qualquer linha que tenha um valor em reais (R$, vírgula decimal)
 
-REGRAS DE EXCLUSÃO — NÃO incluir:
-- Total da fatura / valor total a pagar
-- Saldo anterior / pagamento anterior de fatura
-- Limite de crédito / limite disponível
-- Valores negativos (estornos)
+REGRA ABSOLUTA DE ESTORNOS E CRÉDITOS — NUNCA IGNORE:
+- Estornos, cancelamentos de compra, devoluções → extrair com amount NEGATIVO (ex: -142.52)
+- "Pagamento efetuado", "crédito de fatura", "estorno parcial" → extrair com amount NEGATIVO
+- Qualquer linha com sinal de crédito (-), "(C)" ou indicador de devolução → amount NEGATIVO
+- Você DEVE incluir 100% dessas linhas. Omiti-las causará erro contábil grave.
+
+REGRAS DE EXCLUSÃO — NÃO incluir APENAS:
+- Total da fatura / valor total a pagar (linha de rodapé)
+- Saldo anterior / limite de crédito / limite disponível
 
 REGRA CRÍTICA DE DATAS E PARCELAS:
 
@@ -116,7 +120,7 @@ REGRA CRÍTICA DE DATAS E PARCELAS:
 
 CAMPOS DO JSON:
 - description: Texto EXATO da descrição (SEM data no início, SEM parcela no fim)
-- amount: Número decimal (sempre positivo)
+- amount: Número decimal. POSITIVO para compras/débitos, NEGATIVO para estornos/créditos/cancelamentos
 - date: Data da COMPRA em YYYY-MM-DD (extraída do início da linha, com ano inferido)
 - installment_number: Número da parcela (se houver XX/YY no fim da descrição)
 - installment_total: Total de parcelas (se houver XX/YY no fim da descrição)
@@ -172,17 +176,18 @@ Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items":
         desc = removeInstallmentPattern(desc, inst);
       }
 
+      const rawAmount = parseFloat(item.amount) || 0;
       return {
         description: desc,
-        amount: Math.abs(parseFloat(item.amount) || 0),
+        amount: rawAmount, // Preserva sinal: negativo = estorno/crédito
         date: item.date || ref_month + '-01',
         category: item.category || 'outros',
         installment_number: inst ? inst.number : null,
         installment_total: inst ? inst.total : null,
       };
-    }).filter(item => item.amount > 0);
+    }).filter(item => item.amount !== 0);
 
-    // Checksum: valida consistência entre soma dos itens e total da fatura
+    // Checksum: soma líquida (débitos - créditos) vs total da fatura
     const totalExtracted = items.reduce((sum, item) => sum + (item.amount || 0), 0);
     const invoiceTotal = result?.invoice_total || totalExtracted;
     const diff = Math.abs(invoiceTotal - totalExtracted);
