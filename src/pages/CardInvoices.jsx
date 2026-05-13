@@ -11,7 +11,6 @@ import { format, startOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
-import EditInvoiceItemsModal from '@/components/cardInvoices/EditInvoiceItemsModal';
 import ImportInvoicePDFModal from '@/components/cardInvoices/ImportInvoicePDFModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -27,15 +26,14 @@ export default function CardInvoices() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [payingPayable, setPayingPayable] = useState(null);
   const [importingCard, setImportingCard] = useState(null);
-  
-  // Travas de segurança para fechamento e reabertura
   const [pendingClosureCardId, setPendingClosureCardId] = useState(null); 
   const [pendingReopenData, setPendingReopenData] = useState(null);
 
+  // CORREÇÃO: Inicializamos o estado como objeto vazio para evitar erro de "uncontrolled"
   const [openItems, setOpenItems] = useState({});
   const queryClient = useQueryClient();
 
-  const toggleItems = (cardId) => setOpenItems(p => ({ ...p, [cardId]: !p[cardId] }));
+  const toggleItems = (cardId) => setOpenItems(p => ({ ...p, [cardId]: !!(!p[cardId]) }));
 
   const { data: cards = [] } = useQuery({ queryKey: ['cards'], queryFn: () => base44.entities.Card.list() });
   const { data: invoices = [] } = useQuery({ queryKey: ['card_invoices'], queryFn: () => base44.entities.CardInvoice.list('-month', 200) });
@@ -58,25 +56,19 @@ export default function CardInvoices() {
 
   const generateMutation = useMutation({
     mutationFn: async (cardId) => {
-      console.log(`Iniciando fechamento para cartão: ${cardId}, mês: ${refMonthStr}`);
       return await base44.functions.invoke('generateCardInvoices', { 
         forceCardId: cardId, 
         forceMonth: format(mStart, 'yyyy-MM') + '-01' 
       });
     },
-    onSuccess: (res) => { 
-      const result = res.data?.results?.[0];
-      if (result?.status === 'no_items') {
-        toast.info('Nenhum item pendente para fechar neste mês.');
-      } else {
-        toast.success('Fatura fechada com sucesso!'); 
-      }
+    onSuccess: () => { 
+      // Invalidamos TUDO para garantir que o novo status apareça
       queryClient.invalidateQueries(); 
       setPendingClosureCardId(null);
+      toast.success('Fatura fechada!'); 
     },
-    onError: (err) => {
-      console.error("Erro no fechamento:", err);
-      toast.error('Ocorreu um erro ao tentar fechar a fatura.');
+    onError: () => {
+      toast.error('Erro ao fechar fatura');
       setPendingClosureCardId(null);
     }
   });
@@ -89,7 +81,7 @@ export default function CardInvoices() {
     onSuccess: () => { 
       queryClient.invalidateQueries(); 
       setPendingReopenData(null); 
-      toast.success('Fatura reaberta e consolidado removido.'); 
+      toast.success('Fatura reaberta.'); 
     },
   });
 
@@ -111,14 +103,14 @@ export default function CardInvoices() {
           const invoicePayable = getInvoicePayable(card.id);
           const existingInvoice = getInvoice(card.id);
           const invoiceStatus = existingInvoice?.status || (invoicePayable?.status === 'paid' ? 'paid' : null);
-          const isExpanded = openItems[card.id];
+          const isExpanded = !!openItems[card.id]; // Garantimos valor booleano
 
           return (
             <Card key={card.id} className="border-0 shadow-sm overflow-hidden bg-white">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-slate-100 text-primary hover:bg-primary/10" onClick={() => setImportingCard({ card, refMonth: refMonthStr })}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-slate-100 text-primary" onClick={() => setImportingCard({ card, refMonth: refMonthStr })}>
                       <Upload className="w-4 h-4" />
                     </Button>
                     <div>
@@ -131,7 +123,7 @@ export default function CardInvoices() {
                     {invoiceStatus ? (
                       <Badge className={`text-[10px] font-bold uppercase border-0 ${STATUS_CONFIG[invoiceStatus]?.color}`}>{STATUS_CONFIG[invoiceStatus]?.label}</Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-[10px] font-bold uppercase">Aguardando Fechamento</Badge>
+                      <Badge variant="secondary" className="text-[10px] font-bold uppercase">Pendente</Badge>
                     )}
                   </div>
                 </div>
@@ -140,7 +132,7 @@ export default function CardInvoices() {
               <CardContent className="p-0">
                 <Collapsible open={isExpanded} onOpenChange={() => toggleItems(card.id)}>
                   <div className="px-5 py-3 flex items-center justify-between bg-slate-50/50 border-y">
-                    <div className="flex gap-4 text-[11px] text-slate-500 font-bold uppercase tracking-tight">
+                    <div className="flex gap-4 text-[11px] text-slate-500 font-bold uppercase">
                       <span>Fecha: {card.closing_day || '-'}</span>
                       <span>Vence: {card.due_day || '-'}</span>
                       <span className="flex items-center gap-1.5"><ListFilter className="w-3.5 h-3.5" /> {items.length} itens</span>
@@ -152,7 +144,6 @@ export default function CardInvoices() {
                           FECHAR FATURA
                         </Button>
                       )}
-
                       {invoicePayable && invoicePayable.status !== 'paid' && (
                         <>
                           <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-amber-600" onClick={() => setPendingReopenData({ invoice: existingInvoice, invoicePayable })}>
@@ -163,11 +154,8 @@ export default function CardInvoices() {
                           </Button>
                         </>
                       )}
-
                       <CollapsibleTrigger asChild>
-                        <Button variant="link" size="sm" className="h-8 text-[11px] font-bold no-underline">
-                          {isExpanded ? 'OCULTAR' : 'VER LANÇAMENTOS'}
-                        </Button>
+                        <Button variant="link" size="sm" className="h-8 text-[11px] font-bold no-underline">{isExpanded ? 'OCULTAR' : 'VER LANÇAMENTOS'}</Button>
                       </CollapsibleTrigger>
                     </div>
                   </div>
@@ -180,7 +168,7 @@ export default function CardInvoices() {
                             <div key={p.id} className="flex items-center justify-between px-4 py-3">
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-slate-700 truncate">{p.description}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">
                                   {format(new Date((p.purchase_date || p.due_date).includes('T') ? (p.purchase_date || p.due_date) : (p.purchase_date || p.due_date) + 'T12:00:00'), 'dd/MM/yy')}
                                 </p>
                               </div>
@@ -189,7 +177,7 @@ export default function CardInvoices() {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-center py-8 text-xs text-slate-400 font-medium uppercase tracking-widest">Nenhum lançamento pendente</p>
+                        <p className="text-center py-8 text-xs text-slate-400 font-medium uppercase tracking-widest">Nenhum lançamento</p>
                       )}
                     </div>
                   </CollapsibleContent>
@@ -204,12 +192,12 @@ export default function CardInvoices() {
       <AlertDialog open={!!pendingClosureCardId} onOpenChange={() => setPendingClosureCardId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deseja fechar a fatura?</AlertDialogTitle>
-            <AlertDialogDescription>Isso irá consolidar os lançamentos em um único item nas Contas a Pagar.</AlertDialogDescription>
+            <AlertDialogTitle>Fechar fatura?</AlertDialogTitle>
+            <AlertDialogDescription>Isso consolidará os gastos em um único lançamento nas suas contas a pagar.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
-            <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
-            <AlertDialogAction className="flex-1 bg-primary font-bold" onClick={() => generateMutation.mutate(pendingClosureCardId)}>FECHAR AGORA</AlertDialogAction>
+            <AlertDialogCancel className="flex-1 text-slate-500">CANCELAR</AlertDialogCancel>
+            <AlertDialogAction className="flex-1 bg-primary text-white font-bold" onClick={() => generateMutation.mutate(pendingClosureCardId)}>FECHAR AGORA</AlertDialogAction>
           </div>
         </AlertDialogContent>
       </AlertDialog>
@@ -219,10 +207,10 @@ export default function CardInvoices() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reabrir fatura?</AlertDialogTitle>
-            <AlertDialogDescription>O lançamento consolidado será excluído e os itens individuais voltarão a ficar em aberto.</AlertDialogDescription>
+            <AlertDialogDescription>O lançamento consolidado será excluído e os itens voltarão a ficar em aberto.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
-            <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
+            <AlertDialogCancel className="flex-1 text-slate-500">CANCELAR</AlertDialogCancel>
             <Button variant="destructive" className="flex-1 font-bold" onClick={() => reopenInvoiceMutation.mutate(pendingReopenData)}>REABRIR AGORA</Button>
           </div>
         </AlertDialogContent>
