@@ -1,9 +1,12 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import * as pdfjsLib from 'npm:pdfjs-dist@4.9.155/legacy/build/pdf.mjs';
+
+// Desabilita worker (não suportado em Deno)
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 // Limpa sufixos geográficos e de adquirentes inseridos pelos bancos
 function sanitizeDescription(desc) {
   if (!desc) return desc;
-
   const geoSuffixes = [
     /\s*SAO PAULO\s*BRA?$/i,
     /\s*SALVADOR\s*BRA?$/i,
@@ -21,7 +24,6 @@ function sanitizeDescription(desc) {
     /\s+BRA$/i,
     /\s+BR$/i,
   ];
-
   let cleaned = desc.trim();
   for (const re of geoSuffixes) {
     cleaned = cleaned.replace(re, '').trim();
@@ -29,38 +31,26 @@ function sanitizeDescription(desc) {
   return cleaned;
 }
 
-// Extrai parcela apenas quando o padrão NÃO é uma data (DD/MM ou MM/YYYY)
-// Parcela: ex "03/12", "05/12" onde está entre parênteses ou após espaço no meio da string
-// Datas de vencimento/compra: geralmente no início da linha ou formato DD/MM/YYYY
+// Extrai parcela apenas quando o padrão NÃO é uma data
 function extractInstallment(description) {
-  // Parcela está geralmente entre parênteses ou no final: (03/12), " 03/12"
-  // Evitar confundir com datas do tipo "25/08" que são datas de compra no início
-  
-  // Padrão 1: entre parênteses — quase certamente parcela
   const parenMatch = description.match(/\((\d{1,2})\/(\d{1,2})\)/);
   if (parenMatch) {
     const num = parseInt(parenMatch[1]);
     const total = parseInt(parenMatch[2]);
     if (num <= total && total > 1) return { number: num, total };
   }
-
-  // Padrão 2: no final da string após espaço — provável parcela
-  // Mas só se o número da parcela for plausível (num < total e total <= 72)
   const endMatch = description.match(/\s(\d{1,2})\/(\d{2})\s*$/);
   if (endMatch) {
     const num = parseInt(endMatch[1]);
     const total = parseInt(endMatch[2]);
     if (num <= total && total > 1 && total <= 72) return { number: num, total };
   }
-
   return null;
 }
 
-// Remove o padrão de parcela da descrição (entre parênteses ou no final)
+// Remove o padrão de parcela da descrição
 function removeInstallmentPattern(description, inst) {
-  // Remove padrão entre parênteses
   let result = description.replace(/\s*\(\d{1,2}\/\d{1,2}\)\s*/g, ' ');
-  // Remove padrão no final (somente se for igual ao que extraímos)
   if (inst) {
     const endPat = new RegExp(`\\s${inst.number}/${String(inst.total).padStart(2,'0')}\\s*$`);
     result = result.replace(endPat, '');
@@ -68,6 +58,93 @@ function removeInstallmentPattern(description, inst) {
     result = result.replace(endPat2, '');
   }
   return result.trim();
+}
+
+// Extrai texto de todas as páginas do PDF
+async function extractTextFromPDF(arrayBuffer) {
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true });
+  const pdfDoc = await loadingTask.promise;
+  const pages = [];
+  for (let i = 1; i <= pdfDoc.numPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(item => item.str).join('\n');
+    pages.push(pageText);
+  }
+  return pages.join('\n');
+}
+
+// Inferência de ano com base no mês de referência
+function inferYear(day, month, refMonth) {
+  const [refYear, refMon] = refMonth.split('-').map(Number);
+  // Se o mês da compra é maior que o mês de referência, é do ano anterior
+  if (month > refMon) return refYear - 1;
+  return refYear;
+}
+
+// Categorização automática por keyword
+function categorizeByKeyword(desc) {
+  const d = desc.toUpperCase();
+  if (/UBER|99|CABIFY|POSTO|SHELL|IPIRANGA|PETROBRAS|COMBUSTIVEL|LATAM|GOL|AZUL|PASSAGEM/.test(d)) return 'transporte';
+  if (/GOOGLE|APPLE|CAPCUT|NETFLIX|SPOTIFY|AMAZON|YOUTUBE|DISNEY|PARAMOUNT|HBO|ADAPTA/.test(d)) return 'servicos';
+  if (/FARMACIA|DROGARIA|PAGUE MENOS|ULTRAFARMA|HOSPITAL|CLINICA|LABORATORIO|PLANO|MENSALIDADE/.test(d)) return 'saude';
+  if (/MERCADO|SUPERMERCADO|CARREFOUR|ATAKADAO|HIPERIDEAL|IFOOD|RAPPI|RESTAURANTE|LANCHONETE|PADARIA/.test(d)) return 'alimentacao';
+  if (/ESCOLA|UNIVERSIDADE|CURSO|UDEMY|ALURA|FACULDADE/.test(d)) return 'educacao';
+  if (/IOF|TAXA|IMPOSTO|ENCARGO|MULTA|JUROS/.test(d)) return 'impostos';
+  if (/HOTEL|AIRBNB|CINEMA|TEATRO|SHOW|INGRESSO|BOOKING/.test(d)) return 'lazer';
+  if (/ROUPA|CALCADO|ZARA|RENNER|RIACHUELO/.test(d)) return 'vestuario';
+  if (/ALUGUEL|CONDOMINIO|ENERGIA|AGUA|GAS|INTERNET|TELEFONE/.test(d)) return 'moradia';
+  return 'outros';
+}
+
+// Parser Itaú
+function parseItau(fullText, refMonth) {
+  const items = [];
+  let invoiceTotal = 0;
+
+  const totalMatch = fullText.match(/TOTAL A PAGAR\s*R\$\s*([\d.,]+)/i);
+  if (totalMatch) invoiceTotal = parseFloat(totalMatch[1].replace(/\./g, '').replace(',', '.'));
+
+  // Padrão principal do Itaú: linha com data no início DD/MM + descrição + valor (com sinal ou sem)
+  // Exemplos: "15/04 UBER *TRIP 54,90"  ou  "20/04 ESTORNO COMPRA -142,52"
+  const regexItau = /(\d{2})\/(\d{2})\s+(.+?)\s{2,}([+-]?\s*[\d.,]+)\s*(?:\n|$)/gm;
+  let match;
+
+  while ((match = regexItau.exec(fullText)) !== null) {
+    const day = match[1];
+    const mon = parseInt(match[2]);
+    const rawDesc = match[3].trim();
+    const rawValue = match[4].replace(/\s/g, '');
+
+    if (rawDesc.toLowerCase().includes('pagamento')) continue;
+    if (rawDesc.toLowerCase().includes('total a pagar')) continue;
+    if (rawDesc.toLowerCase().includes('saldo anterior')) continue;
+
+    const absValue = parseFloat(rawValue.replace(/[^0-9.,]/g, '').replace(/\./g, '').replace(',', '.'));
+    if (!absValue || absValue === 0) continue;
+
+    // Sinal: "-" no rawValue = crédito/estorno, sem sinal ou "+" = débito
+    const isCredit = rawValue.startsWith('-');
+    const amount = isCredit ? -absValue : absValue;
+
+    const year = inferYear(parseInt(day), mon, refMonth);
+    const dateStr = `${year}-${String(mon).padStart(2,'0')}-${day}`;
+
+    let cleanDesc = sanitizeDescription(rawDesc);
+    const inst = extractInstallment(cleanDesc);
+    if (inst) cleanDesc = removeInstallmentPattern(cleanDesc, inst);
+
+    items.push({
+      description: cleanDesc,
+      amount,
+      date: dateStr,
+      category: categorizeByKeyword(cleanDesc),
+      installment_number: inst ? inst.number : null,
+      installment_total: inst ? inst.total : null,
+    });
+  }
+
+  return { items, invoiceTotal };
 }
 
 Deno.serve(async (req) => {
@@ -79,127 +156,40 @@ Deno.serve(async (req) => {
     const { file_url, ref_month } = await req.json();
     if (!file_url || !ref_month) return Response.json({ error: 'file_url e ref_month são obrigatórios' }, { status: 400 });
 
-    // Passo único: transcrição + extração em uma única chamada LLM
-    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Você é um extrator de dados financeiros especializado em faturas de cartão de crédito brasileiro.
+    // Download do PDF
+    const pdfResponse = await fetch(file_url);
+    if (!pdfResponse.ok) throw new Error(`Falha ao baixar PDF: ${pdfResponse.status}`);
+    const arrayBuffer = await pdfResponse.arrayBuffer();
 
-MISSÃO: Ler o PDF da fatura abaixo e extrair ABSOLUTAMENTE TODOS os lançamentos com valor positivo.
+    // Extração de texto via pdfjs-dist
+    const fullText = await extractTextFromPDF(arrayBuffer);
 
-REGRAS CRÍTICAS DE INCLUSÃO — inclua TUDO que tiver valor:
-- Compras normais (Mercado, Restaurante, etc.)
-- Uber, 99, transporte por app — SEMPRE incluir, mesmo que "Uber *TRIP" ou "Uber HELP.US"
-- IOF, taxas internacionais, encargos — SEMPRE incluir como "impostos"
-- Mensalidades, assinaturas, planos (mesmo que descrição seja incompleta como "Mensalidade - Plano do")
-- Apps e serviços (Adapta, CapCut, Google, etc.) — SEMPRE incluir
-- Compras parceladas — incluir cada parcela que aparece na fatura como item separado
-- Qualquer linha que tenha um valor em reais (R$, vírgula decimal)
+    if (!fullText || fullText.trim().length < 50) {
+      throw new Error('Não foi possível extrair texto do PDF. Verifique se o arquivo não é uma imagem escaneada.');
+    }
 
-REGRA ABSOLUTA DE ESTORNOS E CRÉDITOS — NUNCA IGNORE:
-- Estornos, cancelamentos de compra, devoluções → extrair com amount NEGATIVO (ex: -142.52)
-- "Pagamento efetuado", "crédito de fatura", "estorno parcial" → extrair com amount NEGATIVO
-- Qualquer linha com sinal de crédito (-), "(C)" ou indicador de devolução → amount NEGATIVO
-- Você DEVE incluir 100% dessas linhas. Omiti-las causará erro contábil grave.
+    // Detecta banco e aplica parser correspondente
+    let items = [];
+    let invoiceTotal = 0;
 
-REGRAS DE EXCLUSÃO — NÃO incluir APENAS:
-- Total da fatura / valor total a pagar (linha de rodapé)
-- Saldo anterior / limite de crédito / limite disponível
+    if (fullText.includes('Itaú') || fullText.includes('ITAU') || fullText.includes('itau')) {
+      const result = parseItau(fullText, ref_month);
+      items = result.items;
+      invoiceTotal = result.invoiceTotal;
+    } else {
+      throw new Error('Padrão de fatura não reconhecido. Banco não homologado. Contate o suporte para adicionar suporte à sua fatura.');
+    }
 
-REGRA CRÍTICA DE DATAS E PARCELAS:
-
-1. INÍCIO DA LINHA (DD/MM) = DATA REAL DA COMPRA
-   - Exemplo: Linha começa com "09/12 ADAPTAORG 150,00" → data = 09/12 (ano inferido)
-   
-2. FIM DA DESCRIÇÃO (XX/YY) = PARCELA
-   - Exemplo: "ADAPTAORG 09/12" no fim da descrição → parcela 09 de 12
-   - Isso NÃO é uma data, é um identificador de parcelamento
-   - Extrair como: installment_number=9, installment_total=12
-
-3. INFERÊNCIA DE ANO:
-   - Se ref_month="2026-05" e data extraída > 05 → ano 2025 (compra mês anterior)
-   - Se ref_month="2026-05" e data extraída <= 05 → ano 2026 (compra mês atual)
-
-CAMPOS DO JSON:
-- description: Texto EXATO da descrição (SEM data no início, SEM parcela no fim)
-- amount: Número decimal. POSITIVO para compras/débitos, NEGATIVO para estornos/créditos/cancelamentos
-- date: Data da COMPRA em YYYY-MM-DD (extraída do início da linha, com ano inferido)
-- installment_number: Número da parcela (se houver XX/YY no fim da descrição)
-- installment_total: Total de parcelas (se houver XX/YY no fim da descrição)
-- category: Use padrões abaixo como fallback
-- invoice_total: Valor TOTAL da fatura (extraído uma única vez do documento, ex: "TOTAL A PAGAR: R$ 5.432,10")
-
-CATEGORIAS PADRÃO (fallback):
-  * "transporte": UBER, 99, CABIFY, POSTO, SHELL, IPIRANGA, PETROBRAS, COMBUSTIVEL, LATAM, GOL, AZUL, PASSAGEM
-  * "servicos": GOOGLE, APPLE, CAPCUT, NETFLIX, SPOTIFY, AMAZON, YOUTUBE, DISNEY, PARAMOUNT, HBO, ADAPTA
-  * "saude": FARMACIA, DROGARIA, PAGUE MENOS, ULTRAFARMA, HOSPITAL, CLINICA, LABORATORIO, PLANO, MENSALIDADE
-  * "alimentacao": MERCADO, SUPERMERCADO, CARREFOUR, ATAKADAO, HIPERIDEAL, IFOOD, RAPPI, RESTAURANTE, LANCHONETE, PADARIA
-  * "educacao": ESCOLA, UNIVERSIDADE, CURSO, UDEMY, ALURA, FACULDADE
-  * "impostos": IOF, TAXA, IMPOSTO, ENCARGO, MULTA, JUROS
-  * "lazer": HOTEL, AIRBNB, CINEMA, TEATRO, SHOW, INGRESSO, BOOKING
-  * "vestuario": ROUPA, CALCADO, ZARA, RENNER, RIACHUELO
-  * "moradia": ALUGUEL, CONDOMINIO, ENERGIA, AGUA, GAS, INTERNET, TELEFONE
-  * "outros": SOMENTE se não se encaixar em nenhuma categoria acima
-
-Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items": []}.`,
-      file_urls: [file_url],
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          items: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                description: { type: 'string' },
-                amount: { type: 'number' },
-                date: { type: 'string' },
-                category: { type: 'string' },
-                installment_number: { type: 'number' },
-                installment_total: { type: 'number' },
-              },
-              required: ['description', 'amount', 'date', 'category'],
-            },
-          },
-          invoice_total: { type: 'number' },
-        },
-        required: ['items'],
-      },
-    });
-
-    // Passo 3: pós-processamento com garantia de parcelamento
-    const items = (result?.items || []).map(item => {
-      let desc = sanitizeDescription(item.description);
-      const inst = item.installment_number && item.installment_total ? 
-        { number: item.installment_number, total: item.installment_total } : 
-        extractInstallment(desc);
-      
-      if (inst) {
-        desc = removeInstallmentPattern(desc, inst);
-      }
-
-      const rawAmount = parseFloat(item.amount) || 0;
-      return {
-        description: desc,
-        amount: rawAmount, // Preserva sinal: negativo = estorno/crédito
-        date: item.date || ref_month + '-01',
-        category: item.category || 'outros',
-        installment_number: inst ? inst.number : null,
-        installment_total: inst ? inst.total : null,
-      };
-    }).filter(item => item.amount !== 0);
-
-    // Checksum: soma líquida (débitos - créditos) vs total da fatura
-    const totalExtracted = items.reduce((sum, item) => sum + (item.amount || 0), 0);
-    const invoiceTotal = result?.invoice_total || totalExtracted;
-    const diff = Math.abs(invoiceTotal - totalExtracted);
-    const isConsistent = diff < 0.05;
+    const totalExtracted = items.reduce((sum, item) => sum + item.amount, 0);
+    const finalTotal = invoiceTotal || totalExtracted;
 
     return Response.json({
       items,
       integrity_check: {
-        is_consistent: isConsistent,
+        is_consistent: Math.abs(finalTotal - totalExtracted) < 0.1,
         total_extracted: totalExtracted,
-        invoice_total: invoiceTotal,
-        diff: diff,
+        invoice_total: finalTotal,
+        diff: Math.abs(finalTotal - totalExtracted),
       },
     });
   } catch (error) {
