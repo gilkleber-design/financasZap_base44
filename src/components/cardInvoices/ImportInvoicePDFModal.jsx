@@ -3,13 +3,12 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Trash2, Check, X } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Trash2, Check, X, Edit2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, isAfter, endOfMonth, parseISO } from 'date-fns';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-
 
 export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImported }) {
   const fileRef = useRef(null);
@@ -26,35 +25,52 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     setStep('processing');
     setProgress(0);
     
-    // Simulação de progresso linear até 90%
     const progressInterval = setInterval(() => {
       setProgress(prev => Math.min(prev + 18, 90));
     }, 500);
 
-    // Upload do PDF
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
 
-    // Extrai lançamentos via backend function (sem timeout do browser)
-    const response = await base44.functions.invoke('extractInvoicePDF', {
-      file_url,
-      ref_month: refMonth,
-    });
+      const response = await base44.functions.invoke('extractInvoicePDF', {
+        file_url,
+        ref_month: refMonth,
+      });
 
-    const result = response.data;
-    
-    // Força progresso para 100% e para a simulação
-    clearInterval(progressInterval);
-    setProgress(100);
+      const result = response.data;
+      clearInterval(progressInterval);
+      setProgress(100);
 
-    const extracted = (result?.items || []).map((item, i) => ({
-      ...item,
-      _id: i,
-      selected: true,
-    }));
+      // --- FILTRO DE INTELIGÊNCIA CONTRA DISCREPÂNCIA ---
+      const lastDayOfMonth = endOfMonth(new Date(refMonth + '-01T12:00:00'));
+      
+      const extracted = (result?.items || []).map((item, i) => {
+        // 1. Tratamento de Sinais (Estornos)
+        const desc = item.description?.toLowerCase() || '';
+        const isNegative = item.amount < 0 || desc.includes('estorno') || desc.includes('cancelamento') || desc.includes('est pcls');
+        const finalAmount = isNegative ? -Math.abs(item.amount) : Math.abs(item.amount);
 
-    setItems(extracted);
-    setIntegrityCheck(result?.integrity_check || null);
-    setStep('review');
+        // 2. Trava de Data (Evitar itens do mês seguinte)
+        const itemDate = item.date ? parseISO(item.date) : null;
+        const isFuture = itemDate && isAfter(itemDate, lastDayOfMonth);
+
+        return {
+          ...item,
+          amount: finalAmount,
+          _id: i,
+          selected: !isFuture, 
+          is_future: isFuture
+        };
+      });
+
+      setItems(extracted);
+      setIntegrityCheck(result?.integrity_check || null);
+      setStep('review');
+    } catch (error) {
+      clearInterval(progressInterval);
+      toast.error('Erro ao processar fatura.');
+      setStep('upload');
+    }
   };
 
   const toggleItem = (idx) => {
@@ -81,22 +97,16 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     setSaving(true);
 
     const genGroupId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-    // Agrupa por (descrição + installment_total) — processa QUALQUER parcela do grupo uma única vez
     const processedGroups = new Set();
     const payables = [];
-    const groupIds = {}; // Mapeia groupKey -> groupId
+    const groupIds = {};
 
     selected.forEach(it => {
       const hasInst = it.installment_number && it.installment_total && it.installment_total > 1;
       const groupKey = hasInst ? `${it.description}|${it.installment_total}` : null;
       
-      // Se é parcelado e ainda não processou esse grupo
       if (hasInst && !processedGroups.has(groupKey)) {
-        // Cria ID único para este grupo
-        if (!groupIds[groupKey]) {
-          groupIds[groupKey] = genGroupId();
-        }
+        if (!groupIds[groupKey]) groupIds[groupKey] = genGroupId();
         
         const startNum = it.installment_number;
         const totalCount = it.installment_total;
@@ -104,14 +114,13 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         const monthlyAmount = it.amount;
         const totalAmount = monthlyAmount * totalCount;
 
-        // Gera apenas as parcelas futuras (de X até Y)
         for (let num = startNum; num <= totalCount; num++) {
           const daysOffset = num - startNum;
           const futureDate = addMonths(baseDate, daysOffset);
           const futureDateStr = futureDate.toISOString().split('T')[0];
 
           payables.push({
-            description: `${it.description} (parcela ${num}/${totalCount})`,
+            description: `${it.description} (${num}/${totalCount})`,
             amount: monthlyAmount,
             due_date: futureDateStr + 'T12:00:00',
             competencia: futureDateStr.substring(0, 7) + '-01',
@@ -129,7 +138,6 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         }
         processedGroups.add(groupKey);
       } else if (!hasInst) {
-        // Sem parcelamento, apenas um lançamento
         payables.push({
           description: it.description,
           amount: it.amount,
@@ -145,26 +153,29 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
       }
     });
 
-    await base44.entities.Payable.bulkCreate(payables);
-    toast.success(`${payables.length} lançamentos importados (incluindo parcelas futuras)!`);
-    setSaving(false);
-    setStep('done');
-    onImported();
+    try {
+      await base44.entities.Payable.bulkCreate(payables);
+      toast.success(`${payables.length} lançamentos importados!`);
+      setSaving(false);
+      setStep('done');
+      onImported();
+    } catch (e) {
+      toast.error('Erro ao salvar no banco.');
+      setSaving(false);
+    }
   };
 
-  const selectedCount = items.filter(it => it.selected).length;
-  const selectedTotal = items.filter(it => it.selected).reduce((s, it) => s + (it.amount || 0), 0);
+  const selectedTotal = useMemo(() => {
+    return items.filter(it => it.selected).reduce((s, it) => s + (it.amount || 0), 0);
+  }, [items]);
   
-  // Calcula quantos payables serão gerados (com parcelas futuras)
   const futurePayablesCount = useMemo(() => {
     const processedGroups = new Set();
     let total = 0;
     items.filter(it => it.selected).forEach(it => {
       const hasInst = it.installment_number && it.installment_total && it.installment_total > 1;
       const groupKey = hasInst ? `${it.description}|${it.installment_total}` : null;
-      
       if (hasInst && !processedGroups.has(groupKey)) {
-        // Gera apenas as parcelas futuras (de X até Y)
         total += (it.installment_total - it.installment_number + 1);
         processedGroups.add(groupKey);
       } else if (!hasInst) {
@@ -176,157 +187,103 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto font-sora">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            Importar Fatura PDF — {card.name}
+            Importar PDF — {card.name}
           </DialogTitle>
         </DialogHeader>
 
-        {/* STEP: upload */}
         {step === 'upload' && (
           <div className="flex flex-col items-center gap-4 py-8">
             <div
-              className="w-full border-2 border-dashed border-border rounded-2xl p-10 flex flex-col items-center gap-3 cursor-pointer hover:border-primary/60 hover:bg-accent/30 transition-all"
+              className="w-full border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center gap-3 cursor-pointer hover:border-primary/60 hover:bg-slate-50 transition-all"
               onClick={() => fileRef.current?.click()}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}
             >
-              <Upload className="w-10 h-10 text-muted-foreground" />
-              <p className="text-sm font-medium">Clique ou arraste o PDF da fatura</p>
-              <p className="text-xs text-muted-foreground">Apenas arquivos .pdf</p>
+              <Upload className="w-10 h-10 text-slate-300" />
+              <p className="text-sm font-bold text-slate-600">Selecione o PDF do Itaú</p>
             </div>
             <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={e => handleFile(e.target.files[0])} />
-            <Button variant="outline" onClick={onClose} className="w-full">Cancelar</Button>
+            <Button variant="ghost" onClick={onClose} className="w-full font-bold">CANCELAR</Button>
           </div>
         )}
 
-        {/* STEP: processing */}
         {step === 'processing' && (
           <div className="flex flex-col items-center gap-4 py-12">
             <Loader2 className="w-12 h-12 text-primary animate-spin" />
-            <p className="text-sm font-medium">Analisando PDF com IA...</p>
-            <p className="text-xs text-muted-foreground">Isso pode levar alguns segundos</p>
-            <div className="w-full max-w-xs h-2 bg-muted rounded-full overflow-hidden mt-2">
-              <div
-                className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
+            <p className="text-sm font-black uppercase tracking-tighter">Sincronizando com IA...</p>
+            <div className="w-full max-w-xs h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{progress}%</p>
           </div>
         )}
 
-        {/* STEP: review */}
         {step === 'review' && (
           <div className="space-y-4">
-            {integrityCheck && !integrityCheck.is_consistent && (
-              <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-amber-800">
-                  <p className="font-semibold">⚠️ Atenção: Divergência Detectada</p>
-                  <p className="text-xs mt-1">A soma dos itens ({fmt(integrityCheck.total_extracted)}) difere do total da fatura ({fmt(integrityCheck.invoice_total)}). Diferença: {fmt(integrityCheck.diff)}. Verifique se algum item foi ignorado.</p>
+            {integrityCheck && (Math.abs(integrityCheck.diff) > 0.1) && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                <div className="text-xs">
+                  <p className="font-black text-red-700 uppercase tracking-tight">Divergência Detectada</p>
+                  <p className="text-red-600 mt-1">O banco diz {fmt(integrityCheck.invoice_total)}, mas a IA somou {fmt(integrityCheck.total_extracted)}. Diferença: {fmt(integrityCheck.diff)}.</p>
                 </div>
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">{items.length} lançamentos encontrados</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="text-xs" onClick={() => setItems(p => p.map(i => ({ ...i, selected: true })))}>
-                  Selec. todos
-                </Button>
-                <Button variant="outline" size="sm" className="text-xs" onClick={() => setItems(p => p.map(i => ({ ...i, selected: false })))}>
-                  Desmarcar
-                </Button>
-              </div>
-            </div>
 
-            <div className="divide-y divide-border border border-border rounded-xl overflow-hidden">
+            <div className="divide-y divide-slate-100 border rounded-xl overflow-hidden shadow-sm">
               {items.map((it, idx) => (
-                <div key={idx} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${it.selected ? 'bg-white' : 'bg-muted/30 opacity-50'}`}>
+                <div key={idx} className={`flex items-center gap-3 px-4 py-3 transition-colors ${it.selected ? 'bg-white' : 'bg-slate-50 opacity-40'}`}>
                   <input
                     type="checkbox"
                     checked={it.selected}
                     onChange={() => toggleItem(idx)}
-                    className="w-4 h-4 accent-primary cursor-pointer flex-shrink-0"
+                    className="w-4 h-4 accent-primary"
                   />
-
-                  {editingIdx === idx ? (
-                    <div className="flex-1 flex gap-2 items-center">
-                      <Input
-                        value={editForm.description}
-                        onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                        className="text-xs h-7 flex-1"
-                      />
-                      <Input
-                        type="number"
-                        value={editForm.amount}
-                        onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
-                        className="text-xs h-7 w-24 flex-shrink-0"
-                      />
-                      <Button size="icon" className="w-7 h-7 flex-shrink-0" onClick={() => saveEdit(idx)}>
-                        <Check className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button size="icon" variant="outline" className="w-7 h-7 flex-shrink-0" onClick={() => setEditingIdx(null)}>
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <p className={`text-sm truncate font-bold uppercase ${it.amount < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                            {it.amount < 0 && '[ESTORNO] '} {it.description}
+                        </p>
+                        {it.is_future && <Badge className="bg-amber-100 text-amber-700 text-[8px] h-4">PROX. FATURA</Badge>}
                     </div>
-                  ) : (
-                    <>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">{it.description}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-muted-foreground">{it.date}</span>
-                          {it.installment_number && it.installment_total && it.installment_total > 1 && (
-                            <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
-                              {it.installment_number}/{it.installment_total}
-                            </Badge>
-                          )}
-                          <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{it.category}</Badge>
-                        </div>
-                      </div>
-                      <span className="text-sm font-semibold text-red-500 flex-shrink-0">{fmt(it.amount)}</span>
-                      <Button variant="ghost" size="icon" className="w-7 h-7 flex-shrink-0 text-muted-foreground hover:text-primary" onClick={() => startEdit(idx)}>
-                        <FileText className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="w-7 h-7 flex-shrink-0 text-muted-foreground hover:text-red-500" onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </>
-                  )}
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+                      <span>{it.date}</span>
+                      <span className="tracking-tighter">[{it.category}]</span>
+                    </div>
+                  </div>
+                  <span className={`text-sm font-black ${it.amount < 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {it.amount < 0 ? '+' : '-'} {fmt(Math.abs(it.amount))}
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(idx)}>
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <p className="text-sm font-semibold">
-                {selectedCount} selecionados · <span className="text-red-500">{fmt(selectedTotal)}</span>
-              </p>
-              <div className="flex gap-2 flex-col w-full">
-                <p className="text-xs text-muted-foreground text-center">
-                  {selectedCount} itens selecionados → {futurePayablesCount} lançamentos (com parcelas futuras)
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
-                  <Button onClick={handleImport} disabled={saving || selectedCount === 0} className="flex-1">
-                    {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando...</> : `Importar ${futurePayablesCount} lançamentos`}
-                  </Button>
+            <div className="bg-slate-900 p-5 rounded-2xl text-white shadow-xl">
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-400">Total Selecionado</p>
+                  <p className="text-2xl font-black">{fmt(selectedTotal)}</p>
+                </div>
+                <div className="text-right">
+                   <p className="text-[10px] font-black uppercase text-slate-400">{futurePayablesCount} Lançamentos</p>
+                   <Button onClick={handleImport} disabled={saving} className="mt-2 bg-white text-slate-900 hover:bg-slate-100 font-black">
+                     {saving ? 'SALVANDO...' : 'IMPORTAR AGORA'}
+                   </Button>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* STEP: done */}
         {step === 'done' && (
           <div className="flex flex-col items-center gap-4 py-8">
-            <CheckCircle2 className="w-14 h-14 text-emerald-500" />
-            <div className="text-center">
-              <p className="text-lg font-bold text-emerald-700">Fatura importada!</p>
-              <p className="text-sm text-muted-foreground mt-1">Todos os lançamentos foram criados como provisionados.</p>
-            </div>
-            <Button onClick={onClose} className="w-full">Fechar</Button>
+            <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+            <p className="text-lg font-black text-slate-900 uppercase">Importação Concluída!</p>
+            <Button onClick={onClose} className="w-full h-12 font-bold">FECHAR</Button>
           </div>
         )}
       </DialogContent>
