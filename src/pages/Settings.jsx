@@ -286,162 +286,173 @@ export default function Settings() {
             ))}
           </div>
 
-          <div className="border-t border-border pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cartões</p>
-              <Button size="sm" variant="outline" onClick={() => setShowCardForm(!showCardForm)}>
-                <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
-              </Button>
-            </div>
-
-          {showCardForm && (
-  <div className="border border-primary/20 rounded-xl p-4 space-y-4 bg-accent/20 mb-3 transition-all">
-    <div className="grid grid-cols-2 gap-3">
-      
-      {/* Dados Básicos */}
-      <div className={cardForm.is_additional ? "col-span-2" : "col-span-1"}>
-        <Label>Nome do Cartão (Apelido) *</Label>
-        <Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} className="mt-1" placeholder="Ex: Nubank Gil" />
-      </div>
-
-      {!cardForm.is_additional && (
-        <div>
-          <Label>Banco</Label>
-          <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Itaú" />
-        </div>
-      )}
-
-      {/* Titular (Quem tem o plástico) */}
-      <div className="col-span-2">
-        <Label>Nome do Titular (No plástico) *</Label>
-        <Input value={cardForm.holder_name} onChange={e => setCard('holder_name', e.target.value)} className="mt-1" placeholder="Ex: Gil Kléber ou Nome da Mãe" />
-      </div>
-
-      {/* Switch de Adicional */}
-      <div className="col-span-2 flex items-center justify-between p-3 bg-white/50 rounded-lg border border-dashed border-primary/20">
-        <div className="flex items-center gap-2">
-          <CreditCard className="w-4 h-4 text-primary" />
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Este é um Cartão Adicional?</span>
-            <span className="text-[10px] text-muted-foreground italic">Herda as datas e fatura do titular</span>
-          </div>
-        </div>
-        <Switch 
-          checked={cardForm.is_additional} 
-          onCheckedChange={v => {
-            setCard('is_additional', v);
-            if(v) { setCard('type', 'credit'); } // Adicional é sempre crédito no seu fluxo
-          }} 
-        />
-      </div>
-
-      {/* CAMPOS CONDICIONAIS: Se for Adicional, escolhe o pai. Se não, escolhe as datas. */}
-      {cardForm.is_additional ? (
-        <div className="col-span-2 animate-in fade-in slide-in-from-top-1">
-          <Label>Vincular ao Cartão Principal *</Label>
-          <Select value={cardForm.principal_card_id} onValueChange={v => setCard('principal_card_id', v)}>
-            <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecione o cartão titular..." /></SelectTrigger>
-            <SelectContent>
-              {allCards.filter(c => !c.is_additional).map(pc => (
-                <SelectItem key={pc.id} value={pc.id}>{pc.name} {pc.bank ? `(${pc.bank})` : ''}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : (
-        <>
-          <div>
-            <Label>Dia Fechamento</Label>
-            <Input type="number" min={1} max={31} value={cardForm.closing_day} onChange={e => setCard('closing_day', e.target.value)} className="mt-1" />
-          </div>
-          <div>
-            <Label>Dia Vencimento</Label>
-            <Input type="number" min={1} max={31} value={cardForm.due_day} onChange={e => setCard('due_day', e.target.value)} className="mt-1" />
-          </div>
-        </>
-      )}
-
-      {/* Atribuição de Usuário (Quem vê no App) */}
-      {currentUser?.role === 'admin' && members.length > 0 && (
-        <div className="col-span-2 border-t pt-3">
-          <Label>Responsável no App (Quem gerencia lançamentos)</Label>
-          <Select value={cardForm.assigned_user_id || '_none'} onValueChange={v => setCard('assigned_user_id', v === '_none' ? '' : v)}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o responsável..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">— Todos (sem filtro) —</SelectItem>
-              {members.map(m => (
-                <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-    </div>
-
-    <div className="flex gap-2">
-      <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
-      <Button size="sm" onClick={() => {
-        if (!cardForm.name || !cardForm.holder_name) return toast.error('Nome e Titular são obrigatórios');
-        
-        // Lógica de herança antes de salvar
-        let finalData = { ...cardForm, active: true };
-        
-        if (cardForm.is_additional) {
-          const principal = allCards.find(c => c.id === cardForm.principal_card_id);
-          finalData.closing_day = principal?.closing_day;
-          finalData.due_day = principal?.due_day;
-          finalData.bank = principal?.bank;
-        } else {
-          finalData.closing_day = parseInt(cardForm.closing_day);
-          finalData.due_day = parseInt(cardForm.due_day);
-        }
-
-        createCardMutation.mutate(finalData);
-      }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
-    </div>
+<div className="border-t border-border pt-4">
+  <div className="flex items-center justify-between mb-2">
+    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cartões</p>
+    <Button size="sm" variant="outline" onClick={() => setShowCardForm(!showCardForm)}>
+      <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
+    </Button>
   </div>
-)}
 
-            {cards.length === 0 && !showCardForm && (
-              <p className="text-sm text-muted-foreground text-center py-3">Nenhum cartão cadastrado.</p>
-            )}
-            {cards.map(c => {
-              const principalName = c.is_additional && c.principal_card_id
-                ? allCards.find(pc => pc.id === c.principal_card_id)?.name
-                : null;
-              const assignedMember = c.assigned_user_id
-                ? members.find(m => m.id === c.assigned_user_id)
-                : null;
-              return (
-                <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border mb-2 ${c.is_additional ? 'bg-amber-50/50 border-amber-200 ml-4' : 'bg-muted/30 border-border'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${c.is_additional ? 'bg-amber-100 text-amber-600' : 'bg-primary/10 text-primary'}`}>
-                      <CreditCard className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium">{c.name}</p>
-                        {c.is_additional && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300 py-0 h-4 px-1.5">Adicional</Badge>}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
-                          {c.type === 'credit' ? 'Crédito' : c.type === 'debit' ? 'Débito' : 'Crédito e Débito'}
-                        </Badge>
-                        {c.bank && <span className="text-xs text-muted-foreground">{c.bank}</span>}
-                        {c.closing_day && <span className="text-xs text-muted-foreground">Fecha dia {c.closing_day}</span>}
-                        {c.due_day && <span className="text-xs text-muted-foreground">Vence dia {c.due_day}</span>}
-                        {principalName && <span className="text-xs text-amber-600">→ {principalName}</span>}
-                        {assignedMember && <span className="text-xs text-blue-600">{assignedMember.full_name || assignedMember.email}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteCardMutation.mutate(c.id)}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              );
-            })}
+  {showCardForm && (
+    <div className="border border-primary/20 rounded-xl p-4 space-y-4 bg-accent/20 mb-3 transition-all">
+      <div className="grid grid-cols-2 gap-3">
+        {/* Titular (Quem tem o plástico) - Prioridade Máxima */}
+        <div className="col-span-2">
+          <Label>Nome do Titular (No plástico) *</Label>
+          <Input value={cardForm.holder_name} onChange={e => setCard('holder_name', e.target.value)} className="mt-1" placeholder="Ex: Gil Kléber ou Nome da Mãe" />
+        </div>
+
+        {/* Dados Básicos */}
+        <div className={cardForm.is_additional ? "col-span-2" : "col-span-1"}>
+          <Label>Nome do Cartão (Apelido) *</Label>
+          <Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} className="mt-1" placeholder="Ex: Nubank Gil" />
+        </div>
+
+        {!cardForm.is_additional && (
+          <div>
+            <Label>Banco</Label>
+            <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Itaú" />
           </div>
+        )}
+
+        {/* Switch de Adicional */}
+        <div className="col-span-2 flex items-center justify-between p-3 bg-white/50 rounded-lg border border-dashed border-primary/20">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-primary" />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Este é um Cartão Adicional?</span>
+              <span className="text-[10px] text-muted-foreground italic">Herda as datas e fatura do titular</span>
+            </div>
+          </div>
+          <Switch 
+            checked={cardForm.is_additional} 
+            onCheckedChange={v => {
+              setCard('is_additional', v);
+              if(v) { setCard('type', 'credit'); }
+            }} 
+          />
+        </div>
+
+        {cardForm.is_additional ? (
+          <div className="col-span-2 animate-in fade-in slide-in-from-top-1">
+            <Label>Vincular ao Cartão Principal *</Label>
+            <Select value={cardForm.principal_card_id} onValueChange={v => setCard('principal_card_id', v)}>
+              <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecione o cartão titular..." /></SelectTrigger>
+              <SelectContent>
+                {allCards.filter(c => !c.is_additional).map(pc => (
+                  <SelectItem key={pc.id} value={pc.id}>{pc.name} {pc.bank ? `(${pc.bank})` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <>
+            <div>
+              <Label>Dia Fechamento</Label>
+              <Input type="number" min={1} max={31} value={cardForm.closing_day} onChange={e => setCard('closing_day', e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Dia Vencimento</Label>
+              <Input type="number" min={1} max={31} value={cardForm.due_day} onChange={e => setCard('due_day', e.target.value)} className="mt-1" />
+            </div>
+          </>
+        )}
+
+        {currentUser?.role === 'admin' && members.length > 0 && (
+          <div className="col-span-2 border-t pt-3">
+            <Label>Responsável no App (Quem gerencia lançamentos)</Label>
+            <Select value={cardForm.assigned_user_id || '_none'} onValueChange={v => setCard('assigned_user_id', v === '_none' ? '' : v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o responsável..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— Todos (sem filtro) —</SelectItem>
+                {members.map(m => (
+                  <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
+        <Button size="sm" onClick={() => {
+          if (!cardForm.name || !cardForm.holder_name) return toast.error('Nome e Titular são obrigatórios');
+          let finalData = { ...cardForm, active: true };
+          if (cardForm.is_additional) {
+            const principal = allCards.find(c => c.id === cardForm.principal_card_id);
+            finalData.closing_day = principal?.closing_day;
+            finalData.due_day = principal?.due_day;
+            finalData.bank = principal?.bank;
+          } else {
+            finalData.closing_day = parseInt(cardForm.closing_day);
+            finalData.due_day = parseInt(cardForm.due_day);
+          }
+          createCardMutation.mutate(finalData);
+        }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
+      </div>
+    </div>
+  )}
+
+  {/* LISTAGEM ORGANIZADA: Titular > Adicional */}
+  <div className="space-y-2">
+    {cards.length === 0 && !showCardForm && (
+      <p className="text-sm text-muted-foreground text-center py-3">Nenhum cartão cadastrado.</p>
+    )}
+    {cards
+      .sort((a, b) => {
+        // Se 'b' é adicional do 'a', 'a' deve vir antes
+        if (b.principal_card_id === a.id) return -1;
+        // Se 'a' é adicional do 'b', 'b' deve vir antes
+        if (a.principal_card_id === b.id) return 1;
+        return 0;
+      })
+      .map(c => {
+        const principalName = c.is_additional && c.principal_card_id
+          ? allCards.find(pc => pc.id === c.principal_card_id)?.name
+          : null;
+        const assignedMember = c.assigned_user_id
+          ? members.find(m => m.id === c.assigned_user_id)
+          : null;
+
+        return (
+          <div 
+            key={c.id} 
+            className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+              c.is_additional 
+                ? 'bg-amber-50/30 border-amber-100 ml-6 scale-[0.98]' 
+                : 'bg-muted/30 border-border font-medium'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${c.is_additional ? 'bg-amber-100 text-amber-600' : 'bg-primary/10 text-primary'}`}>
+                <CreditCard className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm">{c.name}</p>
+                  {c.is_additional && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-200 py-0 h-4 px-1.5">Adicional</Badge>}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground bg-white px-1 rounded border border-border">
+                    {c.holder_name || 'Titular ñ informado'}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] py-0 h-4 px-1.5 capitalize">{c.type}</Badge>
+                  {c.bank && <span className="text-xs text-muted-foreground">{c.bank}</span>}
+                  {c.closing_day && <span className="text-xs text-muted-foreground">Fecha dia {c.closing_day}</span>}
+                  {assignedMember && <span className="text-xs text-blue-600 font-medium">@{assignedMember.full_name || assignedMember.email}</span>}
+                </div>
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteCardMutation.mutate(c.id)}>
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        );
+      })}
+  </div>
+</div>
 
         </CardContent>
       </Card>
