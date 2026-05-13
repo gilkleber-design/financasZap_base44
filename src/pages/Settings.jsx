@@ -295,81 +295,76 @@ export default function Settings() {
             </div>
 
           {showCardForm && (
-  <div className="border border-primary/20 rounded-xl p-4 space-y-3 bg-accent/20 mb-3">
+  <div className="border border-primary/20 rounded-xl p-4 space-y-4 bg-accent/20 mb-3 transition-all">
     <div className="grid grid-cols-2 gap-3">
-      <div className="col-span-2">
+      
+      {/* Dados Básicos */}
+      <div className={cardForm.is_additional ? "col-span-2" : "col-span-1"}>
         <Label>Nome do Cartão (Apelido) *</Label>
-        <Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} className="mt-1" placeholder="Ex: Cartão da Mãe, Nubank Gil" />
+        <Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} className="mt-1" placeholder="Ex: Nubank Gil" />
       </div>
 
-      {/* NOVO CAMPO: Titular do Cartão */}
-      <div className="col-span-2">
-        <Label>Nome do Titular (Como está no cartão) *</Label>
-        <Input value={cardForm.holder_name} onChange={e => setCard('holder_name', e.target.value)} className="mt-1" placeholder="Ex: Maria José Kléber" />
-      </div>
-
-      <div>
-        <Label>Tipo</Label>
-        <Select value={cardForm.type} onValueChange={v => setCard('type', v)}>
-          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="credit">Crédito</SelectItem>
-            <SelectItem value="debit">Débito</SelectItem>
-            <SelectItem value="both">Crédito e Débito</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>Banco</Label>
-        <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú" />
-      </div>
-
-      {/* Datas de Fatura */}
-      {(cardForm.type === 'credit' || cardForm.type === 'both') && (
-        <>
-          <div>
-            <Label>Dia de Fechamento</Label>
-            <Input type="number" min={1} max={31} value={cardForm.closing_day} onChange={e => setCard('closing_day', e.target.value)} className="mt-1" />
-          </div>
-          <div>
-            <Label>Dia de Vencimento</Label>
-            <Input type="number" min={1} max={31} value={cardForm.due_day} onChange={e => setCard('due_day', e.target.value)} className="mt-1" />
-          </div>
-        </>
+      {!cardForm.is_additional && (
+        <div>
+          <Label>Banco</Label>
+          <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Itaú" />
+        </div>
       )}
 
-      {/* Cartão Adicional Switch */}
-      <div className="col-span-2 flex items-center justify-between pt-1">
-        <Label className="flex items-center gap-2 cursor-pointer">
-          <CreditCard className="w-4 h-4 text-primary" />
-          Este é um Cartão Adicional?
-        </Label>
-        <Switch checked={cardForm.is_additional} onCheckedChange={v => setCard('is_additional', v)} />
+      {/* Titular (Quem tem o plástico) */}
+      <div className="col-span-2">
+        <Label>Nome do Titular (No plástico) *</Label>
+        <Input value={cardForm.holder_name} onChange={e => setCard('holder_name', e.target.value)} className="mt-1" placeholder="Ex: Gil Kléber ou Nome da Mãe" />
       </div>
 
-      {/* CAMPO CONDICIONAL: Só aparece se for Adicional */}
-      {cardForm.is_additional && (
-        <div className="col-span-2 bg-white/50 p-3 rounded-lg border border-dashed border-amber-200">
+      {/* Switch de Adicional */}
+      <div className="col-span-2 flex items-center justify-between p-3 bg-white/50 rounded-lg border border-dashed border-primary/20">
+        <div className="flex items-center gap-2">
+          <CreditCard className="w-4 h-4 text-primary" />
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">Este é um Cartão Adicional?</span>
+            <span className="text-[10px] text-muted-foreground italic">Herda as datas e fatura do titular</span>
+          </div>
+        </div>
+        <Switch 
+          checked={cardForm.is_additional} 
+          onCheckedChange={v => {
+            setCard('is_additional', v);
+            if(v) { setCard('type', 'credit'); } // Adicional é sempre crédito no seu fluxo
+          }} 
+        />
+      </div>
+
+      {/* CAMPOS CONDICIONAIS: Se for Adicional, escolhe o pai. Se não, escolhe as datas. */}
+      {cardForm.is_additional ? (
+        <div className="col-span-2 animate-in fade-in slide-in-from-top-1">
           <Label>Vincular ao Cartão Principal *</Label>
           <Select value={cardForm.principal_card_id} onValueChange={v => setCard('principal_card_id', v)}>
-            <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecionar cartão titular..." /></SelectTrigger>
+            <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecione o cartão titular..." /></SelectTrigger>
             <SelectContent>
-              {/* Filtra apenas os que são principais de verdade */}
               {allCards.filter(c => !c.is_additional).map(pc => (
                 <SelectItem key={pc.id} value={pc.id}>{pc.name} {pc.bank ? `(${pc.bank})` : ''}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-amber-700 mt-2 font-medium italic">
-            ⚠️ O pagamento desta fatura será consolidado automaticamente no cartão principal selecionado.
-          </p>
         </div>
+      ) : (
+        <>
+          <div>
+            <Label>Dia Fechamento</Label>
+            <Input type="number" min={1} max={31} value={cardForm.closing_day} onChange={e => setCard('closing_day', e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label>Dia Vencimento</Label>
+            <Input type="number" min={1} max={31} value={cardForm.due_day} onChange={e => setCard('due_day', e.target.value)} className="mt-1" />
+          </div>
+        </>
       )}
 
-      {/* Dono da Conta no App (Atribuir a Membro) */}
+      {/* Atribuição de Usuário (Quem vê no App) */}
       {currentUser?.role === 'admin' && members.length > 0 && (
-        <div className="col-span-2 border-t pt-3 mt-1">
-          <Label>Atribuir Responsável no App (Quem vê os lançamentos)</Label>
+        <div className="col-span-2 border-t pt-3">
+          <Label>Responsável no App (Quem gerencia lançamentos)</Label>
           <Select value={cardForm.assigned_user_id || '_none'} onValueChange={v => setCard('assigned_user_id', v === '_none' ? '' : v)}>
             <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o responsável..." /></SelectTrigger>
             <SelectContent>
@@ -382,20 +377,26 @@ export default function Settings() {
         </div>
       )}
     </div>
-    
-    <div className="flex gap-2 mt-4">
+
+    <div className="flex gap-2">
       <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
       <Button size="sm" onClick={() => {
-        if (!cardForm.name || !cardForm.holder_name) { toast.error('Nome e Titular são obrigatórios'); return; }
-        if (cardForm.is_additional && !cardForm.principal_card_id) { toast.error('Selecione o cartão principal'); return; }
-        createCardMutation.mutate({
-          ...cardForm,
-          closing_day: cardForm.closing_day ? parseInt(cardForm.closing_day) : undefined,
-          due_day: cardForm.due_day ? parseInt(cardForm.due_day) : undefined,
-          principal_card_id: cardForm.is_additional ? cardForm.principal_card_id : undefined,
-          assigned_user_id: cardForm.assigned_user_id || undefined,
-          active: true,
-        });
+        if (!cardForm.name || !cardForm.holder_name) return toast.error('Nome e Titular são obrigatórios');
+        
+        // Lógica de herança antes de salvar
+        let finalData = { ...cardForm, active: true };
+        
+        if (cardForm.is_additional) {
+          const principal = allCards.find(c => c.id === cardForm.principal_card_id);
+          finalData.closing_day = principal?.closing_day;
+          finalData.due_day = principal?.due_day;
+          finalData.bank = principal?.bank;
+        } else {
+          finalData.closing_day = parseInt(cardForm.closing_day);
+          finalData.due_day = parseInt(cardForm.due_day);
+        }
+
+        createCardMutation.mutate(finalData);
       }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
     </div>
   </div>
