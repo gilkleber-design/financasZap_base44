@@ -116,41 +116,31 @@ function parseItauTransactions(raw, refMonth) {
     .replace(/servi\s*[cç]\s*os/gi, 'serviços')
     .replace(/vestu\s*[aá]\s*rio/gi, 'vestuário');
 
-  // Extrai apenas os blocos de lançamentos (compras e saques), ignorando "próximas faturas"
-  const blockRegex = /Lançamentos[:\s]*compras e saques([\s\S]*?)(?=Lançamentos[:\s]*produtos|Compras parceladas|Lançamentos no cart)/gi;
-  const blocks = [];
-  let bm;
-  while ((bm = blockRegex.exec(normalized)) !== null) blocks.push(bm[1]);
-  console.log('=== BLOCKS FOUND:', blocks.length, '===');
-  if (blocks.length === 0) {
-    console.log('=== NORMALIZED SAMPLE ===\n', normalized.substring(0, 2000));
+  // Verifica se tem ao menos um bloco de lançamentos
+  if (!/Lançamentos[:\s]*compras e saques/i.test(normalized)) {
+    console.log('=== SEM BLOCO DE LANÇAMENTOS ===\n', normalized.substring(0, 2000));
     return items;
   }
 
-  const block = blocks.join('\n');
-  console.log('=== BLOCK SAMPLE (first 1000) ===\n', block.substring(0, 1000));
+  // Remove tudo antes do primeiro "Lançamentos: compras e saques"
+  // e tudo depois de marcadores de fim de fatura
+  let block = normalized.replace(/^[\s\S]*?Lançamentos[:\s]*compras e saques/i, '');
+  block = block.replace(/(?:Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)[\s\S]*/i, '');
+
+  console.log('=== BLOCK FULL ===\n', block);
 
   let m;
-  const skipped = [];
   while ((m = txRegex.exec(block)) !== null) {
     const [, date, desc, valueStr] = m;
 
-    // Pula cabeçalhos
-    if (/^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total dos|Total do|GIL |continua)/i.test(desc.trim())) {
-      skipped.push({ reason: 'header', date, desc, valueStr });
-      continue;
-    }
+    // Pula cabeçalhos e totais
+    if (/^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total dos|Total do|GIL |continua)/i.test(desc.trim())) continue;
     // Pula valores negativos (pagamentos)
-    if (valueStr.startsWith('-')) {
-      skipped.push({ reason: 'negative', date, desc, valueStr });
-      continue;
-    }
+    if (valueStr.startsWith('-')) continue;
 
     items.push(makePayable(date, desc, valueStr, refYear, refMonthNum));
   }
 
-  console.log('=== SKIPPED ITEMS ===', JSON.stringify(skipped, null, 2));
-  console.log('=== BLOCK FULL ===\n', block);
   return items;
 }
 
