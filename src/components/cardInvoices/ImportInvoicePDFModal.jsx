@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, Loader2, Trash2, XCircle } from 'lucide-react';
+import { Upload, FileText, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { addMonths, format, parseISO } from 'date-fns';
 
@@ -28,7 +28,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         ...item,
         _id: Math.random().toString(36),
         selected: !item.description.toLowerCase().includes('pagamento'),
-        date_display: item.date ? format(parseISO(item.date), 'dd/MM') : ''
+        date_display: format(parseISO(item.date), 'dd/MM')
       }));
       setItems(extracted);
       setStep('review');
@@ -38,17 +38,27 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     }
   };
 
-  const deleteItem = (id) => setItems(prev => prev.filter(it => it._id !== id));
+  // --- FUNÇÕES DE EXCLUSÃO ---
+  const deleteItem = (id) => {
+    setItems(prev => prev.filter(it => it._id !== id));
+  };
+
+  const clearInvoice = () => {
+    setItems([]);
+    setStep('upload');
+    toast.info('Fatura descartada');
+  };
 
   const handleImport = async () => {
     const selected = items.filter(it => it.selected);
-    if (selected.length === 0) return toast.error('Selecione itens');
+    if (selected.length === 0) return toast.error('Nenhum item selecionado');
     setSaving(true);
     try {
       const allPayables = [];
       selected.forEach(it => {
         const total = it.installment_total || 1;
         const current = it.installment_number || 1;
+        
         for (let i = 0; i <= (total - current); i++) {
           const mDate = addMonths(parseISO(refMonth + '-01'), i);
           allPayables.push({
@@ -63,8 +73,9 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
           });
         }
       });
+
       await base44.entities.Payable.bulkCreate(allPayables);
-      toast.success('Importação concluída!');
+      toast.success('Lançamentos importados com sucesso!');
       onImported();
       onClose();
     } catch (e) {
@@ -79,12 +90,12 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl font-sora">
         <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
-          <DialogTitle className="font-black uppercase text-slate-800 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" /> Fatura de {refMonth}
+          <DialogTitle className="font-black uppercase text-slate-800 flex items-center gap-2 text-sm">
+            <FileText className="w-5 h-5 text-primary" /> Fatura: {refMonth}
           </DialogTitle>
           {step === 'review' && (
-            <Button variant="ghost" size="sm" onClick={() => setStep('upload')} className="text-red-500 font-black text-[10px] uppercase flex items-center gap-1">
-              <Trash2 className="w-3 h-3" /> Deletar Fatura
+            <Button variant="ghost" size="sm" onClick={clearInvoice} className="text-red-500 font-black text-[10px] uppercase flex items-center gap-1 hover:bg-red-50 px-3">
+              <Trash2 className="w-3.5 h-3.5" /> Deletar Fatura
             </Button>
           )}
         </DialogHeader>
@@ -100,15 +111,15 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         {step === 'processing' && (
           <div className="py-20 text-center space-y-4">
             <Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" />
-            <p className="font-black text-[10px] text-slate-400 uppercase">Processando lançamentos...</p>
+            <p className="font-black text-[10px] text-slate-400 uppercase">Processando dados...</p>
           </div>
         )}
 
         {step === 'review' && (
           <div className="space-y-4">
-            <div className="border rounded-2xl overflow-hidden divide-y bg-white max-h-[50vh] overflow-y-auto">
+            <div className="border rounded-2xl overflow-hidden divide-y bg-white max-h-[50vh] overflow-y-auto shadow-sm">
               {items.map((it) => (
-                <div key={it._id} className="flex items-center gap-3 px-4 py-3">
+                <div key={it._id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
                   <input type="checkbox" checked={it.selected} onChange={() => {
                     setItems(items.map(x => x._id === it._id ? {...x, selected: !x.selected} : x))
                   }} className="w-4 h-4 accent-primary" />
@@ -116,12 +127,12 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <input 
-                        className="bg-transparent border-none p-0 text-xs font-bold uppercase focus:ring-0 w-full" 
+                        className="bg-transparent border-none p-0 text-xs font-bold uppercase focus:ring-0 w-full text-slate-700" 
                         value={it.description} 
                         onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, description: e.target.value} : x))} 
                       />
                       {it.installment_total > 1 && (
-                         <Badge className="bg-blue-50 text-blue-600 border-none text-[9px] font-black">
+                         <Badge className="bg-blue-50 text-blue-600 border-none text-[9px] font-black h-5">
                            {it.installment_number}/{it.installment_total}
                          </Badge>
                       )}
@@ -129,13 +140,15 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                     <span className="text-[9px] font-black text-slate-400 uppercase">{it.date_display} • {it.category}</span>
                   </div>
 
+                  {/* Valor sem setas de número */}
                   <input 
                     type="text" 
-                    className="w-20 bg-transparent border-none p-0 text-right text-xs font-black focus:ring-0 text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-20 bg-transparent border-none p-0 text-right text-xs font-black focus:ring-0 text-slate-700"
                     value={it.amount} 
                     onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, amount: parseFloat(e.target.value) || 0} : x))} 
                   />
 
+                  {/* Lixo individual sempre visível */}
                   <button onClick={() => deleteItem(it._id)} className="text-slate-300 hover:text-red-500 p-2 transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
