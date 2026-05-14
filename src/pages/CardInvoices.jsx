@@ -47,18 +47,11 @@ export default function CardInvoices() {
   const refMonthStr = format(mStart, 'yyyy-MM');
 
   const getCardItems = (cardId) => {
-    return payables
-      .filter(p => {
-        if (p.origin_id !== cardId || p.origin_type !== 'card' || p.is_card_invoice_payable) return false;
-        const comp = p.competencia || p.due_date;
-        return comp && comp.startsWith(refMonthStr);
-      })
-      .sort((a, b) => {
-        // Ordena pela data da compra (issue_date ou due_date como fallback)
-        const dateA = new Date(a.issue_date || a.due_date || 0);
-        const dateB = new Date(b.issue_date || b.due_date || 0);
-        return dateA - dateB;
-      });
+    return payables.filter(p => {
+      if (p.origin_id !== cardId || p.origin_type !== 'card' || p.is_card_invoice_payable) return false;
+      const comp = p.competencia || p.due_date;
+      return comp && comp.startsWith(refMonthStr);
+    });
   };
 
   const getInvoicePayable = (cardId) => payables.find(p => p.origin_id === cardId && p.is_card_invoice_payable === true && (p.competencia || p.due_date || '').startsWith(refMonthStr));
@@ -227,41 +220,17 @@ export default function CardInvoices() {
 
                   <CollapsibleContent className="bg-slate-50/20 p-4">
                     <div className="bg-white rounded-lg border divide-y overflow-hidden shadow-sm">
-                      {items.map(p => {
-                        // REGRAS 1 E 4: Separação do Badge de Parcela e Limpeza do Nome
-                        let displayDesc = p.description || '';
-                        let badgeText = null;
-                        const parcelMatch = displayDesc.match(/\(parcela (\d+\/\d+)\)/i);
-                        if (parcelMatch) {
-                          badgeText = parcelMatch[1];
-                          displayDesc = displayDesc.replace(/\(parcela \d+\/\d+\)/i, '').trim();
-                        }
-
-                        // REGRA 2: Tratamento da data da compra
-                        const dateStr = p.issue_date || p.due_date;
-                        const displayDate = dateStr ? format(new Date(dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00'), 'dd/MM/yy') : '--';
-
-                        return (
-                          <div key={p.id} className="flex justify-between items-center px-4 py-3 text-sm hover:bg-slate-50">
-                            <div className="flex flex-col gap-0.5">
-                              <div className="flex items-center gap-2">
-                                <span className="text-slate-700 font-bold text-[11px] uppercase">{displayDesc}</span>
-                                {badgeText && (
-                                  <Badge className="bg-blue-50 text-blue-600 border-none text-[9px] font-black h-4 px-1.5 rounded">
-                                    {badgeText}
-                                  </Badge>
-                                )}
-                              </div>
-                              <span className="text-[9px] text-slate-400 font-bold uppercase">
-                                {displayDate} • {p.category || 'OUTROS'}
-                              </span>
-                            </div>
-                            <span className={`font-black text-xs ${p.amount < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
-                              {fmt(p.amount)}
+                      {items.map(p => (
+                        <div key={p.id} className="flex justify-between px-4 py-2.5 text-sm hover:bg-slate-50">
+                          <div className="flex flex-col">
+                            <span className="text-slate-700 font-medium">{p.description}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">
+                              {p.purchase_date ? format(new Date(p.purchase_date.includes('T') ? p.purchase_date : p.purchase_date + 'T12:00:00'), 'dd/MM/yy') : '--'}
                             </span>
                           </div>
-                        );
-                      })}
+                          <span className={`font-bold ${p.amount < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>{fmt(p.amount)}</span>
+                        </div>
+                      ))}
                     </div>
                     {items.length > 0 && (
                       <div className="flex justify-end mt-3">
