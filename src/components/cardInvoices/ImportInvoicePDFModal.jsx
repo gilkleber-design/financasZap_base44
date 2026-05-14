@@ -131,17 +131,27 @@ function parseItauTransactions(raw, refMonth) {
   console.log('=== BLOCK SAMPLE (first 1000) ===\n', block.substring(0, 1000));
 
   let m;
+  const skipped = [];
   while ((m = txRegex.exec(block)) !== null) {
     const [, date, desc, valueStr] = m;
 
     // Pula cabeçalhos
-    if (/^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total dos|Total do|GIL |continua)/i.test(desc.trim())) continue;
+    if (/^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total dos|Total do|GIL |continua)/i.test(desc.trim())) {
+      skipped.push({ reason: 'header', date, desc, valueStr });
+      continue;
+    }
     // Pula valores negativos (pagamentos)
-    if (valueStr.startsWith('-')) continue;
+    if (valueStr.startsWith('-')) {
+      skipped.push({ reason: 'negative', date, desc, valueStr });
+      continue;
+    }
 
     items.push(makePayable(date, desc, valueStr, refYear, refMonthNum));
   }
 
+  console.log('=== SKIPPED ITEMS ===', JSON.stringify(skipped, null, 2));
+  console.log('=== ALL ITEMS ===', JSON.stringify(items.map(i => ({ date: i.date_display, desc: i.description, amount: i.amount })), null, 2));
+  console.log('=== BLOCK FULL ===\n', block);
   return items;
 }
 
