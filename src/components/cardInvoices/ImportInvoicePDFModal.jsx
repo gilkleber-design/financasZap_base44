@@ -147,7 +147,7 @@ function parseItauTransactions(raw, refMonth) {
     console.log('=== PROD SERV SECTION: NENHUMA ===');
   }
 
-  console.log('=== BLOCK FULL ===\n', block);
+  console.log('=== BLOCK FULL (first 3000) ===\n', block.substring(0, 3000));
 
   let m;
   while ((m = txRegex.exec(block)) !== null) {
