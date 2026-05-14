@@ -126,18 +126,17 @@ function parseItauTransactions(raw, refMonth) {
   let block = normalized.replace(/^[\s\S]*?Lançamentos[:\s]*compras e saques/i, '');
   block = block.replace(/Lançamentos no cart[\s\S]*/i, '');
 
-  // Extrai lançamentos de produtos/serviços: captura DD/MM após o cabeçalho PRODUTOS/serviços
-  // até o marcador de subtotal "Lançamentos produtos e serviços"
-  const prodServSection = normalized.match(/PRODUTOS\/servi[çc]os\s+VALOR[^\n]*([\s\S]*?)(?:Lançamentos produtos e servi|Compras parceladas|Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)/i);
-  if (prodServSection) {
-    // Extrai o padrão DD/MM <desc> VALOR diretamente da seção (ignora coluna esquerda)
-    const prodText = prodServSection[1];
-    console.log('=== PROD SERV RAW FULL ===\n', prodText);
+  // Extrai lançamentos de produtos/serviços: procura o padrão DD/MM ... VALOR
+  // em qualquer lugar após "PRODUTOS/serviços" até o fim do texto
+  const prodServIdx = normalized.search(/PRODUTOS\/servi[çc]os\s+VALOR/i);
+  if (prodServIdx !== -1) {
+    const remainingText = normalized.substring(prodServIdx);
+    console.log('=== PROD SERV RAW FULL ===\n', remainingText.substring(0, 2000));
     // Procura por DD/MM seguido de espaços, descrição, espaços, e valor
     const prodMatches = [];
     const prodRegex = /(\d{2}\/\d{2})\s+(.+?)\s{2,}(\d{1,3}(?:\.\d{3})*,\d{2})/g;
     let m;
-    while ((m = prodRegex.exec(prodText)) !== null) {
+    while ((m = prodRegex.exec(remainingText)) !== null) {
       prodMatches.push(m[0]);
     }
     console.log('=== PROD SERV EXTRACTED ===\n', prodMatches.join('\n'));
