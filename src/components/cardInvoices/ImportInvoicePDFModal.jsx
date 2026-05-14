@@ -126,13 +126,16 @@ function parseItauTransactions(raw, refMonth) {
   let block = normalized.replace(/^[\s\S]*?Lançamentos[:\s]*compras e saques/i, '');
   block = block.replace(/Lançamentos no cart[\s\S]*/i, '');
 
-  // Extrai bloco de produtos/serviços separadamente
-  // O cabeçalho aparece como "DATA  PRODUTOS/serviços  VALOR EM R$"
-  const prodServMatch = normalized.match(/DATA\s+PRODUTOS\/servi[çc]os\s+VALOR[^\n]*\n([\s\S]*?)(?:Lançamentos produtos|Compras parceladas|Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)/i);
-  if (prodServMatch) block += '\n' + prodServMatch[1];
+  // Extrai lançamentos de produtos/serviços: captura DD/MM após o cabeçalho PRODUTOS/serviços
+  // até o marcador de subtotal "Lançamentos produtos e serviços"
+  const prodServSection = normalized.match(/PRODUTOS\/servi[çc]os\s+VALOR[^\n]*([\s\S]*?)(?:Lançamentos produtos e servi|Compras parceladas|Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)/i);
+  if (prodServSection) {
+    // Extrai apenas as linhas que começam com DD/MM
+    const prodLines = prodServSection[1].split('\n').filter(l => /^\d{2}\/\d{2}\s+/.test(l.trim()));
+    block += '\n' + prodLines.join('\n');
+  }
 
   console.log('=== BLOCK FULL ===\n', block);
-  console.log('=== PROD SERV MATCH ===\n', prodServMatch ? prodServMatch[1] : 'NENHUM');
 
   let m;
   while ((m = txRegex.exec(block)) !== null) {
