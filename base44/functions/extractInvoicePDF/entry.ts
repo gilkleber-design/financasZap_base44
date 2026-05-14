@@ -7,6 +7,8 @@ function normalizePdfText(text) {
     .replace(/[ \t]+/g, ' ')
     .replace(/Lan\s*[cç]\s*amentos/gi, 'Lançamentos')
     .replace(/Pr\s*[oó]\s*dutos/gi, 'Produtos')
+    .replace(/Pr\s*[oó]\s*xima/gi, 'Próxima')
+    .replace(/Pr\s*[oó]\s*ximas/gi, 'Próximas')
     .replace(/Servi\s*[cç]\s*os/gi, 'Serviços')
     .replace(/Compras\s+e\s+Saques/gi, 'Compras e Saques')
     .replace(/\bs\s*[aá]\s*[uú]\s*de\b/gi, 'saúde')
@@ -15,12 +17,12 @@ function normalizePdfText(text) {
 }
 
 async function extractTextFromPDF(buffer) {
-  const pdfjsLib = await import('npm:pdfjs-dist@4.4.168/legacy/build/pdf.mjs');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = false;
+  const pdfjsModule = await import('npm:pdfjs-dist@3.11.174/legacy/build/pdf.js');
+  const pdfjsLib = pdfjsModule.default || pdfjsModule;
 
   const loadingTask = pdfjsLib.getDocument({
     data: buffer,
-    useWorkerFetch: false,
+    disableWorker: true,
     isEvalSupported: false,
     useSystemFonts: true,
   });
@@ -31,8 +33,7 @@ async function extractTextFromPDF(buffer) {
     const page = await pdf.getPage(pageNum);
     const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
-    const middleX = viewport.width / 2;
-    const columns = [[], []];
+    const rows = [];
 
     for (const item of content.items) {
       const str = String(item.str || '').trim();
@@ -40,23 +41,22 @@ async function extractTextFromPDF(buffer) {
 
       const x = Math.round(item.transform[4]);
       const y = Math.round(item.transform[5]);
-      const column = x < middleX ? columns[0] : columns[1];
-      let row = column.find(r => Math.abs(r.y - y) <= 3);
+      let row = rows.find(r => Math.abs(r.y - y) <= 3);
 
       if (!row) {
         row = { y, items: [] };
-        column.push(row);
+        rows.push(row);
       }
 
       row.items.push({ x, str });
     }
 
-    const formatColumn = (rows) => rows
+    const pageText = rows
       .sort((a, b) => b.y - a.y)
       .map(row => row.items.sort((a, b) => a.x - b.x).map(it => it.str).join('  '))
       .join('\n');
 
-    pageTexts.push(`${formatColumn(columns[0])}\n${formatColumn(columns[1])}`);
+    pageTexts.push(pageText);
   }
 
   return normalizePdfText(pageTexts.join('\n--- PAGE BREAK ---\n'));
@@ -82,23 +82,22 @@ function cleanDescription(description) {
 }
 
 function parseItauTransactions(raw, refMonth) {
-  const blockStart = /(Lançamentos[:\s-]*(compras e saques|produtos e serviços)|Produtos e Serviços)/i;
-  const startIndex = raw.search(blockStart);
-  const source = startIndex >= 0 ? raw.slice(startIndex) : raw;
-  const endIndex = source.search(/(Compras parceladas\s*-\s*pr[oó]ximas faturas|Pr[oó]xima fatura|Limites de cr[eé]dito|Encargos cobrados|Demonstrativo|Resumo da fatura)/i);
+  const firstBlock = raw.search(/Lançamentos[:\s-]*(compras e saques|produtos e serviços)/i);
+  const source = firstBlock >= 0 ? raw.slice(firstBlock) : raw;
+  const endIndex = source.search(/Total dos lan[çc]amentos atuais|Compras parceladas\s*-\s*pr[oó]ximas faturas|Pr[oó]xima fatura|Limites de cr[eé]dito|Encargos cobrados/i);
   const block = endIndex >= 0 ? source.slice(0, endIndex) : source;
 
-  const txRegex = /(\d{2}\/\d{2})\s+(.+?)\s{2,}(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
-  const skipDescription = /^(DATA|VALOR|ESTABELECIMENTO|TOTAL|SUBTOTAL|SALDO|LIMITE|JUROS|MULTA|IOF|ENCARGOS|LANÇAMENTOS|COMPRAS|SAQUES|PRODUTOS|SERVIÇOS|PRÓXIMA|ANUIDADE|DESCONTOS|CAIXA|DISPON[IÍ]VEL|UTILIZADO)/i;
+  const skipDescription = /^(DATA|VALOR|ESTABELECIMENTO|TOTAL|SUBTOTAL|SALDO|LIMITE|JUROS|MULTA|IOF|ENCARGOS|LANÇAMENTOS|COMPRAS|SAQUES|PRODUTOS|SERVIÇOS|PRÓXIMA|ANUIDADE|DESCONTOS|CAIXA|DISPON[IÍ]VEL|UTILIZADO|CONTINUA)/i;
   const paymentPattern = /\b(PAGAMENTO|PAGTO|PGTO|D[ÉE]BITO\s+AUTOM[ÁA]TICO|PAG\s+FATURA)\b/i;
   const reversalPattern = /\b(ESTORNO|CR[ÉE]DITO|CREDITO|DEVOLU[CÇ][AÃ]O|REEMBOLSO)\b/i;
   const items = [];
+  const txRegex = /(\d{2}\/\d{2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|\n|$)/g;
   let match;
 
   while ((match = txRegex.exec(block)) !== null) {
     const dateToken = match[1];
     let description = cleanDescription(match[2]);
-    const amount = brlToNumber(match[3]);
+    const amountText = match[3];
 
     if (!description || description.length < 3) continue;
     if (skipDescription.test(description)) continue;
@@ -113,11 +112,14 @@ function parseItauTransactions(raw, refMonth) {
       parcelTotal = Number(parcelMatch[3]);
     }
 
+    const isReversal = reversalPattern.test(description) || amountText.startsWith('-');
+    const amount = isReversal ? -Math.abs(brlToNumber(amountText)) : brlToNumber(amountText);
+
     items.push({
       date: resolveDate(dateToken, refMonth),
       description,
       amount,
-      is_reversal: amount < 0 || reversalPattern.test(description),
+      is_reversal: isReversal,
       parcel_current: parcelCurrent,
       parcel_total: parcelTotal,
     });
@@ -174,7 +176,9 @@ Deno.serve(async (req) => {
     }
 
     const text = await extractTextFromPDF(buffer);
+    console.log('PDF TEXT DEBUG', text.slice(0, 5000));
     const items = parseItauTransactions(text, refMonth);
+    console.log('ITEMS DEBUG', items.length);
 
     return Response.json({ items });
   } catch (error) {
