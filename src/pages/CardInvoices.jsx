@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Upload, Undo2, ListFilter } from 'lucide-react';
-import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Upload, Undo2, ListFilter, Trash2, Settings2 } from 'lucide-react';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { format, startOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 import ImportInvoicePDFModal from '@/components/cardInvoices/ImportInvoicePDFModal';
+import ManageInvoiceItemsModal from '@/components/cardInvoices/ManageInvoiceItemsModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -29,6 +30,9 @@ export default function CardInvoices() {
   const [pendingClosureCardId, setPendingClosureCardId] = useState(null); 
   const [pendingReopenData, setPendingReopenData] = useState(null);
   const [openItems, setOpenItems] = useState({});
+  const [managingItems, setManagingItems] = useState(null); // { items, cardName }
+  const [pendingDeleteInvoice, setPendingDeleteInvoice] = useState(null); // { invoice, invoicePayable }
+  const [pendingUndoPayment, setPendingUndoPayment] = useState(null); // invoicePayable
   const queryClient = useQueryClient();
 
   const toggleItems = (cardId) => setOpenItems(p => ({ ...p, [cardId]: !p[cardId] }));
@@ -36,6 +40,7 @@ export default function CardInvoices() {
   const { data: cards = [] } = useQuery({ queryKey: ['cards'], queryFn: () => base44.entities.Card.list() });
   const { data: invoices = [] } = useQuery({ queryKey: ['card_invoices'], queryFn: () => base44.entities.CardInvoice.list('-month', 200) });
   const { data: payables = [] } = useQuery({ queryKey: ['payables'], queryFn: () => base44.entities.Payable.list('-due_date', 500) });
+  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: () => base44.entities.Transaction.list('-date', 200) });
 
   const creditCards = cards.filter(c => c.type === 'credit' || c.type === 'both');
   const mStart = startOfMonth(currentMonth);
@@ -75,6 +80,41 @@ export default function CardInvoices() {
       queryClient.invalidateQueries(); 
       setPendingReopenData(null); 
       toast.success('Fatura reaberta.'); 
+    },
+  });
+
+  const deleteInvoiceMutation = useMutation({
+    mutationFn: async ({ invoice, invoicePayable, cardItems }) => {
+      // Deleta payable consolidado, registro da fatura e todos os itens provisionados
+      if (invoicePayable?.id) await base44.entities.Payable.delete(invoicePayable.id);
+      if (invoice?.id) await base44.entities.CardInvoice.delete(invoice.id);
+      for (const item of (cardItems || [])) {
+        await base44.entities.Payable.delete(item.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      setPendingDeleteInvoice(null);
+      toast.success('Fatura e lançamentos deletados.');
+    },
+  });
+
+  const undoPaymentMutation = useMutation({
+    mutationFn: async (invoicePayable) => {
+      // Marca payable como pending e remove transaction_id
+      await base44.entities.Payable.update(invoicePayable.id, { status: 'pending', transaction_id: null });
+      // Se tinha transaction vinculada, deleta
+      if (invoicePayable.transaction_id) {
+        await base44.entities.Transaction.delete(invoicePayable.transaction_id);
+      }
+      // Atualiza CardInvoice se existir
+      const invoice = invoices.find(inv => inv.payable_id === invoicePayable.id);
+      if (invoice?.id) await base44.entities.CardInvoice.update(invoice.id, { status: 'closed', paid_date: null, transaction_id: null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      setPendingUndoPayment(null);
+      toast.success('Pagamento desfeito.');
     },
   });
 
@@ -138,7 +178,7 @@ export default function CardInvoices() {
                       <span className="flex items-center gap-1.5"><ListFilter className="w-3.5 h-3.5" /> {items.length} itens</span>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
                       {/* BOTAO FECHAR: Se não existe o consolidado ainda */}
                       {!invoicePayable && items.length > 0 && (
                         <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-primary" onClick={() => setPendingClosureCardId(card.id)}>
@@ -158,6 +198,20 @@ export default function CardInvoices() {
                         </>
                       )}
 
+                      {/* DESFAZER PAGAMENTO */}
+                      {invoicePayable?.status === 'paid' && (
+                        <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-amber-600" onClick={() => setPendingUndoPayment(invoicePayable)}>
+                          <Undo2 className="w-3 h-3 mr-1" /> DESFAZER PAGTO
+                        </Button>
+                      )}
+
+                      {/* DELETAR FATURA */}
+                      {(items.length > 0 || existingInvoice) && (
+                        <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-red-500 hover:text-red-700" onClick={() => setPendingDeleteInvoice({ invoice: existingInvoice, invoicePayable, cardItems: items })}>
+                          <Trash2 className="w-3 h-3 mr-1" /> DELETAR
+                        </Button>
+                      )}
+
                       <CollapsibleTrigger asChild>
                         <Button variant="link" size="sm" className="h-8 text-[11px] font-bold no-underline">{isExpanded ? 'OCULTAR' : 'VER ITENS'}</Button>
                       </CollapsibleTrigger>
@@ -171,13 +225,20 @@ export default function CardInvoices() {
                           <div className="flex flex-col">
                             <span className="text-slate-700 font-medium">{p.description}</span>
                             <span className="text-[10px] text-slate-400 font-bold uppercase">
-                              {p.purchase_date ? format(new Date(p.purchase_date.includes('T') ? p.purchase_date : p.purchase_date + 'T12:00:00'), 'dd/MM/yy') : '--'}
+                              {p.due_date ? format(new Date(p.due_date.includes('T') ? p.due_date : p.due_date + 'T12:00:00'), 'dd/MM/yy') : '--'}
                             </span>
                           </div>
-                          <span className="font-bold text-slate-900">{fmt(p.amount)}</span>
+                          <span className={`font-bold ${p.amount < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>{fmt(p.amount)}</span>
                         </div>
                       ))}
                     </div>
+                    {items.length > 0 && (
+                      <div className="flex justify-end mt-3">
+                        <Button variant="ghost" size="sm" className="h-7 text-[11px] font-bold text-slate-500" onClick={() => setManagingItems({ items, cardName: card.name })}>
+                          <Settings2 className="w-3 h-3 mr-1" /> EDITAR / REMOVER ITENS
+                        </Button>
+                      </div>
+                    )}
                   </CollapsibleContent>
                 </Collapsible>
               </CardContent>
@@ -213,8 +274,45 @@ export default function CardInvoices() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Dialog: Deletar Fatura */}
+      <AlertDialog open={!!pendingDeleteInvoice} onOpenChange={() => setPendingDeleteInvoice(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deletar fatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso irá deletar o registro da fatura, o lançamento consolidado e todos os {pendingDeleteInvoice?.cardItems?.length || 0} itens importados. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-3 mt-4">
+            <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
+            <Button variant="destructive" className="flex-1 font-bold h-10" onClick={() => deleteInvoiceMutation.mutate(pendingDeleteInvoice)} disabled={deleteInvoiceMutation.isPending}>
+              {deleteInvoiceMutation.isPending ? 'DELETANDO...' : 'DELETAR TUDO'}
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog: Desfazer Pagamento */}
+      <AlertDialog open={!!pendingUndoPayment} onOpenChange={() => setPendingUndoPayment(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desfazer pagamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lançamento de pagamento será excluído e a fatura voltará ao status "Fechada".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-3 mt-4">
+            <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
+            <Button variant="destructive" className="flex-1 font-bold h-10" onClick={() => undoPaymentMutation.mutate(pendingUndoPayment)} disabled={undoPaymentMutation.isPending}>
+              {undoPaymentMutation.isPending ? 'DESFAZENDO...' : 'CONFIRMAR'}
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {payingPayable && <ConfirmPayableModal payable={payingPayable} onClose={() => { setPayingPayable(null); queryClient.invalidateQueries(); }} />}
       {importingCard && <ImportInvoicePDFModal card={importingCard.card} refMonth={importingCard.refMonth} onClose={() => setImportingCard(null)} onImported={() => queryClient.invalidateQueries()} />}
+      {managingItems && <ManageInvoiceItemsModal items={managingItems.items} cardName={managingItems.cardName} onClose={() => { setManagingItems(null); queryClient.invalidateQueries(); }} />}
     </div>
   );
 }
