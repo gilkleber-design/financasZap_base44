@@ -15,19 +15,19 @@ async function extractTextFromPDF(buffer) {
 function parseItauTransactions(raw) {
   const items = [];
 
-  // Extrai o bloco entre "Lançamentos atuais" e "Compras parceladas" / "Resumo da fatura" / "Total desta fatura"
-  const blockMatch = raw.match(/Lançamentos atuais[\s\S]*?(?=Compras parceladas|Resumo da fatura|Total desta fatura|$)/i);
-  const block = blockMatch ? blockMatch[0] : raw;
+  // Extrai apenas os blocos de lançamentos (páginas com "Lançamentos: compras e saques")
+  const blockMatch = raw.match(/Lançamentos[:\s]+compras e saques[\s\S]*?(?=Próxima fatura|Limites de crédito|Encargos cobrados|$)/gi);
+  const block = blockMatch ? blockMatch.join('\n') : '';
 
-  console.log('--- TEXTO COMPLETO (primeiros 5000 chars) ---');
-  console.log(raw.substring(0, 5000));
-  console.log('--- BLOCO ENCONTRADO:', !!blockMatch, 'tamanho:', block.length);
-  console.log('--- BLOCO (primeiros 3000) ---');
-  console.log(block.substring(0, 3000));
+  console.log('--- BLOCO LANÇAMENTOS (tamanho):', block.length);
+  console.log(block.substring(0, 2000));
 
-  // Regex global para capturar: DD/MM DESCRIÇÃO [XX/YY] VALOR
-  // Aceita letras, números, espaços, acentos, traços, pontos nas descrições
-  const txRegex = /(\d{2}\/\d{2})\s+([\wÀ-ÿ][\w\sÀ-ÿ.,'&\-*#@!()]+?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})/g;
+  if (!block) return items;
+
+  // Formato Itaú: cada linha de transação = "DD/MM DESCRIÇÃO [PP/TT] VALOR"
+  // seguida de uma linha de categoria+cidade (ignorada)
+  // Regex: data | descrição (com opcional parcela XX/YY) | valor
+  const txRegex = /^(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/gm;
   const installRegex = /^(.*?)\s+(\d{2})\/(\d{2})$/;
 
   let match;
@@ -35,8 +35,8 @@ function parseItauTransactions(raw) {
     let [, date, desc, valueStr] = match;
     desc = desc.trim();
 
-    // Ignora linhas de totais/pagamentos
-    if (/^(Total|Pagamento|Saldo|Encargo|IOF|Lançamentos)/i.test(desc)) continue;
+    // Ignora linhas de totais/cabeçalhos
+    if (/^(Total|Pagamento|Saldo|Encargo|IOF|DATA|VALOR|Lançamentos|Próxima)/i.test(desc)) continue;
 
     let installNumber = null;
     let installTotal = null;
