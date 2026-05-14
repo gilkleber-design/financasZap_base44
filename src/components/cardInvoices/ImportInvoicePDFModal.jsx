@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, Loader2, Trash2 } from 'lucide-react';
+import { Upload, FileText, Loader2, Trash2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { addMonths, format, parseISO } from 'date-fns';
 
@@ -28,7 +28,6 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         ...item,
         _id: Math.random().toString(36),
         selected: !item.description.toLowerCase().includes('pagamento'),
-        // Forçamos a exibição da data original formatada
         date_display: format(parseISO(item.date), 'dd/MM')
       }));
       setItems(extracted);
@@ -37,6 +36,16 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
       toast.error('Erro no processamento');
       setStep('upload');
     }
+  };
+
+  const deleteItem = (id) => {
+    setItems(prev => prev.filter(it => it._id !== id));
+  };
+
+  const clearAll = () => {
+    setItems([]);
+    setStep('upload');
+    toast.info('Fatura descartada');
   };
 
   const handleImport = async () => {
@@ -49,11 +58,9 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         const current = it.installment_number || 1;
         
         for (let i = 0; i <= (total - current); i++) {
-          // A data de vencimento e competência andam conforme a parcela
           const mDate = addMonths(parseISO(refMonth + '-01'), i);
-          
           allPayables.push({
-            description: `${it.description} (parcela ${current + i}/${total})`.replace(' (parcela 1/1)', ''),
+            description: `${it.description} ${total > 1 ? `(parcela ${current + i}/${total})` : ''}`.trim(),
             amount: it.amount,
             due_date: format(mDate, 'yyyy-MM-dd') + 'T12:00:00',
             competencia: format(mDate, 'yyyy-MM-01'),
@@ -66,7 +73,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
       });
 
       await base44.entities.Payable.bulkCreate(allPayables);
-      toast.success('Importação concluída!');
+      toast.success('Importado com sucesso!');
       onImported();
       onClose();
     } catch (e) {
@@ -75,24 +82,26 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     }
   };
 
+  const totalSelected = useMemo(() => items.filter(it => it.selected).reduce((acc, it) => acc + it.amount, 0), [items]);
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl font-sora">
         <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
           <DialogTitle className="font-black uppercase text-slate-800 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" /> Revisão de Maio
+            <FileText className="w-5 h-5 text-primary" /> Revisão de Lançamentos
           </DialogTitle>
           {step === 'review' && (
-            <Button variant="ghost" size="sm" onClick={() => setStep('upload')} className="text-red-500 font-black text-[10px] uppercase">
-              RECOMEÇAR
+            <Button variant="ghost" size="sm" onClick={clearAll} className="text-red-500 font-black text-[10px] uppercase gap-1">
+              <XCircle className="w-3 h-3" /> Deletar Fatura
             </Button>
           )}
         </DialogHeader>
 
         {step === 'upload' && (
           <div className="py-20 border-2 border-dashed rounded-[2rem] text-center cursor-pointer hover:bg-slate-50" onClick={() => fileRef.current?.click()}>
-            <Upload className="w-10 h-10 mx-auto text-slate-300 mb-4" />
-            <p className="font-black text-slate-500 uppercase">Anexar Fatura de Maio</p>
+            <Upload className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+            <p className="font-black text-slate-500 uppercase">Anexar PDF</p>
             <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={e => handleFile(e.target.files[0])} />
           </div>
         )}
@@ -106,9 +115,9 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
 
         {step === 'review' && (
           <div className="space-y-4">
-            <div className="border rounded-2xl overflow-hidden divide-y bg-white">
+            <div className="border rounded-2xl overflow-hidden divide-y bg-white max-h-[50vh] overflow-y-auto">
               {items.map((it) => (
-                <div key={it._id} className="group flex items-center gap-3 px-4 py-3">
+                <div key={it._id} className="group flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
                   <input type="checkbox" checked={it.selected} onChange={() => {
                     setItems(items.map(x => x._id === it._id ? {...x, selected: !x.selected} : x))
                   }} className="w-4 h-4 accent-primary" />
@@ -121,7 +130,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                         onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, description: e.target.value} : x))} 
                       />
                       {it.installment_total > 1 && (
-                         <Badge className="bg-blue-50 text-blue-600 border-none text-[9px] font-black whitespace-nowrap">
+                         <Badge variant="outline" className="text-blue-600 border-blue-100 text-[9px] font-black">
                            {it.installment_number}/{it.installment_total}
                          </Badge>
                       )}
@@ -129,26 +138,29 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                     <span className="text-[9px] font-black text-slate-400 uppercase">{it.date_display} • {it.category}</span>
                   </div>
 
-                  <div className="text-right">
-                    {/* Input sem setinhas (appearance-none) */}
-                    <input 
-                      type="text" 
-                      className="w-24 bg-transparent border-none p-0 text-right text-xs font-black focus:ring-0 text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      value={it.amount} 
-                      onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, amount: parseFloat(e.target.value) || 0} : x))} 
-                    />
-                  </div>
-                  
-                  <button onClick={() => setItems(items.filter(x => x._id !== it._id))} className="text-slate-300 hover:text-red-500">
+                  <input 
+                    type="text" 
+                    className="w-20 bg-transparent border-none p-0 text-right text-xs font-black focus:ring-0 text-slate-700"
+                    value={it.amount} 
+                    onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, amount: parseFloat(e.target.value) || 0} : x))} 
+                  />
+
+                  <button onClick={() => deleteItem(it._id)} className="text-slate-300 hover:text-red-500 p-1">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
             </div>
 
-            <Button onClick={handleImport} disabled={saving} className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl">
-              {saving ? 'SALVANDO...' : 'CONFIRMAR IMPORTAÇÃO DE MAIO'}
-            </Button>
+            <div className="bg-slate-900 p-6 rounded-[2rem] flex justify-between items-center text-white">
+              <div>
+                <p className="text-[9px] font-black text-slate-500 uppercase">Total Selecionado</p>
+                <p className="text-2xl font-black">{fmt(totalSelected)}</p>
+              </div>
+              <Button onClick={handleImport} disabled={saving} className="h-12 bg-white text-slate-900 font-black hover:bg-slate-100 rounded-xl px-8 shadow-lg">
+                {saving ? 'SALVANDO...' : 'CONFIRMAR IMPORTAÇÃO'}
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>
