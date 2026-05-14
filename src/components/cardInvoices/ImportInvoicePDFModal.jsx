@@ -26,25 +26,33 @@ async function extractTextFromPDF(file) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
 
-    // Agrupa itens por linha (Y) com tolerância de 2pt
-    const rows = [];
+    // Agrupa itens por coluna (Esquerda/Direita) e depois por linha (Y) com tolerância de 3pt
+    // Faturas do Itaú usam layout de jornal (lê-se a coluna 1 inteira, depois a coluna 2)
+    const rowsLeft = [];
+    const rowsRight = [];
     for (const item of content.items) {
       if (!item.str.trim()) continue;
       const y = Math.round(item.transform[5]);
       const x = Math.round(item.transform[4]);
-      let row = rows.find(r => Math.abs(r.y - y) <= 3);
-      if (!row) { row = { y, items: [] }; rows.push(row); }
+      const target = x < 300 ? rowsLeft : rowsRight;
+      let row = target.find(r => Math.abs(r.y - y) <= 3);
+      if (!row) { row = { y, items: [] }; target.push(row); }
       row.items.push({ x, str: item.str.trim() });
     }
 
-    // Ordena por Y decrescente (topo → baixo) e dentro de cada linha por X crescente
-    rows.sort((a, b) => b.y - a.y);
-    const pageText = rows.map(row => {
+    // Ordena de cima para baixo
+    rowsLeft.sort((a, b) => b.y - a.y);
+    rowsRight.sort((a, b) => b.y - a.y);
+
+    const formatRow = row => {
       row.items.sort((a, b) => a.x - b.x);
       return row.items.map(it => it.str).join('  ');
-    }).join('\n');
+    };
 
-    pageTexts.push(pageText);
+    const textLeft = rowsLeft.map(formatRow).join('\n');
+    const textRight = rowsRight.map(formatRow).join('\n');
+
+    pageTexts.push(textLeft + '\n' + textRight);
   }
 
   return pageTexts.join('\n--- PAGE BREAK ---\n');
@@ -126,6 +134,7 @@ function parseItauTransactions(raw, refMonth) {
   let blockIdx = normalized.search(/Lançamentos[:\s]*compras e saques/i);
   let block = blockIdx !== -1 ? normalized.substring(blockIdx) : normalized;
   
+  // Corta no final da sessão de lançamentos atuais, antes das parcelas futuras ou totalizadores finais
   const endIdx = block.search(/Total dos Lançamentos atuais|Compras parceladas\s*-\s*pr\s*[óo]\s*ximas faturas/i);
   if (endIdx !== -1) {
     block = block.substring(0, endIdx);
