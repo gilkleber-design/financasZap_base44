@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Upload, Undo2, ListFilter, Trash2, Settings2 } from 'lucide-react';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { format, startOfMonth, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, addMonths, subMonths, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
@@ -15,6 +15,12 @@ import ImportInvoicePDFModal from '@/components/cardInvoices/ImportInvoicePDFMod
 import ManageInvoiceItemsModal from '@/components/cardInvoices/ManageInvoiceItemsModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+const formatCardItemDate = (dateStr) => {
+  if (!dateStr) return '--';
+  const date = new Date(String(dateStr).includes('T') ? dateStr : `${dateStr}T12:00:00`);
+  return isValid(date) ? format(date, 'dd/MM/yy') : '--';
+};
 
 const STATUS_CONFIG = {
   open:    { label: 'Aberta',   color: 'bg-blue-100 text-blue-700',       icon: Clock },
@@ -239,7 +245,7 @@ export default function CardInvoices() {
 
                         // REGRA 2: Tratamento da data da compra com purchase_date prioritário
                         const dateStr = p.purchase_date || p.issue_date || p.due_date;
-                        const displayDate = dateStr ? format(new Date(dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00'), 'dd/MM/yy') : '--';
+                        const displayDate = formatCardItemDate(dateStr);
 
                         return (
                           <div key={p.id} className="flex justify-between items-center px-4 py-3 text-sm hover:bg-slate-50">
