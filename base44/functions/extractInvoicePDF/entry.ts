@@ -122,11 +122,9 @@ Deno.serve(async (req) => {
       .filter(it => it.amount > 0)
       .reduce((s, it) => s + it.amount, 0);
 
-    console.log('--- DEBUG TEXT (primeiros 1000 chars) ---');
-    console.log(text.substring(0, 1000));
+    console.log('--- DEBUG TEXT COMPLETO ---');
+    console.log(text.substring(0, 4000));
     console.log('--- PARSED ITEMS COUNT:', parsed.length);
-    console.log('--- PRIMEIRAS 5 LINHAS DO PDF:');
-    text.split('\n').slice(0, 20).forEach((l, i) => console.log(`L${i}: ${l}`));
 
     return Response.json({
       items,
