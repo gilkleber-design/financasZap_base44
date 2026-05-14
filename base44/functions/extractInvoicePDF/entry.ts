@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import * as pdfjsModule from 'npm:pdfjs-dist@3.11.174/legacy/build/pdf.js';
 
 const pdfjsLib = pdfjsModule.default || pdfjsModule;
-const MAX_TEXT_CHARS_FOR_LLM = 120000;
+const MAX_TEXT_CHARS_FOR_LLM = 65000;
 
 function nowLabel(startedAt, label) {
   const elapsed = Date.now() - startedAt;
@@ -359,38 +359,15 @@ function parseWithBestDeterministicCandidate(texts, refMonth, expectedTotal) {
   return candidates.sort((a, b) => a.diff - b.diff || b.items.length - a.items.length)[0];
 }
 
-function getFocusedInvoiceText(texts) {
-  const stopRegex = /(Limites de crédito|Encargos cobrados|Simulação de Compras|Novo teto de juros|Fique atento aos encargos)/i;
-  const sections = [];
-
-  for (const [label, text] of [['ROW TEXT', texts.rowText], ['COLUMN TEXT', texts.columnText], ['STREAM TEXT', texts.streamText]]) {
-    const normalized = String(text || '');
-    const startIndexes = [];
-    const startRegex = /Lanç\s*amentos|Lança\s*m\s*ent\s*os|L\s+Lançamentos atuais|Lançamentos atuais/gi;
-    let match;
-
-    while ((match = startRegex.exec(normalized)) !== null) {
-      startIndexes.push(Math.max(0, match.index - 500));
-    }
-
-    if (!startIndexes.length) {
-      sections.push(`--- ${label} ---\n${normalized.slice(0, 30000)}`);
-      continue;
-    }
-
-    for (const start of startIndexes.slice(0, 8)) {
-      const rest = normalized.slice(start, start + 35000);
-      const stopMatch = rest.search(stopRegex);
-      const excerpt = stopMatch > 2000 ? rest.slice(0, stopMatch + 1200) : rest;
-      sections.push(`--- ${label} EXCERPT ---\n${excerpt}`);
-    }
-  }
-
-  return sections.join('\n\n').slice(0, MAX_TEXT_CHARS_FOR_LLM);
-}
-
 async function extractWithLLMTextFallback(base44, texts, refMonth, expectedTotal) {
-  const combinedText = getFocusedInvoiceText(texts);
+  const combinedText = [
+    '--- ROW TEXT ---',
+    texts.rowText,
+    '--- COLUMN TEXT ---',
+    texts.columnText,
+    '--- STREAM TEXT ---',
+    texts.streamText,
+  ].join('\n').slice(0, MAX_TEXT_CHARS_FOR_LLM);
 
   const response = await base44.asServiceRole.integrations.Core.InvokeLLM({
     prompt: `Você receberá texto extraído por pdfjs de uma fatura Itaú de cartão de crédito. Extraia somente os lançamentos atuais que compõem o total "Lançamentos atuais".
@@ -407,8 +384,6 @@ Regras obrigatórias:
 - Para parcelas, inclua somente a parcela atual que aparece nos lançamentos atuais.
 - Retorne date no formato YYYY-MM-DD, resolvendo datas DD/MM com o mês de referência.
 - A soma dos amounts deve ficar o mais próxima possível do total esperado.
-- Confira cuidadosamente lançamentos em colunas paralelas: quando houver duas tabelas lado a lado, extraia os dois lados.
-- Não pare no primeiro bloco; continue até "L Total dos lançamentos atuais" ou até antes de limites/encargos/simulações.
 
 Texto extraído:
 ${combinedText}`,
