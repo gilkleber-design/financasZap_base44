@@ -49,7 +49,9 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
       setItems(extracted);
       setStep('review');
     } catch (error) {
-      toast.error('Erro no processamento');
+      console.error('Erro no processamento:', error);
+      const msg = error?.response?.data?.error || error?.message || 'Erro desconhecido';
+      toast.error(`Erro: ${msg}`);
       setStep('upload');
     }
   };

@@ -16,6 +16,7 @@ Deno.serve(async (req) => {
     const { file_url, ref_month } = await req.json();
 
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      model: 'gemini_3_flash',
       prompt: `Extraia os lançamentos desta fatura de cartão de crédito.
       Referência: ${ref_month}.
       REGRAS:
