@@ -132,7 +132,10 @@ function parseItauTransactions(raw, refMonth) {
   if (prodServSection) {
     // Extrai apenas as linhas que começam com DD/MM
     const prodLines = prodServSection[1].split('\n').filter(l => /^\d{2}\/\d{2}\s+/.test(l.trim()));
+    console.log('=== PROD SERV LINES ===\n', prodLines.join('\n'));
     block += '\n' + prodLines.join('\n');
+  } else {
+    console.log('=== PROD SERV SECTION: NENHUMA ===');
   }
 
   console.log('=== BLOCK FULL ===\n', block);
