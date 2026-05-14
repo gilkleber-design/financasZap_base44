@@ -2,8 +2,13 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 async function extractTextFromPDF(buffer) {
   const { extractText } = await import('npm:unpdf@0.11.0');
-  const { text } = await extractText(buffer, { mergePages: true });
-  return text;
+  // Extrai página por página e concatena tudo
+  const result = await extractText(buffer, { mergePages: false });
+  const pages = result.text; // array de strings quando mergePages=false
+  if (Array.isArray(pages)) {
+    return pages.join('\n');
+  }
+  return String(pages);
 }
 
 function parseItauTransactions(raw) {
