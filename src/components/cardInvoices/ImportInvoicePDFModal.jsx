@@ -98,9 +98,11 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     setStep('processing');
     try {
       const text = await extractTextFromPDF(file);
+      console.log('=== PDF TEXT ===\n', text.substring(0, 3000));
       const extracted = parseItauTransactions(text, refMonth);
 
       if (extracted.length === 0) {
+        console.log('=== FULL TEXT ===\n', text);
         toast.error('Nenhum lançamento encontrado no PDF');
         setStep('upload');
         return;
