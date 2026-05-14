@@ -21,12 +21,32 @@ async function extractTextFromPDF(file) {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const pageTexts = [];
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str).join('\n');
+
+    // Agrupa itens por linha (Y) com tolerância de 2pt
+    const rows = [];
+    for (const item of content.items) {
+      if (!item.str.trim()) continue;
+      const y = Math.round(item.transform[5]);
+      const x = Math.round(item.transform[4]);
+      let row = rows.find(r => Math.abs(r.y - y) <= 3);
+      if (!row) { row = { y, items: [] }; rows.push(row); }
+      row.items.push({ x, str: item.str.trim() });
+    }
+
+    // Ordena por Y decrescente (topo → baixo) e dentro de cada linha por X crescente
+    rows.sort((a, b) => b.y - a.y);
+    const pageText = rows.map(row => {
+      row.items.sort((a, b) => a.x - b.x);
+      return row.items.map(it => it.str).join('  ');
+    }).join('\n');
+
     pageTexts.push(pageText);
   }
+
   return pageTexts.join('\n--- PAGE BREAK ---\n');
 }
 
