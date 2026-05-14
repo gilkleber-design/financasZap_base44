@@ -7,51 +7,110 @@ import { Badge } from '@/components/ui/badge';
 import { Upload, FileText, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { addMonths, format, parseISO } from 'date-fns';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configura worker inline para evitar problemas de CORS
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.mjs',
+  import.meta.url
+).toString();
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+async function extractTextFromPDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pageTexts = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(item => item.str).join('\n');
+    pageTexts.push(pageText);
+  }
+  return pageTexts.join('\n--- PAGE BREAK ---\n');
+}
+
+function parseItauTransactions(raw, refMonth) {
+  const items = [];
+
+  const blockMatch = raw.match(/Lançamentos[:\s]+compras e saques[\s\S]*?(?=Próxima fatura|Limites de crédito|Encargos cobrados|$)/gi);
+  const block = blockMatch ? blockMatch.join('\n') : '';
+  if (!block) return items;
+
+  const txRegex = /^(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/gm;
+  const installRegex = /^(.*?)\s+(\d{2})\/(\d{2})$/;
+
+  const [refYear, refMonthNum] = refMonth.split('-').map(Number);
+
+  let match;
+  while ((match = txRegex.exec(block)) !== null) {
+    let [, date, desc, valueStr] = match;
+    desc = desc.trim();
+
+    if (/^(Total|Pagamento|Saldo|Encargo|IOF|DATA|VALOR|Lançamentos|Próxima)/i.test(desc)) continue;
+
+    let installNumber = null;
+    let installTotal = null;
+    const instMatch = desc.match(installRegex);
+    if (instMatch) {
+      desc = instMatch[1].trim();
+      installNumber = parseInt(instMatch[2], 10);
+      installTotal = parseInt(instMatch[3], 10);
+    }
+
+    const amount = parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
+    const [day, month] = date.split('/');
+    const itemMonth = parseInt(month, 10);
+    let year = refYear;
+    if (itemMonth > refMonthNum) year = refYear - 1;
+
+    const dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+    items.push({
+      _id: Math.random().toString(36),
+      description: desc,
+      amount,
+      date: dateStr,
+      date_display: `${day}/${month}`,
+      installment_number: installNumber,
+      installment_total: installTotal,
+      selected: !/pagamento/i.test(desc),
+      category_id: '',
+    });
+  }
+
+  return items;
+}
+
 export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImported }) {
   const fileRef = useRef(null);
-  const [step, setStep] = useState('upload'); 
+  const [step, setStep] = useState('upload');
   const [items, setItems] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  // 1. Busca as categorias oficiais do banco
-  const { data: categories = [] } = useQuery({ 
-    queryKey: ['categories'], 
-    queryFn: () => base44.entities.Category.list() 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => base44.entities.Category.list()
   });
 
   const handleFile = async (file) => {
+    if (!file) return;
     setStep('processing');
     try {
-      const uploadRes = await base44.integrations.Core.UploadFile({ file });
-      const { data } = await base44.functions.invoke('extractInvoicePDF', {
-        file_url: uploadRes.file_url,
-        ref_month: refMonth,
-      });
+      const text = await extractTextFromPDF(file);
+      const extracted = parseItauTransactions(text, refMonth);
 
-      // 2. Mapeamento Automático (usa categoriesRef para garantir dados carregados)
-      const loadedCategories = await base44.entities.Category.list();
-      const extracted = (data.items || []).map(item => {
-        const aiCat = (item.category || '').toLowerCase();
-        const matchedCat = loadedCategories.find(c => c.name.toLowerCase().includes(aiCat) || aiCat.includes(c.name.toLowerCase()));
+      if (extracted.length === 0) {
+        toast.error('Nenhum lançamento encontrado no PDF');
+        setStep('upload');
+        return;
+      }
 
-        return {
-          ...item,
-          _id: Math.random().toString(36),
-          selected: !item.description.toLowerCase().includes('pagamento'),
-          date_display: item.date ? format(parseISO(item.date), 'dd/MM') : '',
-          category_id: matchedCat ? matchedCat.id : ''
-        };
-      });
-      
       setItems(extracted);
       setStep('review');
     } catch (error) {
       console.error('Erro no processamento:', error);
-      const msg = error?.response?.data?.error || error?.message || 'Erro desconhecido';
-      toast.error(`Erro: ${msg}`);
+      toast.error(`Erro: ${error.message}`);
       setStep('upload');
     }
   };
@@ -68,26 +127,23 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     const selected = items.filter(it => it.selected);
     if (selected.length === 0) return toast.error('Nenhum item selecionado');
     setSaving(true);
-    
+
     try {
       const allPayables = [];
       selected.forEach(it => {
         const total = it.installment_total || 1;
         const current = it.installment_number || 1;
-        const originalDate = it.date ? format(parseISO(it.date), 'yyyy-MM-dd') + 'T12:00:00' : null;
-        
+        const originalDate = it.date ? it.date + 'T12:00:00' : null;
+
         for (let i = 0; i <= (total - current); i++) {
           const mDate = addMonths(parseISO(refMonth + '-01'), i);
-          
-          // 4. Atualizar Payload com category_id
           allPayables.push({
-            description: `${it.description} ${total > 1 ? `(parcela ${current + i}/${total})` : ''}`.trim(),
+            description: `${it.description}${total > 1 ? ` (parcela ${current + i}/${total})` : ''}`.trim(),
             amount: it.amount,
             due_date: format(mDate, 'yyyy-MM-dd') + 'T12:00:00',
             competencia: format(mDate, 'yyyy-MM-01'),
-            issue_date: originalDate,
             purchase_date: originalDate,
-            category_id: it.category_id || null, 
+            category_id: it.category_id || null,
             origin_id: card.id,
             origin_type: 'card',
             status: 'provisioned'
@@ -105,7 +161,10 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     }
   };
 
-  const totalSelected = useMemo(() => items.filter(it => it.selected).reduce((acc, it) => acc + it.amount, 0), [items]);
+  const totalSelected = useMemo(
+    () => items.filter(it => it.selected).reduce((acc, it) => acc + it.amount, 0),
+    [items]
+  );
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -132,7 +191,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         {step === 'processing' && (
           <div className="py-20 text-center space-y-4">
             <Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" />
-            <p className="font-black text-[10px] text-slate-400 uppercase">Processando e categorizando...</p>
+            <p className="font-black text-[10px] text-slate-400 uppercase">Processando PDF...</p>
           </div>
         )}
 
@@ -142,31 +201,29 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
               {items.map((it) => (
                 <div key={it._id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
                   <input type="checkbox" checked={it.selected} onChange={() => {
-                    setItems(items.map(x => x._id === it._id ? {...x, selected: !x.selected} : x))
+                    setItems(items.map(x => x._id === it._id ? { ...x, selected: !x.selected } : x))
                   }} className="w-4 h-4 accent-primary" />
-                  
+
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <input 
-                        className="bg-transparent border-none p-0 text-xs font-bold uppercase focus:ring-0 w-full text-slate-700" 
-                        value={it.description} 
-                        onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, description: e.target.value} : x))} 
+                      <input
+                        className="bg-transparent border-none p-0 text-xs font-bold uppercase focus:ring-0 w-full text-slate-700"
+                        value={it.description}
+                        onChange={(e) => setItems(items.map(x => x._id === it._id ? { ...x, description: e.target.value } : x))}
                       />
                       {it.installment_total > 1 && (
-                         <Badge className="bg-blue-50 text-blue-600 border-none text-[9px] font-black h-5">
-                           {it.installment_number}/{it.installment_total}
-                         </Badge>
+                        <Badge className="bg-blue-50 text-blue-600 border-none text-[9px] font-black h-5">
+                          {it.installment_number}/{it.installment_total}
+                        </Badge>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center gap-1 mt-0.5">
                       <span className="text-[9px] font-black text-slate-400 uppercase">{it.date_display} •</span>
-                      
-                      {/* 3. Dropdown de Categorias */}
                       <select
                         className="bg-transparent border-none p-0 text-[9px] font-black text-slate-400 uppercase focus:ring-0 cursor-pointer hover:text-slate-600 w-auto"
                         value={it.category_id || ''}
-                        onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, category_id: e.target.value} : x))}
+                        onChange={(e) => setItems(items.map(x => x._id === it._id ? { ...x, category_id: e.target.value } : x))}
                       >
                         <option value="">SEM CATEGORIA</option>
                         {categories.map(c => (
@@ -174,14 +231,13 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                         ))}
                       </select>
                     </div>
-
                   </div>
 
-                  <input 
-                    type="text" 
+                  <input
+                    type="number"
                     className="w-20 bg-transparent border-none p-0 text-right text-xs font-black focus:ring-0 text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    value={it.amount} 
-                    onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, amount: parseFloat(e.target.value) || 0} : x))} 
+                    value={it.amount}
+                    onChange={(e) => setItems(items.map(x => x._id === it._id ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))}
                   />
 
                   <button onClick={() => deleteItem(it._id)} className="text-slate-300 hover:text-red-500 p-2 transition-colors">
