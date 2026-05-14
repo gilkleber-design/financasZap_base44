@@ -122,10 +122,13 @@ function parseItauTransactions(raw, refMonth) {
     return items;
   }
 
-  // Remove tudo antes do primeiro "Lançamentos: compras e saques"
-  // e tudo depois de marcadores de fim de fatura
+  // Extrai bloco de compras/saques: do início até "Lançamentos no cart" ou "Compras parceladas"
   let block = normalized.replace(/^[\s\S]*?Lançamentos[:\s]*compras e saques/i, '');
-  block = block.replace(/(?:Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)[\s\S]*/i, '');
+  block = block.replace(/(?:Lançamentos no cart|Compras parceladas|Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)[\s\S]*/i, '');
+
+  // Extrai bloco de produtos/serviços (lançamentos atuais adicionais) se existir
+  const prodServMatch = normalized.match(/Lançamentos[:\s]*produtos e servi[çc]os([\s\S]*?)(?:Lançamentos produtos|Lançamentos no cart|Compras parceladas|Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)/i);
+  if (prodServMatch) block += '\n' + prodServMatch[1];
 
   console.log('=== BLOCK FULL ===\n', block);
 
