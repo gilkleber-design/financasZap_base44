@@ -63,7 +63,12 @@ const ITAU_CATEGORY_MAP = {
   'outros': 'outros',
 };
 
+const CATEGORY_SUFFIXES = /\s+(transporte|alimentacao|saude|educacao|lazer|vestuario|servicos|supermercado|restaurante|outros|farmacia)\s+\S+$/i;
+
 function makePayable(date, desc, valueStr, refYear, refMonthNum) {
+  // Remove sufixo de categoria do Itaú: "NomeEstab transporte Sao Paulo"
+  desc = desc.replace(CATEGORY_SUFFIXES, '').trim();
+
   // Detecta parcela no final: "Nome 09/12"
   let installNumber = null;
   let installTotal = null;
@@ -99,8 +104,9 @@ function parseItauTransactions(raw, refMonth) {
   const [refYear, refMonthNum] = refMonth.split('-').map(Number);
 
   // Regex que encontra uma transação: DD/MM  NOME  VALOR
-  // Usamos busca global em todo o texto para não depender de linha única
-  const txRegex = /(\d{2}\/\d{2})\s{2,}(.+?)\s{2,}(\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
+  // - Entre data e nome: 1+ espaços (às vezes é só 1)
+  // - Entre nome e valor: 2+ espaços (separador de coluna PDF)
+  const txRegex = /(\d{2}\/\d{2})\s+(.+?)\s{2,}(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
 
   // Normaliza o texto: remove espaços extras que o pdfjs insere em caracteres especiais
   // Ex: "Lan  ç  amentos" → "Lançamentos"
