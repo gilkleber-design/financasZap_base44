@@ -114,17 +114,17 @@ Deno.serve(async (req) => {
     if (status === 'VENCIDAS') {
       items = payables.filter(p => p.status !== 'paid' && toDateOnly(p.due_date) < todayKey() && typeMatches(p, filter));
     } else if (status === 'PAGAS') {
-      items = future ? [] : payables.filter(p => p.status === 'paid' && monthMatches(p, month, sortBy) && typeMatches(p, filter));
+      items = payables.filter(p => p.status === 'paid' && monthMatches(p, month, sortBy) && typeMatches(p, filter));
     } else {
-      if (future) {
-        const realFuture = payables.filter(p => monthMatches(p, month, sortBy) && p.installment_group_id && ['pending', 'provisioned'].includes(p.status));
-        const projections = filter === 'PARCELADAS' || filter === 'AVULSAS'
-          ? []
-          : recurrences.filter(r => r.active !== false).map(r => makeProjection(r, month));
-        items = [...realFuture, ...projections].filter(item => typeMatches(item, filter));
-      } else {
-        items = payables.filter(p => ['pending', 'provisioned'].includes(p.status) && monthMatches(p, month, sortBy) && typeMatches(p, filter));
-      }
+      const realOpen = payables.filter(p => ['pending', 'provisioned'].includes(p.status) && monthMatches(p, month, sortBy));
+      const projections = future && filter !== 'PARCELADAS' && filter !== 'AVULSAS'
+        ? recurrences
+            .filter(r => r.active !== false)
+            .filter(r => !payables.some(p => p.recurrence_id === r.id && monthKeyFromDate(p.competencia || p.due_date) === month))
+            .map(r => makeProjection(r, month))
+        : [];
+
+      items = [...realOpen, ...projections].filter(item => typeMatches(item, filter));
     }
 
     items.sort((a, b) => {
