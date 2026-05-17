@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2, Undo2, Repeat, Layers, Receipt, RefreshCw, ToggleLeft, ToggleRight, Pencil } from 'lucide-react';
-import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
+import { format, isPast, isToday, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction } from '@/components/ui/alert-dialog';
@@ -16,12 +16,12 @@ import RecurrenceFormModal from '@/components/recurrences/RecurrenceFormModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-const STATUS_LABELS = { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido', scheduled: 'Agendado' };
+const STATUS_LABELS = { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido', provisioned: 'Provisionado' };
 const STATUS_COLORS = {
   pending: 'bg-amber-100 text-amber-700',
   paid: 'bg-emerald-100 text-emerald-700',
   overdue: 'bg-red-100 text-red-700',
-  scheduled: 'bg-blue-100 text-blue-700',
+  provisioned: 'bg-blue-100 text-blue-700',
 };
 const CATEGORY_LABELS = {
   alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
@@ -104,54 +104,27 @@ export default function Payables() {
   const [filterBy, setFilterBy] = useState('competencia'); 
   const queryClient = useQueryClient();
 
-  const { data: payables = [] } = useQuery({
-    queryKey: ['payables'],
-    queryFn: () => base44.entities.Payable.list('-due_date', 500),
+  const listFilter = activeTab === 'fixas' ? 'FIXAS' : activeTab === 'parceladas' ? 'PARCELADAS' : activeTab === 'avulsas' ? 'AVULSAS' : 'TODAS';
+  const listStatus = filterStatus === 'open' ? 'EM_ABERTO' : filterStatus === 'overdue' ? 'VENCIDAS' : 'PAGAS';
+  const monthKey = format(currentMonth, 'yyyy-MM');
+
+  const { data: payablesResponse } = useQuery({
+    queryKey: ['payables-list', monthKey, listFilter, listStatus, filterBy],
+    queryFn: () => base44.functions.invoke('listPayables', {
+      month: monthKey,
+      filter: listFilter,
+      status: listStatus,
+      sort: filterBy,
+    }),
   });
 
-  const { data: transactions = [] } = useQuery({
-    queryKey: ['transactions'],
-    queryFn: () => base44.entities.Transaction.list('-date', 500),
-  });
+  const filtered = payablesResponse?.data?.items || [];
 
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
-    if (p.status === 'scheduled') return 'scheduled';
     if (p.due_date && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date))) return 'overdue';
     return p.status || 'pending';
   };
-
-  const paidDateMap = {};
-  transactions.forEach(t => { if (t.payable_id) paidDateMap[t.payable_id] = t.date; });
-
-  const mStart = startOfMonth(currentMonth);
-  const mEnd = endOfMonth(currentMonth);
-
-  const filtered = payables.filter(p => {
-    // Esconder itens de cartão provisionados (individuais)
-    if (p.origin_type === 'card' && !p.is_card_invoice_payable) return false;
-
-    if (activeTab === 'fixas' && !(p.recurrence_id || p.recurrent)) return false;
-    if (activeTab === 'parceladas' && !p.installment_group_id) return false;
-    if (activeTab === 'avulsas' && (p.recurrence_id || p.recurrent || p.installment_group_id)) return false;
-
-    const status = getStatus(p);
-    if (filterStatus === 'open' && status === 'paid') return false;
-    if (filterStatus === 'overdue' && status !== 'overdue') return false;
-    if (filterStatus === 'paid' && status !== 'paid') return false;
-
-    if (status === 'paid') {
-      const payDate = paidDateMap[p.id] || p.due_date;
-      if (!payDate) return false;
-      const d = new Date(payDate.includes('T') ? payDate : payDate + 'T12:00:00');
-      return d >= mStart && d <= mEnd;
-    }
-
-    const dateField = filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date;
-    if (!dateField) return false;
-    const d = new Date(dateField.includes('T') ? dateField : dateField + 'T12:00:00');
-    return !isNaN(d.getTime()) && d >= mStart && d <= mEnd;
-  });
 
   const totalFiltered = filtered.reduce((s, p) => s + (p.amount || 0), 0);
 
@@ -229,12 +202,12 @@ export default function Payables() {
               const status = getStatus(p);
               const TypeIcon = p.recurrence_id || p.recurrent ? Repeat : p.installment_group_id ? Layers : null;
               return (
-                <div key={p.id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors">
+                <div key={p.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${p.is_projection ? 'bg-slate-50/60 opacity-60' : 'hover:bg-slate-50/50'}`}>
                   <div className={`w-1.5 h-11 rounded-full flex-shrink-0 ${status === 'paid' ? 'bg-emerald-500' : status === 'overdue' ? 'bg-red-500' : 'bg-amber-400'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 font-bold mb-0.5">
                       <p className="text-sm truncate text-slate-800 uppercase tracking-tight">{p.description}</p>
-                      {p.is_card_invoice_payable && <Badge className="bg-indigo-50 text-indigo-600 border-none text-[9px] px-2 font-black uppercase">Fatura</Badge>}
+                      {p.is_projection && <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] px-2 font-black uppercase">Projeção</Badge>}
                     </div>
                     <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
                         {format(new Date((filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date).includes('T') ? (filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date) : (filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date) + 'T12:00:00'), 'dd MMM yyyy', { locale: ptBR })}
@@ -248,13 +221,17 @@ export default function Payables() {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => setEditingPayable(p)}><Edit2 className="w-4 h-4" /></Button>
-                    {status !== 'paid' ? (
-                      <Button variant="ghost" size="icon" className="h-9 w-9 text-emerald-600 hover:bg-emerald-50" onClick={() => setConfirmingPayable(p)}><CheckCircle2 className="w-5 h-5" /></Button>
-                    ) : (
-                      <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-500 hover:bg-amber-50" onClick={() => undoPaymentMutation.mutate(p)} disabled={undoPaymentMutation.isPending}><Undo2 className={`w-5 h-5 ${undoPaymentMutation.isPending ? 'animate-spin' : ''}`} /></Button>
+                    {!p.is_projection && (
+                      <>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => setEditingPayable(p)}><Edit2 className="w-4 h-4" /></Button>
+                        {status !== 'paid' ? (
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-emerald-600 hover:bg-emerald-50" onClick={() => setConfirmingPayable(p)}><CheckCircle2 className="w-5 h-5" /></Button>
+                        ) : (
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-500 hover:bg-amber-50" onClick={() => undoPaymentMutation.mutate(p)} disabled={undoPaymentMutation.isPending}><Undo2 className={`w-5 h-5 ${undoPaymentMutation.isPending ? 'animate-spin' : ''}`} /></Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setDeletingPayable(p)}><Trash2 className="w-4 h-4" /></Button>
+                      </>
                     )}
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setDeletingPayable(p)}><Trash2 className="w-4 h-4" /></Button>
                   </div>
                 </div>
               );
@@ -268,7 +245,7 @@ export default function Payables() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deseja excluir este lançamento?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita. Se for uma fatura, ela voltará a ficar aberta na tela de cartões.</AlertDialogDescription>
+            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
             <AlertDialogCancel className="flex-1 font-bold">CANCELAR</AlertDialogCancel>

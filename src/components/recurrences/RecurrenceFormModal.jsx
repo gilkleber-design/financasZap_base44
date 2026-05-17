@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sparkles, Loader2, X, Plus, CreditCard, Landmark } from 'lucide-react';
+import { Sparkles, Loader2, X, Plus, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCategories } from '@/hooks/useCategories';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -179,11 +179,9 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
             <Label>Origem do Pagamento</Label>
             <Select value={form.origin_id} onValueChange={(value) => {
               const origin = origins.find(o => o.id === value);
-              if (!origin) { set('origin_id', ''); set('origin_type', ''); return; }
+              if (!origin || origin.type !== 'account') { set('origin_id', ''); set('origin_type', ''); return; }
               set('origin_id', origin.id);
-              set('origin_type', origin.type);
-              if (origin.type === 'card') set('payment_modality', 'card_invoice');
-              else if (form.payment_modality === 'card_invoice') set('payment_modality', 'manual');
+              set('origin_type', 'account');
             }}>
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Selecionar conta ou cartão..." />
@@ -200,21 +198,8 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
                     ))}
                   </>
                 )}
-                {origins.filter(o => o.type === 'card').length > 0 && (
-                  <>
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <CreditCard className="w-3 h-3" /> Cartões de Crédito
-                    </div>
-                    {origins.filter(o => o.type === 'card').map(o => (
-                      <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
-                    ))}
-                  </>
-                )}
               </SelectContent>
             </Select>
-            {form.origin_type === 'card' && (
-              <p className="text-xs text-blue-600 mt-1 bg-blue-50 px-2 py-1 rounded">💳 Despesa provisionada na fatura do cartão</p>
-            )}
             {form.origin_type === 'account' && (
               <div className="mt-2">
                 <Label>Modalidade</Label>
@@ -263,14 +248,14 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
-            Ao salvar, serão gerados automaticamente <strong>12 lançamentos futuros</strong> em Contas a Pagar com status <strong>Pendente</strong>.
+            Ao salvar, será criado apenas o molde da despesa fixa. Os lançamentos reais serão materializados no mês correto.
           </div>
         </div>
 
         <div className="flex gap-2 pt-2">
         <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
         <Button onClick={handleSave} disabled={saving} className="flex-1">
-          {saving ? 'Salvando...' : initial ? 'Atualizar' : 'Criar e Gerar Lançamentos'}
+          {saving ? 'Salvando...' : initial ? 'Atualizar' : 'Criar Despesa Fixa'}
         </Button>
         </div>
       </DialogContent>

@@ -4,11 +4,11 @@
   "properties": {
     "description": {
       "type": "string",
-      "description": "Nome da despesa recorrente (ex: Aluguel, Condom\u00ednio)"
+      "description": "Nome da despesa fixa"
     },
     "amount": {
       "type": "number",
-      "description": "Valor base mensal"
+      "description": "Valor mensal"
     },
     "due_day": {
       "type": "number",
@@ -29,24 +29,25 @@
         "outros"
       ]
     },
+    "category_id": {
+      "type": "string",
+      "description": "ID da categoria"
+    },
     "origin_id": {
       "type": "string",
-      "description": "ID da conta (Account) ou cart\u00e3o (Card) de origem do pagamento"
+      "description": "ID da conta de origem/pagamento"
     },
     "origin_type": {
       "type": "string",
       "enum": [
-        "account",
-        "card"
-      ],
-      "description": "Tipo da origem: 'account' para Conta Corrente, 'card' para Cart\u00e3o de Cr\u00e9dito"
+        "account"
+      ]
     },
     "payment_modality": {
       "type": "string",
       "enum": [
         "manual",
-        "automatic_debit",
-        "card_invoice"
+        "automatic_debit"
       ],
       "default": "manual"
     },
@@ -62,7 +63,6 @@
   "required": [
     "description",
     "amount",
-    "due_day",
-    "category"
+    "due_day"
   ]
 }

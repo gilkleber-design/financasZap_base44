@@ -16,24 +16,14 @@ export function usePaymentOrigins() {
     queryFn: () => base44.entities.Card.list(),
   });
 
-  const origins = [
-    ...accounts
-      .filter(a => a.active !== false)
-      .map(a => ({
-        id: a.id,
-        label: `${a.name}${a.bank ? ' — ' + a.bank : ''}`,
-        type: 'account',
-        raw: a,
-      })),
-    ...cards
-      .filter(c => c.active !== false && (c.type === 'credit' || c.type === 'both'))
-      .map(c => ({
-        id: c.id,
-        label: `${c.name}${c.bank ? ' — ' + c.bank : ''} (Cartão)`,
-        type: 'card',
-        raw: c,
-      })),
-  ];
+  const origins = accounts
+    .filter(a => a.active !== false)
+    .map(a => ({
+      id: a.id,
+      label: `${a.name}${a.bank ? ' — ' + a.bank : ''}`,
+      type: 'account',
+      raw: a,
+    }));
 
   return { origins, accounts, cards };
 }
