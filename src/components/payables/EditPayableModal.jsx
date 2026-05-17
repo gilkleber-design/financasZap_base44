@@ -7,19 +7,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CategorySelect } from '@/components/ui/category-select';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { getFifthBusinessDay } from '@/lib/businessDayCalculator';
 
 export default function EditPayableModal({ payable, onClose, onSaved }) {
+  // O split('T')[0] garante que o input date consiga ler a data do banco (YYYY-MM-DD)
   const [form, setForm] = useState({
     description: payable?.description || '',
     amount: payable?.amount || '',
-    due_date: payable?.due_date || '',
-    competencia: payable?.competencia || '',
+    due_date: payable?.due_date ? payable.due_date.split('T')[0] : '',
+    competencia: payable?.competencia ? payable.competencia.split('T')[0] : '',
     category: payable?.category || '',
-    fifth_business_day: payable?.fifth_business_day || false,
     notes: payable?.notes || '',
   });
   const [saving, setSaving] = useState(false);
@@ -27,14 +25,6 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
   const queryClient = useQueryClient();
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const handleFifthBusinessDayToggle = (checked) => {
-    set('fifth_business_day', checked);
-    if (checked && form.due_date) {
-      const fifthDay = getFifthBusinessDay(form.due_date);
-      set('due_date', fifthDay);
-    }
-  };
 
   const handleSave = async () => {
     if (!form.description || !form.amount || !form.due_date) {
@@ -52,7 +42,6 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
         due_date: form.due_date,
         competencia,
         category: form.category,
-        fifth_business_day: form.fifth_business_day,
         notes: form.notes || undefined,
       });
     } else if (updateScope === 'all') {
@@ -64,7 +53,6 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           amount: parseFloat(form.amount),
           competencia: form.competencia || p.due_date,
           category: form.category,
-          fifth_business_day: form.fifth_business_day,
           notes: form.notes || undefined,
         });
       }
@@ -79,7 +67,6 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           amount: parseFloat(form.amount),
           competencia: form.competencia || p.due_date,
           category: form.category,
-          fifth_business_day: form.fifth_business_day,
           notes: form.notes || undefined,
         });
       }
@@ -168,20 +155,6 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
               className="mt-1"
             />
             <p className="text-xs text-muted-foreground mt-1">Se não preenchido, usa a data de vencimento</p>
-          </div>
-
-          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-3">
-            <Checkbox
-              checked={form.fifth_business_day}
-              onCheckedChange={handleFifthBusinessDayToggle}
-              id="fifth-business-day"
-            />
-            <label
-              htmlFor="fifth-business-day"
-              className="text-sm font-medium text-blue-900 cursor-pointer flex-1"
-            >
-              Vencimento no 5º dia útil
-            </label>
           </div>
 
           <div>
