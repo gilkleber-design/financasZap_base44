@@ -11,6 +11,7 @@ import { Plus, Pencil, Trash2, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DEFAULT_COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16', '#64748b'];
+const sortByName = (items) => [...items].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
 
 function CategoryForm({ initial, parentId, parentOptions, onSave, onClose }) {
   const [form, setForm] = useState({
@@ -116,8 +117,8 @@ export default function CategoryManager() {
     onSuccess: () => { queryClient.invalidateQueries(['categories']); toast.success('Removida!'); },
   });
 
-  const roots = categories.filter(c => !c.parent_id && c.active !== false);
-  const childrenOf = (id) => categories.filter(c => c.parent_id === id && c.active !== false);
+  const roots = sortByName(categories.filter(c => !c.parent_id && c.active !== false));
+  const childrenOf = (id) => sortByName(categories.filter(c => c.parent_id === id && c.active !== false));
 
   const handleSave = async (data) => {
     if (editingCategory) {

@@ -1,14 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 
+const sortByName = (items) => [...items].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
+
 export function useCategories() {
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ['categories'],
-    queryFn: () => base44.entities.Category.list('-created_date', 100),
+    queryFn: () => base44.entities.Category.list('name', 100),
   });
 
-  const roots = categories.filter(c => !c.parent_id && c.active !== false);
-  const getChildren = (parentId) => categories.filter(c => c.parent_id === parentId && c.active !== false);
+  const sortedCategories = sortByName(categories);
+  const roots = sortByName(sortedCategories.filter(c => !c.parent_id && c.active !== false));
+  const getChildren = (parentId) => sortByName(sortedCategories.filter(c => c.parent_id === parentId && c.active !== false));
   
   const getCategoryLabel = (slug) => {
     const cat = categories.find(c => c.slug === slug);
@@ -38,7 +41,7 @@ export function useCategories() {
    });
 
   return {
-    categories,
+    categories: sortedCategories,
     roots,
     getChildren,
     getCategoryLabel,
