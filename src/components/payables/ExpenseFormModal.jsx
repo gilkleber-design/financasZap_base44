@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CategorySelect } from '@/components/ui/category-select';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { toast } from 'sonner';
 import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
 import { useCategories } from '@/hooks/useCategories';
@@ -103,7 +104,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
     ? parseInt(form.installment_count) - parseInt(form.installment_number) + 1
     : 0;
   const installmentAmt = expenseType === 'parcelada' && form.installment_total_amount && form.installment_count
-    ? (parseFloat(form.installment_total_amount) / parseInt(form.installment_count)).toFixed(2)
+    ? (parseFloat(form.installment_total_amount) / parseInt(form.installment_count))
     : null;
 
   return (
@@ -198,7 +199,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           <div className={`grid gap-3 ${expenseType === 'avulsa' || expenseType === 'parcelada' ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div>
               <Label>{expenseType === 'parcelada' ? 'Valor da Parcela (R$) *' : 'Valor (R$) *'}</Label>
-              <Input tabIndex={5} type="number" value={form.amount} onChange={e => set('amount', e.target.value)} className="mt-1" />
+              <CurrencyInput tabIndex={5} value={form.amount} onChange={(value) => set('amount', value)} className="mt-1" />
             </div>
             {(expenseType === 'avulsa') && (
               <div>
@@ -221,7 +222,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Valor Total da Compra</Label>
-                  <Input tabIndex={7} type="number" value={form.installment_total_amount} onChange={e => set('installment_total_amount', e.target.value)} className="mt-1 text-sm" placeholder="R$ 0,00" />
+                  <CurrencyInput tabIndex={7} value={form.installment_total_amount} onChange={(value) => set('installment_total_amount', value)} className="mt-1 text-sm" />
                 </div>
                 <div>
                   <Label className="text-xs">Data da 1ª Parcela *</Label>
@@ -238,7 +239,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
               </div>
               {installmentsToGenerate > 0 && installmentAmt && (
                 <p className="text-xs text-muted-foreground bg-muted/40 rounded px-2 py-1">
-                  Serão geradas <strong>{installmentsToGenerate}</strong> parcelas de <strong>R$ {installmentAmt}</strong>
+                  Serão geradas <strong>{installmentsToGenerate}</strong> parcelas de <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(installmentAmt)}</strong>
                 </p>
               )}
             </div>

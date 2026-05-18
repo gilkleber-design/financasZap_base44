@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Badge } from '@/components/ui/badge';
 import { format, startOfMonth, addMonths, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -251,12 +252,10 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                   />
                 )}
                 <div className="grid grid-cols-3 gap-2">
-                  <input
-                    type="number"
-                    placeholder="Valor"
+                  <CurrencyInput
                     value={extraForm.amount}
-                    onChange={e => setExtraForm({ ...extraForm, amount: e.target.value })}
-                    className="px-2 py-1.5 text-sm rounded border border-input bg-background"
+                    onChange={(value) => setExtraForm({ ...extraForm, amount: value })}
+                    className="px-2 py-1.5 text-sm rounded border border-input bg-background h-auto"
                   />
                   <input
                     type="number"

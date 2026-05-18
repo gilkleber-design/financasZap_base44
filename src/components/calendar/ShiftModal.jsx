@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, addWeeks, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -183,12 +184,10 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
           {isProducao && (
             <div>
               <Label>Valor do Evento (R$) *</Label>
-              <Input
-                type="number"
+              <CurrencyInput
                 className="mt-1"
-                placeholder="0,00"
                 value={producaoValor}
-                onChange={e => setProducaoValor(e.target.value)}
+                onChange={setProducaoValor}
               />
             </div>
           )}

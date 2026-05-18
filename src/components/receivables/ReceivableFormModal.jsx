@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -63,7 +64,7 @@ export default function ReceivableFormModal({ incomeSources, onClose, onSaved })
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Valor Bruto (R$) *</Label>
-              <Input type="number" value={form.amount} onChange={e => set('amount', e.target.value)} className="mt-1" />
+              <CurrencyInput value={form.amount} onChange={(value) => set('amount', value)} className="mt-1" />
             </div>
             <div>
               <Label>Alíquota Imposto (%)</Label>

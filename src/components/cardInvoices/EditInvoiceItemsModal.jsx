@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { CategorySelect } from '@/components/ui/category-select';
@@ -203,11 +204,9 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
                     className="text-sm"
                   />
                   <div className="flex gap-2">
-                    <Input
-                      type="number"
+                    <CurrencyInput
                       value={editForm.amount}
-                      onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
-                      placeholder="Valor"
+                      onChange={(value) => setEditForm(f => ({ ...f, amount: value }))}
                       className="text-sm w-28 flex-shrink-0"
                     />
                     <CategorySelect value={editForm.category} onChange={(value) => setEditForm(f => ({ ...f, category: value }))} className="text-sm flex-1 h-9" includeTransfer />

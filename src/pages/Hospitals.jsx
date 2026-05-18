@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -110,23 +111,23 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>SD Seg–Sex (R$)</Label>
-              <Input type="number" value={form.valor_sd_semana} onChange={e => set('valor_sd_semana', e.target.value)} className="mt-1" placeholder="0,00" />
+              <CurrencyInput value={form.valor_sd_semana} onChange={(value) => set('valor_sd_semana', value)} className="mt-1" />
             </div>
             <div>
               <Label>SN Seg–Sex (R$)</Label>
-              <Input type="number" value={form.valor_sn_semana} onChange={e => set('valor_sn_semana', e.target.value)} className="mt-1" placeholder="0,00" />
+              <CurrencyInput value={form.valor_sn_semana} onChange={(value) => set('valor_sn_semana', value)} className="mt-1" />
             </div>
             <div>
               <Label>SD Fim de Semana (R$)</Label>
-              <Input type="number" value={form.valor_sd_fds} onChange={e => set('valor_sd_fds', e.target.value)} className="mt-1" placeholder="0,00" />
+              <CurrencyInput value={form.valor_sd_fds} onChange={(value) => set('valor_sd_fds', value)} className="mt-1" />
             </div>
             <div>
               <Label>SN Fim de Semana (R$)</Label>
-              <Input type="number" value={form.valor_sn_fds} onChange={e => set('valor_sn_fds', e.target.value)} className="mt-1" placeholder="0,00" />
+              <CurrencyInput value={form.valor_sn_fds} onChange={(value) => set('valor_sn_fds', value)} className="mt-1" />
             </div>
             <div>
               <Label>Adicional Sobreaviso (R$)</Label>
-              <Input type="number" value={form.valor_sobreaviso} onChange={e => set('valor_sobreaviso', e.target.value)} className="mt-1" placeholder="0,00" />
+              <CurrencyInput value={form.valor_sobreaviso} onChange={(value) => set('valor_sobreaviso', value)} className="mt-1" />
             </div>
           </div>
 

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CategorySelect } from '@/components/ui/category-select';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Sparkles, Loader2, X, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCategories } from '@/hooks/useCategories';
@@ -140,12 +141,10 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Valor Mensal (R$) *</Label>
-              <Input
-                type="number"
+              <CurrencyInput
                 value={form.amount}
-                onChange={e => set('amount', e.target.value)}
+                onChange={(value) => set('amount', value)}
                 className="mt-1"
-                placeholder="0,00"
               />
             </div>
             <div>

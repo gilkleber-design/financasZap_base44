@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Upload, FileText, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { addMonths, format, parseISO } from 'date-fns';
@@ -177,11 +178,10 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                     </div>
                   </div>
 
-                  <input
-                    type="number"
-                    className="w-20 bg-transparent border-none p-0 text-right text-xs font-black focus:ring-0 text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  <CurrencyInput
+                    className="w-28 bg-transparent border-none p-0 text-right text-xs font-black shadow-none focus-visible:ring-0 text-slate-700"
                     value={it.amount}
-                    onChange={(e) => setItems(items.map(x => x._id === it._id ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))}
+                    onChange={(value) => setItems(items.map(x => x._id === it._id ? { ...x, amount: parseFloat(value) || 0 } : x))}
                   />
 
                   <button onClick={() => deleteItem(it._id)} className="text-slate-300 hover:text-red-500 p-2 transition-colors">

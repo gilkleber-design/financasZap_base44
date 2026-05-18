@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CategorySelect } from '@/components/ui/category-select';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -123,10 +124,9 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Valor (R$) *</Label>
-              <Input
-                type="number"
+              <CurrencyInput
                 value={form.amount}
-                onChange={e => set('amount', e.target.value)}
+                onChange={(value) => set('amount', value)}
                 className="mt-1"
               />
             </div>

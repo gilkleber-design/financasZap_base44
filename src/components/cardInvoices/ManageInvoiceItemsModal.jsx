@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Trash2, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -63,11 +64,10 @@ export default function ManageInvoiceItemsModal({ items, cardName, onClose }) {
                       value={editData.description}
                       onChange={e => setEditData(d => ({ ...d, description: e.target.value }))}
                     />
-                    <Input
-                      className="h-7 w-24 text-xs font-bold text-right"
-                      type="number"
+                    <CurrencyInput
+                      className="h-7 w-28 text-xs font-bold text-right"
                       value={editData.amount}
-                      onChange={e => setEditData(d => ({ ...d, amount: e.target.value }))}
+                      onChange={(value) => setEditData(d => ({ ...d, amount: value }))}
                     />
                   </div>
                   <button onClick={() => saveEdit(item.id)} className="text-emerald-500 hover:text-emerald-700 p-1"><Check className="w-4 h-4" /></button>

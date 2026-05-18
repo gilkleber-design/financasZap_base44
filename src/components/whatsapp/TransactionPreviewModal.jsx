@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CategorySelect } from '@/components/ui/category-select';
@@ -246,7 +247,7 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
 
           <div>
             <Label className="text-xs">Valor Bruto (R$)</Label>
-            <Input type="number" value={form.amount || ''} onChange={e => set('amount', parseFloat(e.target.value))} className="mt-1" />
+            <CurrencyInput value={form.amount || ''} onChange={(value) => set('amount', parseFloat(value) || 0)} className="mt-1" />
           </div>
 
           <div>
@@ -267,7 +268,7 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
               </div>
               <div>
                 <Label className="text-xs">Valor Líquido (R$)</Label>
-                <Input type="number" value={form.net_amount || form.amount || ''} onChange={e => set('net_amount', parseFloat(e.target.value))} className="mt-1" />
+                <CurrencyInput value={form.net_amount || form.amount || ''} onChange={(value) => set('net_amount', parseFloat(value) || 0)} className="mt-1" />
               </div>
             </>
           )}

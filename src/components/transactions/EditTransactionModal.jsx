@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CategorySelect } from '@/components/ui/category-select';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { toast } from 'sonner';
 
 export default function EditTransactionModal({ transaction, onClose, onSaved }) {
@@ -78,7 +79,7 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
             </div>
             <div>
               <Label>Valor Bruto (R$) *</Label>
-              <Input type="number" value={form.amount} onChange={e => set('amount', e.target.value)} className="mt-1" />
+              <CurrencyInput value={form.amount} onChange={(value) => set('amount', value)} className="mt-1" />
             </div>
             <div>
               <Label>Data *</Label>
