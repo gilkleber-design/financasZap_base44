@@ -449,11 +449,11 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     return (
       <TableRow key={row.id} className={`${isProcessed || isIgnored ? 'bg-slate-50/50 opacity-50 grayscale' : 'hover:bg-slate-50'} transition-all`}>
         <TableCell className="whitespace-nowrap font-bold text-slate-600 text-xs">{format(parseISO(row.date), 'dd/MM/yyyy')}</TableCell>
-        <TableCell className="max-w-[280px] truncate font-bold text-slate-800 text-sm">
+        <TableCell className="max-w-[450px] truncate font-bold text-slate-800 text-sm">
           {row.description}
         </TableCell>
         <TableCell className="border-r text-right font-black text-sm">{formatCurrency(row.amount)}</TableCell>
-        <TableCell className="max-w-[360px]">
+        <TableCell className="max-w-[500px]">
           {row.match ? (
               <p className={`truncate text-sm font-bold ${isProcessed ? 'text-slate-500' : 'text-slate-700'}`}>{row.match.description}</p>
           ) : (
@@ -462,7 +462,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         </TableCell>
         <TableCell>
           <Badge className={`${badgeClass} border-none font-bold uppercase text-[9px]`}>
-              {row.status === 'processed' ? 'Conciliado - WhatsApp' : 
+              {row.status === 'processed' ? 'Já Salvo no Banco' : 
                row.status === 'auto_match' || row.status === 'manual_match' ? 'Conciliado - Match' :
                row.status === 'to_ignore' ? 'Ignorado' : 'Órfão'}
           </Badge>
@@ -508,7 +508,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="flex flex-col max-h-[90vh] max-w-7xl p-0 font-sora">
+      <DialogContent className="flex flex-col max-h-[90vh] max-w-[95vw] p-0 font-sora">
         <DialogHeader className="border-b px-6 py-5 bg-slate-50 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
             <FileUp className="h-5 w-5 text-primary" />
@@ -543,7 +543,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               </div>
             </div>
 
-            <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+            <div className="rounded-xl border bg-white shadow-sm overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-100/80">
