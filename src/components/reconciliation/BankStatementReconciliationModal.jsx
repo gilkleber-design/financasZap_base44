@@ -37,12 +37,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-const DATE_HEADERS = ['data', 'date', 'dt', 'data movimento', 'data_movimento'];
-const DESCRIPTION_HEADERS = ['descrição', 'descricao', 'description', 'histórico', 'historico', 'memo', 'lançamento', 'lancamento'];
-const AMOUNT_HEADERS = ['valor', 'amount', 'quantia', 'montante', 'valor lançamento', 'valor_lancamento'];
-const TYPE_HEADERS = ['tipo', 'movimentação', 'movimentacao', 'type', 'entrada/saída', 'entrada_saida'];
+// Função de normalização super agressiva (tira acentos e caracteres especiais para não falhar na leitura)
+const normalize = (value) => {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); 
+};
 
-const normalize = (value) => String(value || '').trim().toLowerCase();
 const toCents = (value) => Math.round(Math.abs(Number(value) || 0) * 100);
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
 
@@ -61,10 +64,6 @@ function splitCsvLine(line, delimiter) {
 
   result.push(current.trim().replace(/^"|"$/g, ''));
   return result;
-}
-
-function findHeaderIndex(headers, options) {
-  return headers.findIndex((header) => options.includes(normalize(header)));
 }
 
 function parseAmount(rawValue) {
@@ -90,12 +89,11 @@ function parseStatementDate(rawValue) {
 
 function resolveMovementType(rawType, amount) {
   const text = normalize(rawType);
-  if (['entrada', 'credito', 'crédito', 'credit', 'income', 'receita'].some((term) => text.includes(term))) return 'income';
-  if (['saida', 'saída', 'debito', 'débito', 'debit', 'expense', 'despesa'].some((term) => text.includes(term))) return 'expense';
+  if (['entrada', 'credito', 'credit', 'income', 'receita'].some((term) => text.includes(term))) return 'income';
+  if (['saida', 'debito', 'debit', 'expense', 'despesa'].some((term) => text.includes(term))) return 'expense';
   return Number(amount) < 0 ? 'expense' : 'income';
 }
 
-// Interceptador para limpar ruídos e organizar a lista
 function postProcessCsv(rows) {
   const processed = [];
   let rentabSum = 0;
@@ -112,7 +110,6 @@ function postProcessCsv(rows) {
     }
   });
 
-  // Insere a linha consolidada se houver rendimentos
   if (rentabSum !== 0) {
     processed.push({
       id: 'csv-rentab-grouped',
@@ -120,40 +117,85 @@ function postProcessCsv(rows) {
       description: 'Rendimentos Automáticos Bradesco',
       amount: Math.abs(rentabSum),
       type: rentabSum >= 0 ? 'income' : 'expense',
-      preSelectedCategory: 'rendimentos', // Já injeta a categoria correta
+      preSelectedCategory: 'rendimentos',
       raw: [],
     });
   }
 
-  // Ordena por data (Mais antigos primeiro, ordem cronológica)
   return processed.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// NOVO PARSER INTELIGENTE (Preparado para Bradesco e CSVs Brasileiros)
 function parseCsv(text) {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length < 2) return [];
 
   const delimiter = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ',';
-  const headers = splitCsvLine(lines[0], delimiter);
-  const dateIndex = findHeaderIndex(headers, DATE_HEADERS);
-  const descriptionIndex = findHeaderIndex(headers, DESCRIPTION_HEADERS);
-  const amountIndex = findHeaderIndex(headers, AMOUNT_HEADERS);
-  const typeIndex = findHeaderIndex(headers, TYPE_HEADERS);
 
-  const rawRows = lines.slice(1).map((line, index) => {
+  // 1. Achar a linha verdadeira de Cabeçalho (Ignora metadados do Bradesco no topo)
+  let headerLineIndex = 0;
+  for (let i = 0; i < Math.min(5, lines.length); i++) {
+    const cols = splitCsvLine(lines[i], delimiter).map(normalize);
+    if (cols.some(c => c.includes('data') || c.includes('date'))) {
+      headerLineIndex = i;
+      break;
+    }
+  }
+
+  const headers = splitCsvLine(lines[headerLineIndex], delimiter).map(normalize);
+  
+  const dateIndex = headers.findIndex(h => h.includes('data') || h.includes('date'));
+  const descriptionIndex = headers.findIndex(h => h.includes('hist') || h.includes('desc') || h.includes('memo') || h.includes('lancamento'));
+  
+  // 2. Detecção inteligente de colunas de Valores
+  const creditIndex = headers.findIndex(h => h.includes('credito') || h.includes('dito') || h.includes('entrada')); 
+  const debitIndex = headers.findIndex(h => h.includes('debito') || h.includes('bito') || h.includes('saida'));
+  const amountIndex = headers.findIndex(h => h === 'valor' || h === 'amount' || h.includes('quantia'));
+  const typeIndex = headers.findIndex(h => h.includes('tipo') || h.includes('movimenta'));
+
+  const rawRows = lines.slice(headerLineIndex + 1).map((line, index) => {
     const columns = splitCsvLine(line, delimiter);
-    const amount = parseAmount(columns[amountIndex >= 0 ? amountIndex : 2]);
-    const type = resolveMovementType(columns[typeIndex], amount);
+    if (columns.length < 3) return null;
+
+    let amount = 0;
+    let type = 'expense';
+
+    // Se o banco tem colunas duplas (Bradesco, BB, Itaú)
+    if (creditIndex >= 0 && debitIndex >= 0 && creditIndex !== debitIndex) {
+      const creditVal = parseAmount(columns[creditIndex]);
+      const debitVal = parseAmount(columns[debitIndex]);
+      
+      if (creditVal > 0) {
+        amount = creditVal;
+        type = 'income';
+      } else if (debitVal > 0) {
+        amount = debitVal;
+        type = 'expense';
+      } else {
+        return null; // Linha inútil (saldo zerado)
+      }
+    } 
+    // Se o banco tem coluna única (Nubank, Inter)
+    else {
+      const valCol = amountIndex >= 0 ? columns[amountIndex] : columns[2];
+      const parsedVal = parseAmount(valCol);
+      amount = Math.abs(parsedVal);
+      if (amount === 0) return null;
+      type = resolveMovementType(typeIndex >= 0 ? columns[typeIndex] : '', parsedVal);
+    }
+
+    const dateCol = columns[dateIndex >= 0 ? dateIndex : 0];
+    const descCol = columns[descriptionIndex >= 0 ? descriptionIndex : 1];
 
     return {
       id: `csv-${index}`,
-      date: parseStatementDate(columns[dateIndex >= 0 ? dateIndex : 0]),
-      description: columns[descriptionIndex >= 0 ? descriptionIndex : 1] || 'Lançamento do extrato',
-      amount: Math.abs(amount),
+      date: parseStatementDate(dateCol),
+      description: descCol || 'Lançamento do extrato',
+      amount,
       type,
       raw: columns,
     };
-  }).filter((row) => row.date && row.amount > 0);
+  }).filter(Boolean).filter((row) => row.date && row.amount > 0);
 
   return postProcessCsv(rawRows);
 }
@@ -231,14 +273,13 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
   const reconcileMutation = useMutation({
     mutationFn: async (row) => {
-      // 1. Criar novo lançamento do zero (Não tem match ou é um grupo automático)
       if (!row.match) {
         await base44.entities.Transaction.create({
           description: row.description,
           amount: row.amount,
           type: row.type,
           date: row.date,
-          category: row.preSelectedCategory || undefined, // Usa a categoria injetada (ex: rendimentos) se existir
+          category: row.preSelectedCategory || undefined,
           source: 'manual',
           reconciled: true,
           notes: row.preSelectedCategory ? 'Agrupado via importação de extrato' : 'Criado via Extrato (Órfão)',
@@ -246,7 +287,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         return row.id;
       }
 
-      // 2. Vinculando com Transação Existente
       if (row.match.kind === 'transaction') {
         await base44.entities.Transaction.update(row.match.id, {
           amount: row.amount, 
@@ -257,7 +297,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         return row.id;
       }
 
-      // 3. Vinculando com Payables (Co-participação)
       const transaction = await base44.entities.Transaction.create({
         description: row.description || row.match.description,
         amount: row.amount,
@@ -300,7 +339,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       setManualMatches({});
       setConfirmedRows({});
     };
-    reader.readAsText(file, 'UTF-8');
+    // Leitura em padrão ISO resolve os bugs de acentuação do Windows-1252 dos bancos
+    reader.readAsText(file, 'ISO-8859-1');
   };
 
   const confirmAllAutomatic = async () => {
@@ -321,11 +361,9 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
   const isLoading = loadingTransactions || loadingPayables;
 
-  // Separa as listas para renderização
   const incomeRows = rowsWithMatches.filter(r => r.type === 'income');
   const expenseRows = rowsWithMatches.filter(r => r.type === 'expense');
 
-  // Componente de Linha da Tabela extraído para evitar repetição
   const RowComponent = ({ row }) => (
     <TableRow key={row.id} className={`${confirmedRows[row.id] ? 'bg-emerald-50/50 opacity-60' : 'hover:bg-slate-50'} transition-all`}>
       <TableCell className="whitespace-nowrap font-bold text-slate-600 text-xs">{format(parseISO(row.date), 'dd/MM/yyyy')}</TableCell>
@@ -404,7 +442,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                     <CommandEmpty className="py-6 text-center text-sm font-medium text-slate-500">Sem resultados.</CommandEmpty>
                     <CommandGroup heading={<span className="text-xs font-bold text-slate-400 uppercase tracking-widest">PENDENTES DE CONCILIAÇÃO</span>}>
                       {candidates
-                        .filter(c => candidateType(c) === row.type) // Filtra só pelo tipo correto
+                        .filter(c => candidateType(c) === row.type)
                         .map((candidate) => (
                         <CommandItem
                           key={`${candidate.kind}-${candidate.id}`}
@@ -436,8 +474,9 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-h-[90vh] max-w-7xl overflow-hidden p-0 font-sora">
-        <DialogHeader className="border-b px-6 py-5 bg-slate-50">
+      <DialogContent className="flex flex-col max-h-[90vh] max-w-7xl overflow-hidden p-0 font-sora">
+        
+        <DialogHeader className="border-b px-6 py-5 bg-slate-50 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
             <FileUp className="h-5 w-5 text-primary" />
             Conciliação de Extrato Bancário
@@ -447,7 +486,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 overflow-y-auto px-6 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
           <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row md:items-center md:justify-between shadow-sm">
             <div className="flex flex-1 items-center gap-3">
               <Input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
@@ -492,7 +531,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   </TableRow>
                 ) : (
                   <>
-                    {/* Bloco de Receitas */}
                     {incomeRows.length > 0 && (
                       <>
                         <TableRow className="bg-emerald-50 hover:bg-emerald-50">
@@ -504,7 +542,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                       </>
                     )}
 
-                    {/* Bloco de Despesas */}
                     {expenseRows.length > 0 && (
                       <>
                         <TableRow className="bg-red-50 hover:bg-red-50">
@@ -522,7 +559,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
           </div>
         </div>
 
-        <DialogFooter className="border-t px-6 py-4 bg-slate-50">
+        <DialogFooter className="border-t px-6 py-4 bg-slate-50 shrink-0">
           <Button variant="outline" onClick={() => handleClose(false)} className="font-bold w-full md:w-auto">FECHAR</Button>
         </DialogFooter>
       </DialogContent>
