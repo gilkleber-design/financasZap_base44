@@ -221,7 +221,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [statementRows, setStatementRows] = useState([]);
   const [ignoredRows, setIgnoredRows] = useState({});
   const [manualMatches, setManualMatches] = useState({});
-  const [hideProcessed, setHideProcessed] = useState(false); // NOVO: Toggle
+  const [hideProcessed, setHideProcessed] = useState(false);
 
   const { data: transactions = [], isLoading: loadingTransactions } = useQuery({
     queryKey: ['transactions'],
@@ -413,8 +413,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
   const isLoading = loadingTransactions || loadingPayables || loadingReceivables;
   
-  // FILTRAGEM PARA O TOGGLE
   const displayRows = hideProcessed ? rowsWithState.filter(r => r.status !== 'processed') : rowsWithState;
+  
+  // Agrupamento exigido: Receitas primeiro, depois Despesas. Desempate pela data.
+  const groupedRows = [...displayRows].sort((a, b) => {
+    if (a.type === 'income' && b.type === 'expense') return -1;
+    if (a.type === 'expense' && b.type === 'income') return 1;
+    return a.date.localeCompare(b.date);
+  });
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -473,16 +479,20 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayRows.length === 0 ? (
+                  {groupedRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-32 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
                         Nenhum arquivo processado
                       </TableCell>
                     </TableRow>
                   ) : (
-                    displayRows.map((row) => {
+                    groupedRows.map((row) => {
                       const isProcessed = row.status === 'processed';
                       const isIgnored = row.status === 'to_ignore';
+                      
+                      let badgeClass = "bg-slate-100 text-slate-500";
+                      if (row.status === 'auto_match' || row.status === 'manual_match') badgeClass = "bg-green-100 text-green-700";
+                      if (row.status === 'orphan') badgeClass = "bg-red-100 text-red-700";
                       
                       return (
                         <TableRow key={row.id} className={`${isProcessed || isIgnored ? 'bg-slate-50/50 opacity-50 grayscale' : 'hover:bg-slate-50'} transition-all`}>
@@ -499,7 +509,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge className="bg-slate-100 text-slate-500 border-none font-bold uppercase text-[9px]">
+                            <Badge className={`${badgeClass} border-none font-bold uppercase text-[9px]`}>
                                 {row.status === 'processed' ? 'Conciliado - WhatsApp' : 
                                  row.status === 'auto_match' || row.status === 'manual_match' ? 'Conciliado - Match' :
                                  row.status === 'to_ignore' ? 'Ignorado' : 'Órfão'}
@@ -520,7 +530,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                                 <CommandInput />
                                                 <CommandList className="max-h-[300px] overflow-y-auto">
                                                     <CommandGroup>
-                                                        {candidates.filter(c => (row.type === 'income' ? ['receivable', 'income'].includes(c.kind === 'transaction' ? c.type : 'receivable') : ['payable', 'expense'].includes(c.kind === 'transaction' ? c.type : 'payable'))).map(c => (
+                                                        {candidates.filter(c => {
+                                                            const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
+                                                            if (row.type === 'income') {
+                                                                return ['receivable', 'income', 'transfer'].includes(cType);
+                                                            } else {
+                                                                return ['payable', 'expense', 'transfer'].includes(cType);
+                                                            }
+                                                        }).map(c => (
                                                             <CommandItem key={c.id} onSelect={() => setManualMatches({...manualMatches, [row.id]: c})}>
                                                                 {c.description} - {formatCurrency(c.amount)}
                                                             </CommandItem>
