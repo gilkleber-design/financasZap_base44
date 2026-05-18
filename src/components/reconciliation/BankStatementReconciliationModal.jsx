@@ -216,6 +216,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [ignoredRows, setIgnoredRows] = useState({});
   const [manualMatches, setManualMatches] = useState({});
   const [hideProcessed, setHideProcessed] = useState(false);
+  const [parsingPdf, setParsingPdf] = useState(false);
 
   const { data: transactions = [], isLoading: loadingTransactions } = useQuery({
     queryKey: ['transactions'],
@@ -374,14 +375,38 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     }
   });
 
-  const handleFileChange = (event) => {
+  const resetReviewState = () => {
+    setManualMatches({});
+    setIgnoredRows({});
+  };
+
+  const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    const fileName = file.name.toLowerCase();
+    const isPdf = file.type === 'application/pdf' || fileName.endsWith('.pdf');
+    const isCsv = file.type.includes('csv') || fileName.endsWith('.csv');
+
+    if (isPdf) {
+      setParsingPdf(true);
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const response = await base44.functions.invoke('extractBankStatementPDF', { file_url });
+      setStatementRows(postProcessCsv(response.data.rows || []));
+      resetReviewState();
+      setParsingPdf(false);
+      return;
+    }
+
+    if (!isCsv) {
+      toast.error('Envie um arquivo CSV ou PDF');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (loadEvent) => {
       setStatementRows(parseCsv(loadEvent.target.result || ''));
-      setManualMatches({});
-      setIgnoredRows({});
+      resetReviewState();
     };
     reader.readAsText(file, 'ISO-8859-1');
   };
@@ -391,6 +416,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       setStatementRows([]);
       setManualMatches({});
       setIgnoredRows({});
+      setParsingPdf(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
     onOpenChange?.(nextOpen);
@@ -405,7 +431,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     });
   };
 
-  const isLoading = loadingTransactions || loadingPayables || loadingReceivables;
+  const isLoading = loadingTransactions || loadingPayables || loadingReceivables || parsingPdf;
   
   const displayRows = hideProcessed ? rowsWithState.filter(r => r.status !== 'processed') : rowsWithState;
   
@@ -497,8 +523,9 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
           <div className="p-6 space-y-4">
             <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row md:items-center md:justify-between shadow-sm sticky top-0 z-10">
               <div className="flex flex-1 items-center gap-3">
-                <Input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
+                <Input ref={fileInputRef} type="file" accept=".csv,text/csv,application/pdf,.pdf" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
                 {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                {parsingPdf && <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Processando PDF...</span>}
                 <Button variant="outline" onClick={() => setHideProcessed(!hideProcessed)}>
                     {hideProcessed ? <Eye className="w-4 h-4 mr-2" /> : <EyeOff className="w-4 h-4 mr-2" />}
                     {hideProcessed ? "Mostrar Processados" : "Ocultar Processados"}
@@ -521,7 +548,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 <TableHeader>
                   <TableRow className="bg-slate-100/80">
                     <TableHead colSpan={3} className="border-r text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
-                      VISÃO DO EXTRATO BANCÁRIO (CSV)
+                      VISÃO DO EXTRATO BANCÁRIO (CSV/PDF)
                     </TableHead>
                     <TableHead colSpan={3} className="text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
                       DIAGNÓSTICO E REVISÃO
