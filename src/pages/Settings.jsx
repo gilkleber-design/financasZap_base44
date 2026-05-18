@@ -18,82 +18,82 @@ import CategoryRuleManager from '@/components/settings/CategoryRuleManager';
 
 
 export default function Settings() {
- const queryClient = useQueryClient();
- const [currentUser, setCurrentUser] = useState(null);
- const [openSections, setOpenSections] = useState({ members: false, sources: false, accounts: false, cards: true, rules: false, categories: false });
+  const queryClient = useQueryClient();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [openSections, setOpenSections] = useState({ members: false, sources: false, accounts: false, cards: true, rules: false, categories: false });
 
 
- const [showInviteForm, setShowInviteForm] = useState(false);
- const [showNewSource, setShowNewSource] = useState(false);
- const [showNewAccount, setShowNewAccount] = useState(false);
- const [showNewCard, setShowNewCard] = useState(false);
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [showNewSource, setShowNewSource] = useState(false);
+  const [showNewAccount, setShowNewAccount] = useState(false);
+  const [showNewCard, setShowNewCard] = useState(false);
 
 
- const toggleSection = (section) => setOpenSections(p => ({ ...p, [section]: !p[section] }));
+  const toggleSection = (section) => setOpenSections((p) => ({ ...p, [section]: !p[section] }));
 
 
- useEffect(() => {
-   base44.auth.me().then(setCurrentUser).catch(() => {});
- }, []);
+  useEffect(() => {
+    base44.auth.me().then(setCurrentUser).catch(() => {});
+  }, []);
 
 
- const [inviteEmail, setInviteEmail] = useState('');
- const [form, setForm] = useState({ name: '', type: 'pj', bank: '', default_tax_rate: '0' });
- const [accountForm, setAccountForm] = useState({ name: '', type: 'corrente', bank: '' });
- const [cardForm, setCardForm] = useState({
-   name: '', holder_name: '', type: 'credit', bank: '', closing_day: '', due_day: '',
-   is_additional: false, principal_card_id: '', assigned_user_id: '',
- });
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [form, setForm] = useState({ name: '', type: 'pj', bank: '', default_tax_rate: '0' });
+  const [accountForm, setAccountForm] = useState({ name: '', type: 'corrente', bank: '' });
+  const [cardForm, setCardForm] = useState({
+    name: '', holder_name: '', type: 'credit', bank: '', closing_day: '', due_day: '',
+    is_additional: false, principal_card_id: '', assigned_user_id: ''
+  });
 
 
- const [editingSourceId, setEditingSourceId] = useState(null);
- const [editingAccountId, setEditingAccountId] = useState(null);
- const [editingCardId, setEditingCardId] = useState(null);
+  const [editingSourceId, setEditingSourceId] = useState(null);
+  const [editingAccountId, setEditingAccountId] = useState(null);
+  const [editingCardId, setEditingCardId] = useState(null);
 
 
- const setCard = (k, v) => setCardForm(p => ({ ...p, [k]: v }));
+  const setCard = (k, v) => setCardForm((p) => ({ ...p, [k]: v }));
 
 
- const { data: members = [] } = useQuery({ queryKey: ['workspace_members'], queryFn: () => base44.entities.User.list(), enabled: currentUser?.role === 'admin' });
- const { data: allCards = [] } = useQuery({ queryKey: ['cards'], queryFn: () => base44.entities.Card.list() });
- const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: () => base44.entities.Account.list() });
- const { data: sources = [] } = useQuery({ queryKey: ['income_sources'], queryFn: () => base44.entities.IncomeSource.list() });
+  const { data: members = [] } = useQuery({ queryKey: ['workspace_members'], queryFn: () => base44.entities.User.list(), enabled: currentUser?.role === 'admin' });
+  const { data: allCards = [] } = useQuery({ queryKey: ['cards'], queryFn: () => base44.entities.Card.list() });
+  const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: () => base44.entities.Account.list() });
+  const { data: sources = [] } = useQuery({ queryKey: ['income_sources'], queryFn: () => base44.entities.IncomeSource.list() });
 
 
- const cards = currentUser?.role === 'admin' ? allCards : allCards.filter(c => !c.assigned_user_id || c.assigned_user_id === currentUser?.id);
+  const cards = currentUser?.role === 'admin' ? allCards : allCards.filter((c) => !c.assigned_user_id || c.assigned_user_id === currentUser?.id);
 
 
- const inviteMember = useMutation({
-   mutationFn: (email) => base44.auth.invite(email),
-   onSuccess: () => { queryClient.invalidateQueries(['workspace_members']); setShowInviteForm(false); setInviteEmail(''); toast.success('Convite enviado!'); }
- });
+  const inviteMember = useMutation({
+    mutationFn: (email) => base44.auth.invite(email),
+    onSuccess: () => {queryClient.invalidateQueries(['workspace_members']);setShowInviteForm(false);setInviteEmail('');toast.success('Convite enviado!');}
+  });
 
 
- const upsertCard = useMutation({
-   mutationFn: (data) => editingCardId ? base44.entities.Card.update(editingCardId, data) : base44.entities.Card.create(data),
-   onSuccess: () => { queryClient.invalidateQueries(); setEditingCardId(null); setShowNewCard(false); setCardForm({ name: '', holder_name: '', type: 'credit', bank: '', closing_day: '', due_day: '', is_additional: false, principal_card_id: '', assigned_user_id: '' }); toast.success('Cartão salvo!'); }
- });
+  const upsertCard = useMutation({
+    mutationFn: (data) => editingCardId ? base44.entities.Card.update(editingCardId, data) : base44.entities.Card.create(data),
+    onSuccess: () => {queryClient.invalidateQueries();setEditingCardId(null);setShowNewCard(false);setCardForm({ name: '', holder_name: '', type: 'credit', bank: '', closing_day: '', due_day: '', is_additional: false, principal_card_id: '', assigned_user_id: '' });toast.success('Cartão salvo!');}
+  });
 
 
- const upsertAccount = useMutation({
-   mutationFn: (data) => editingAccountId ? base44.entities.Account.update(editingAccountId, data) : base44.entities.Account.create(data),
-   onSuccess: () => { queryClient.invalidateQueries(); setEditingAccountId(null); setShowNewAccount(false); toast.success('Conta salva!'); }
- });
+  const upsertAccount = useMutation({
+    mutationFn: (data) => editingAccountId ? base44.entities.Account.update(editingAccountId, data) : base44.entities.Account.create(data),
+    onSuccess: () => {queryClient.invalidateQueries();setEditingAccountId(null);setShowNewAccount(false);toast.success('Conta salva!');}
+  });
 
 
- const upsertSource = useMutation({
-   mutationFn: (data) => editingSourceId ? base44.entities.IncomeSource.update(editingSourceId, data) : base44.entities.IncomeSource.create(data),
-   onSuccess: () => { queryClient.invalidateQueries(); setEditingSourceId(null); setShowNewSource(false); toast.success('Fonte salva!'); }
- });
+  const upsertSource = useMutation({
+    mutationFn: (data) => editingSourceId ? base44.entities.IncomeSource.update(editingSourceId, data) : base44.entities.IncomeSource.create(data),
+    onSuccess: () => {queryClient.invalidateQueries();setEditingSourceId(null);setShowNewSource(false);toast.success('Fonte salva!');}
+  });
 
 
- const deleteEntity = (entity, id) => {
-   base44.entities[entity].delete(id).then(() => { queryClient.invalidateQueries(); toast.success('Removido'); });
- };
+  const deleteEntity = (entity, id) => {
+    base44.entities[entity].delete(id).then(() => {queryClient.invalidateQueries();toast.success('Removido');});
+  };
 
 
- return (
-   <div className="p-6 space-y-4 max-w-2xl pb-32 font-sora">
+  return (
+    <div className="p-6 space-y-4 max-w-2xl pb-32 font-sora hidden">
      <header className="mb-6">
        <h1 className="text-2xl font-bold">Configurações</h1>
        <p className="text-muted-foreground text-sm">Gerenciamento do Workspace</p>
@@ -112,26 +112,26 @@ export default function Settings() {
          <div className="flex justify-end">
            <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setShowInviteForm(true)} disabled={showInviteForm}><UserPlus className="w-3.5 h-3.5 mr-1" /> Convidar Membro</Button>
          </div>
-         {showInviteForm && (
-           <div className="p-4 bg-accent/20 rounded-lg space-y-3 border border-primary/10">
+         {showInviteForm &&
+          <div className="p-4 bg-accent/20 rounded-lg space-y-3 border border-primary/10">
              <Label>E-mail</Label>
-             <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="exemplo@email.com" />
+             <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="exemplo@email.com" />
              <div className="flex gap-2">
                <Button variant="outline" className="flex-1" onClick={() => setShowInviteForm(false)}>Cancelar</Button>
                <Button className="flex-1" onClick={() => inviteMember.mutate(inviteEmail)}>Enviar</Button>
              </div>
            </div>
-         )}
+          }
          <div className="space-y-2">
-           {members.sort((a, b) => (a.role === 'admin' ? -1 : 1)).map(m => (
-             <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
+           {members.sort((a, b) => a.role === 'admin' ? -1 : 1).map((m) =>
+            <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
                <div className="flex items-center gap-3">
                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">{m.full_name?.substring(0, 2).toUpperCase() || '??'}</div>
                  <div><p className="text-sm font-medium">{m.full_name || m.email}</p><Badge variant={m.role === 'admin' ? 'default' : 'outline'} className="text-[9px] h-4">{m.role === 'admin' ? 'Admin' : 'Membro'}</Badge></div>
                </div>
                {m.id !== currentUser?.id && <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => deleteEntity('User', m.id)}><Trash2 className="w-3.5 h-3.5" /></Button>}
              </div>
-           ))}
+            )}
          </div>
        </CollapsibleContent>
      </Collapsible>
@@ -144,18 +144,18 @@ export default function Settings() {
        </CollapsibleTrigger>
        <CollapsibleContent className="p-4 border-t space-y-4">
          <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setShowNewSource(true)}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Fonte</Button></div>
-         {(showNewSource || editingSourceId) && (
-           <div className="p-4 bg-accent/20 rounded-lg space-y-3">
-             <Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Nome" />
-             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingSourceId(null); setShowNewSource(false)}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertSource.mutate({...form, active: true})}>Salvar</Button></div>
+         {(showNewSource || editingSourceId) &&
+          <div className="p-4 bg-accent/20 rounded-lg space-y-3">
+             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nome" />
+             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingSourceId(null);setShowNewSource(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertSource.mutate({ ...form, active: true })}>Salvar</Button></div>
            </div>
-         )}
-         {sources.map(s => (
-           <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
+          }
+         {sources.map((s) =>
+          <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
              <span className="text-sm font-medium">{s.name}</span>
-             <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setEditingSourceId(s.id); setForm(s); setShowNewSource(true); }}><Pencil className="w-3.5 h-3.5" /></Button><Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('IncomeSource', s.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div>
+             <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => {setEditingSourceId(s.id);setForm(s);setShowNewSource(true);}}><Pencil className="w-3.5 h-3.5" /></Button><Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('IncomeSource', s.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div>
            </div>
-         ))}
+          )}
        </CollapsibleContent>
      </Collapsible>
 
@@ -167,18 +167,18 @@ export default function Settings() {
        </CollapsibleTrigger>
        <CollapsibleContent className="p-4 border-t space-y-4">
          <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setShowNewAccount(true)}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Conta</Button></div>
-         {(showNewAccount || editingAccountId) && (
-           <div className="p-4 bg-accent/20 rounded-lg space-y-3">
-             <Input value={accountForm.name} onChange={e => setAccountForm({...accountForm, name: e.target.value})} placeholder="Nome" />
-             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingAccountId(null); setShowNewAccount(false)}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertAccount.mutate({...accountForm, active: true})}>Salvar</Button></div>
+         {(showNewAccount || editingAccountId) &&
+          <div className="p-4 bg-accent/20 rounded-lg space-y-3">
+             <Input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome" />
+             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingAccountId(null);setShowNewAccount(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertAccount.mutate({ ...accountForm, active: true })}>Salvar</Button></div>
            </div>
-         )}
-         {accounts.map(a => (
-           <div key={a.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
+          }
+         {accounts.map((a) =>
+          <div key={a.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
              <span className="text-sm font-medium">{a.name}</span>
-             <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => { setEditingAccountId(a.id); setAccountForm(a); setShowNewAccount(true); }}><Pencil className="w-3.5 h-3.5" /></Button><Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('Account', a.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div>
+             <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => {setEditingAccountId(a.id);setAccountForm(a);setShowNewAccount(true);}}><Pencil className="w-3.5 h-3.5" /></Button><Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('Account', a.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div>
            </div>
-         ))}
+          )}
        </CollapsibleContent>
      </Collapsible>
 
@@ -190,44 +190,44 @@ export default function Settings() {
        </CollapsibleTrigger>
        <CollapsibleContent className="p-4 border-t space-y-4">
          <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setShowNewCard(true)}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Cartão</Button></div>
-         {(showNewCard || editingCardId) && (
-           <div className="p-4 bg-slate-50/50 rounded-xl space-y-4 border border-primary/20">
+         {(showNewCard || editingCardId) &&
+          <div className="p-4 bg-slate-50/50 rounded-xl space-y-4 border border-primary/20">
              <div className="grid grid-cols-2 gap-3">
-               <div className="col-span-2"><Label>Titular *</Label><Input value={cardForm.holder_name} onChange={e => setCard('holder_name', e.target.value)} /></div>
-               <div className={cardForm.is_additional ? "col-span-2" : "col-span-1"}><Label>Apelido *</Label><Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} /></div>
-               {!cardForm.is_additional && (<div><Label>Banco</Label><Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} /></div>)}
+               <div className="col-span-2"><Label>Titular *</Label><Input value={cardForm.holder_name} onChange={(e) => setCard('holder_name', e.target.value)} /></div>
+               <div className={cardForm.is_additional ? "col-span-2" : "col-span-1"}><Label>Apelido *</Label><Input value={cardForm.name} onChange={(e) => setCard('name', e.target.value)} /></div>
+               {!cardForm.is_additional && <div><Label>Banco</Label><Input value={cardForm.bank} onChange={(e) => setCard('bank', e.target.value)} /></div>}
                <div className="col-span-2 flex items-center justify-between p-3 bg-white rounded-lg border">
                  <span className="text-sm font-medium">Adicional?</span>
-                 <Switch checked={cardForm.is_additional} onCheckedChange={v => setCard('is_additional', v)} />
+                 <Switch checked={cardForm.is_additional} onCheckedChange={(v) => setCard('is_additional', v)} />
                </div>
-               {cardForm.is_additional ? (
-                 <div className="col-span-2"><Label>Principal</Label>
-                   <Select value={cardForm.principal_card_id} onValueChange={v => setCard('principal_card_id', v)}>
+               {cardForm.is_additional ?
+              <div className="col-span-2"><Label>Principal</Label>
+                   <Select value={cardForm.principal_card_id} onValueChange={(v) => setCard('principal_card_id', v)}>
                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                     <SelectContent>{allCards.filter(c => !c.is_additional).map(pc => (<SelectItem key={pc.id} value={pc.id}>{pc.name}</SelectItem>))}</SelectContent>
+                     <SelectContent>{allCards.filter((c) => !c.is_additional).map((pc) => <SelectItem key={pc.id} value={pc.id}>{pc.name}</SelectItem>)}</SelectContent>
                    </Select>
-                 </div>
-               ) : (
-                 <>
-                   <div><Label>Fechamento</Label><Input type="number" value={cardForm.closing_day} onChange={e => setCard('closing_day', e.target.value)} /></div>
-                   <div><Label>Vencimento</Label><Input type="number" value={cardForm.due_day} onChange={e => setCard('due_day', e.target.value)} /></div>
+                 </div> :
+
+              <>
+                   <div><Label>Fechamento</Label><Input type="number" value={cardForm.closing_day} onChange={(e) => setCard('closing_day', e.target.value)} /></div>
+                   <div><Label>Vencimento</Label><Input type="number" value={cardForm.due_day} onChange={(e) => setCard('due_day', e.target.value)} /></div>
                  </>
-               )}
-               {currentUser?.role === 'admin' && (
-                 <div className="col-span-2 border-t pt-2"><Label>Responsável</Label>
-                   <Select value={cardForm.assigned_user_id || '_none'} onValueChange={v => setCard('assigned_user_id', v === '_none' ? '' : v)}>
+              }
+               {currentUser?.role === 'admin' &&
+              <div className="col-span-2 border-t pt-2"><Label>Responsável</Label>
+                   <Select value={cardForm.assigned_user_id || '_none'} onValueChange={(v) => setCard('assigned_user_id', v === '_none' ? '' : v)}>
                      <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                     <SelectContent><SelectItem value="_none">Todos</SelectItem>{members.map(m => (<SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>))}</SelectContent>
+                     <SelectContent><SelectItem value="_none">Todos</SelectItem>{members.map((m) => <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>)}</SelectContent>
                    </Select>
                  </div>
-               )}
+              }
              </div>
-             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => { setEditingCardId(null); setShowNewCard(false); }}>Cancelar</Button><Button className="flex-1 font-bold" onClick={() => upsertCard.mutate({...cardForm, active: true})}>Salvar</Button></div>
+             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingCardId(null);setShowNewCard(false);}}>Cancelar</Button><Button className="flex-1 font-bold" onClick={() => upsertCard.mutate({ ...cardForm, active: true })}>Salvar</Button></div>
            </div>
-         )}
+          }
          <div className="space-y-2">
-           {cards.sort((a, b) => (b.principal_card_id === a.id ? -1 : a.principal_card_id === b.id ? 1 : 0)).map(c => (
-             <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border transition-all ${c.is_additional ? 'bg-amber-50/40 ml-6 border-amber-100' : 'bg-white shadow-sm'}`}>
+           {cards.sort((a, b) => b.principal_card_id === a.id ? -1 : a.principal_card_id === b.id ? 1 : 0).map((c) =>
+            <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border transition-all ${c.is_additional ? 'bg-amber-50/40 ml-6 border-amber-100' : 'bg-white shadow-sm'}`}>
                <div className="flex items-center gap-3">
                  <CreditCard className={`w-4 h-4 ${c.is_additional ? 'text-amber-600' : 'text-primary'}`} />
                  <div>
@@ -237,14 +237,14 @@ export default function Settings() {
                </div>
                <div className="flex gap-1">
                  <Button size="icon" variant="ghost" onClick={() => {
-                   setEditingCardId(c.id);
-                   setCardForm({ ...c, holder_name: c.holder_name || '' }); // Força o preenchimento do titular
-                   setShowNewCard(true);
-                 }}><Pencil className="w-3.5 h-3.5" /></Button>
+                  setEditingCardId(c.id);
+                  setCardForm({ ...c, holder_name: c.holder_name || '' }); // Força o preenchimento do titular
+                  setShowNewCard(true);
+                }}><Pencil className="w-3.5 h-3.5" /></Button>
                  <Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('Card', c.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                </div>
              </div>
-           ))}
+            )}
          </div>
        </CollapsibleContent>
      </Collapsible>
@@ -274,7 +274,6 @@ export default function Settings() {
          </a>
        </CardContent>
      </Card>
-   </div>
- );
-}
+   </div>);
 
+}
