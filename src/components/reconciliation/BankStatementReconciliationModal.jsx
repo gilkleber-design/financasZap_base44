@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parse, parseISO, isValid, differenceInCalendarDays, addMonths } from 'date-fns';
 import { Check, FileUp, Loader2, Search, EyeOff, Undo2, Eye, PlusCircle, Pencil, AlertTriangle, RefreshCcw } from 'lucide-react';
@@ -207,6 +207,10 @@ function isDateNear(statementDate, targetDate) {
   }
 }
 
+function getRecordAccountId(record) {
+  return record?.account_id || record?.origin_id || '';
+}
+
 export default function BankStatementReconciliationModal({ open, onOpenChange }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
@@ -224,11 +228,24 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [showOtherAccounts, setShowOtherAccounts] = useState(false);
 
   // Queries
-  const { data: accounts = [] } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => base44.entities.Account.list(),
-    enabled: open,
-  });
+  const [accounts, setAccounts] = useState([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setLoadingAccounts(true);
+      base44.entities.Account.list('', 500)
+        .then(res => {
+          setAccounts(Array.isArray(res) ? res : []);
+          setLoadingAccounts(false);
+        })
+        .catch(err => {
+          console.error("Erro ao carregar contas:", err);
+          setAccounts([]);
+          setLoadingAccounts(false);
+        });
+    }
+  }, [open]);
 
   const { data: dbCategories = [] } = useQuery({
     queryKey: ['categories'],
@@ -254,10 +271,15 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     enabled: open,
   });
 
+  const visibleAccounts = useMemo(() => {
+    console.log("Accounts query data:", accounts);
+    return Array.isArray(accounts) ? accounts.filter((account) => account.active !== false) : [];
+  }, [accounts]);
+
   const { candidates, reconciledTransactions } = useMemo(() => {
     if (!selectedAccountId) return { reconciledTransactions: [], candidates: [] };
 
-    const isOwner = (item) => item.account_id === selectedAccountId;
+    const isOwner = (item) => getRecordAccountId(item) === selectedAccountId;
 
     const reconciled = transactions
       .filter(t => t.reconciled === true && (isOwner(t) || showOtherAccounts))
@@ -291,7 +313,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       if (ignoredRows[row.id]) return { ...row, status: 'to_ignore' };
 
       // 1. Busca Match Exato na Conta Selecionada
-      const processedIdx = poolReconciled.findIndex(t => t.account_id === selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
+      const processedIdx = poolReconciled.findIndex(t => getRecordAccountId(t) === selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
       if (processedIdx !== -1) {
         const match = poolReconciled[processedIdx];
         poolReconciled.splice(processedIdx, 1); 
@@ -300,7 +322,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       // 2. Busca Quarentena (Conta Errada) nos Processados
       if (showOtherAccounts) {
-        const foreignProcessedIdx = poolReconciled.findIndex(t => t.account_id !== selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
+        const foreignProcessedIdx = poolReconciled.findIndex(t => getRecordAccountId(t) !== selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
         if (foreignProcessedIdx !== -1) {
           const match = poolReconciled[foreignProcessedIdx];
           return { ...row, status: 'foreign_match', match };
@@ -311,7 +333,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       if (row.isDraftResolved) return { ...row, status: 'draft_ready' };
 
       // 3. Busca Match Exato nos Candidatos Pendentes
-      const autoIdx = poolCandidates.findIndex(c => c.account_id === selectedAccountId && matchesBankAmount(c, row.amount) && isDateNear(candidateDate(c), row.date));
+      const autoIdx = poolCandidates.findIndex(c => getRecordAccountId(c) === selectedAccountId && matchesBankAmount(c, row.amount) && isDateNear(candidateDate(c), row.date));
       if (autoIdx !== -1) {
         const match = poolCandidates[autoIdx];
         poolCandidates.splice(autoIdx, 1);
@@ -320,7 +342,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       // 4. Busca Quarentena (Conta Errada) nos Candidatos
       if (showOtherAccounts) {
-        const foreignAutoIdx = poolCandidates.findIndex(c => c.account_id !== selectedAccountId && matchesBankAmount(c, row.amount) && isDateNear(candidateDate(c), row.date));
+        const foreignAutoIdx = poolCandidates.findIndex(c => getRecordAccountId(c) !== selectedAccountId && matchesBankAmount(c, row.amount) && isDateNear(candidateDate(c), row.date));
         if (foreignAutoIdx !== -1) {
           const match = poolCandidates[foreignAutoIdx];
           return { ...row, status: 'foreign_match', match };
@@ -341,7 +363,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         if (match.kind === 'transaction') {
           await base44.entities.Transaction.update(match.id, { account_id: selectedAccountId });
         } else if (match.kind === 'payable') {
-          await base44.entities.Payable.update(match.id, { account_id: selectedAccountId });
+          await base44.entities.Payable.update(match.id, { account_id: selectedAccountId, origin_id: selectedAccountId, origin_type: 'account' });
         } else if (match.kind === 'receivable') {
           await base44.entities.Receivable.update(match.id, { account_id: selectedAccountId });
         }
@@ -388,6 +410,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             due_date: row.date,
             status: isExpense ? 'paid' : 'received',
             account_id: selectedAccountId,
+            ...(isExpense && { origin_id: selectedAccountId, origin_type: 'account' }),
           };
           
           if (isExpense) {
@@ -432,6 +455,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 due_date: format(nextDate, 'yyyy-MM-dd'),
                 status: 'pending',
                 account_id: selectedAccountId,
+                ...(isExpense && { origin_id: selectedAccountId, origin_type: 'account' }),
               };
               
               if (isExpense) {
@@ -471,6 +495,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               amount: row.amount, 
               status: 'paid',
               account_id: selectedAccountId,
+              origin_id: selectedAccountId,
+              origin_type: 'account',
               transaction_id: transaction.id,
             });
           } else if (row.match.kind === 'receivable') {
@@ -593,7 +619,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     setEditingOrphan(null);
   };
 
-  const isLoading = loadingTransactions || loadingPayables || loadingReceivables || parsingPdf;
+  const isLoading = loadingTransactions || loadingPayables || loadingReceivables || loadingAccounts || parsingPdf;
   
   const displayRows = hideProcessed ? rowsWithState.filter(r => r.status !== 'processed') : rowsWithState;
   
@@ -716,9 +742,15 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                     onChange={(e) => setSelectedAccountId(e.target.value)}
                   >
                     <option value="">1. Selecione a Conta...</option>
-                    {accounts.filter(a => a.type === 'checking').map(a => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
+                    {visibleAccounts.length === 0 && (
+                      <option value="" disabled>Nenhuma conta encontrada</option>
+                    )}
+                    {visibleAccounts.map(a => {
+                      const accountName = a.name || a.data?.name || a.bank || a.data?.bank || 'Conta sem nome';
+                      return (
+                        <option key={a.id} value={a.id}>{accountName}</option>
+                      );
+                    })}
                   </select>
 
                   <Input disabled={!selectedAccountId} ref={fileInputRef} type="file" accept=".csv,text/csv,application/pdf,.pdf" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
