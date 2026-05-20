@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, Copy, Save, Target } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CurrencyInput } from '@/components/ui/currency-input';
+import { debounce } from 'lodash';
 
 export default function Planning() {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -28,13 +29,23 @@ export default function Planning() {
         queryFn: () => base44.entities.Budget.filter({ month, year }, '', 500),
     });
 
+    const prevMonthYear = React.useRef(`${month}-${year}`);
+
     React.useEffect(() => {
-        const map = {};
-        budgets.forEach(b => {
-            map[b.category_id] = b.amount;
+        const isNewMonth = prevMonthYear.current !== `${month}-${year}`;
+        prevMonthYear.current = `${month}-${year}`;
+
+        setLocalBudgets(prev => {
+            const map = isNewMonth ? {} : { ...prev };
+            budgets.forEach(b => {
+                // Preenche com os dados do banco apenas se for mês novo ou se não havia edição local
+                if (isNewMonth || prev[b.category_id] === undefined) {
+                    map[b.category_id] = b.amount;
+                }
+            });
+            return map;
         });
-        setLocalBudgets(map);
-    }, [budgets]);
+    }, [budgets, month, year]);
 
     const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
     const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
@@ -55,29 +66,47 @@ export default function Planning() {
         }
     };
 
-    const handleSave = async (categoryId) => {
-        setSavingId(categoryId);
-        const amount = parseFloat(localBudgets[categoryId]) || 0;
-        const existing = budgets.find(b => b.category_id === categoryId);
-        
-        try {
+    const saveMutation = useMutation({
+        mutationFn: async ({ categoryId, amount }) => {
+            const currentBudgets = queryClient.getQueryData(['budgets', month, year]) || [];
+            const existing = currentBudgets.find(b => b.category_id === categoryId);
             if (existing) {
-                await base44.entities.Budget.update(existing.id, { amount });
+                return await base44.entities.Budget.update(existing.id, { amount });
             } else {
-                await base44.entities.Budget.create({
+                return await base44.entities.Budget.create({
                     category_id: categoryId,
                     month,
                     year,
                     amount
                 });
             }
-            toast.success('Orçamento salvo!');
+        },
+        onMutate: ({ categoryId }) => {
+            setSavingId(categoryId);
+        },
+        onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['budgets', month, year] });
-        } catch (error) {
+        },
+        onError: () => {
             toast.error('Erro ao salvar orçamento');
-        } finally {
+        },
+        onSettled: () => {
             setSavingId(null);
         }
+    });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const debouncedSave = useCallback(
+        debounce((categoryId, amount) => {
+            saveMutation.mutate({ categoryId, amount });
+        }, 800),
+        [month, year, queryClient]
+    );
+
+    const handleBudgetChange = (categoryId, val) => {
+        const amount = parseFloat(val) || 0;
+        setLocalBudgets(prev => ({ ...prev, [categoryId]: val }));
+        debouncedSave(categoryId, amount);
     };
 
     const expenseCategories = categories.filter(c => c.type === 'expense' && c.active !== false);
@@ -167,22 +196,18 @@ export default function Planning() {
                                             <CurrencyInput 
                                                 className="w-full sm:w-40 text-right font-medium"
                                                 value={localBudgets[cat.id] ?? ''}
-                                                onChange={(val) => setLocalBudgets(prev => ({ ...prev, [cat.id]: val }))}
+                                                onChange={(val) => handleBudgetChange(cat.id, val)}
                                                 placeholder="R$ 0,00"
                                             />
-                                            <Button 
-                                                size="icon" 
-                                                variant={isModified ? "default" : "secondary"}
-                                                onClick={() => handleSave(cat.id)}
-                                                disabled={savingId === cat.id || (!isModified && localBudgets[cat.id] === undefined)}
-                                                className="shrink-0"
-                                            >
+                                            <div className="w-9 h-9 flex items-center justify-center shrink-0">
                                                 {savingId === cat.id ? (
-                                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                    <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                                ) : isModified ? (
+                                                    <div className="w-2 h-2 rounded-full bg-amber-400" title="Alterações pendentes" />
                                                 ) : (
-                                                    <Save className={isModified ? "w-4 h-4 text-white" : "w-4 h-4"} />
+                                                    <Save className="w-4 h-4 text-muted-foreground/30" />
                                                 )}
-                                            </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 );
