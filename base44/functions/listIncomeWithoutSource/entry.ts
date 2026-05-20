@@ -9,13 +9,11 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Buscar todas as transações de income
     const allTransactions = await base44.entities.Transaction.list('date', 1000);
     
-    // Filtrar por type = income e income_source_id vazio
-    const incomeWithoutSource = allTransactions.filter(t => 
-      t.type === 'income' && (!t.income_source_id || t.income_source_id === '')
-    );
+    const incomeWithoutSource = allTransactions
+      .filter(t => t.type === 'income' && (!t.income_source_id || t.income_source_id === ''))
+      .map(t => `${t.date} - ${t.description} - R$ ${t.amount}`);
 
     return Response.json({ 
       total: incomeWithoutSource.length,
