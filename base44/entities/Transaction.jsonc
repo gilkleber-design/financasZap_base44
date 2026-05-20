@@ -89,6 +89,17 @@
       "default": false,
       "description": "Se foi conciliado com conta a pagar/receber"
     },
+    "status": {
+      "type": "string",
+      "enum": [
+        "registered",
+        "conciliated",
+        "diverged",
+        "ignored"
+      ],
+      "default": "registered",
+      "description": "Estado real da transa\u00e7\u00e3o"
+    },
     "file_url": {
       "type": "string",
       "description": "URL do comprovante (PDF ou imagem)"

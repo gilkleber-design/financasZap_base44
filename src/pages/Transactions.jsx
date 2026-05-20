@@ -34,10 +34,12 @@ export default function Transactions() {
   const [openReconciliation, setOpenReconciliation] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: transactions = [], isLoading } = useQuery({
+  const { data: rawTransactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
     queryFn: () => base44.entities.Transaction.list('-date', 500),
   });
+
+  const transactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Transaction.delete(id),

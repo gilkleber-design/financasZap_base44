@@ -24,10 +24,12 @@ export default function Dashboard() {
   const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
   const todayStr = format(now, 'yyyy-MM-dd');
 
-  const { data: transactions = [] } = useQuery({
+  const { data: rawTransactions = [] } = useQuery({
     queryKey: ['transactions'],
     queryFn: () => base44.entities.Transaction.list('-date', 200),
   });
+
+  const transactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
 
   const { data: payables = [] } = useQuery({
     queryKey: ['payables'],

@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
             account_id: isAccount ? origin_id : undefined,
             card_id: isCard ? origin_id : undefined,
             reconciled: false,
+            status: 'registered',
             notes: notes || 'Gerado via Assistente'
         });
 
