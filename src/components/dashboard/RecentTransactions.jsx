@@ -40,6 +40,11 @@ export default function RecentTransactions({ transactions }) {
                     {CATEGORY_LABELS[tx.category] || tx.category}
                   </Badge>
                 )}
+                {tx.created_by && (
+                  <Badge variant="outline" className="text-xs py-0 px-1.5 h-4 text-slate-500 bg-slate-50">
+                    👤 {tx.created_by.split('@')[0]}
+                  </Badge>
+                )}
                 {tx.status === 'conciliated' && (
                   <Badge className="text-xs py-0 px-1.5 h-4 bg-emerald-100 text-emerald-700 border-0">✓ Conciliado</Badge>
                 )}

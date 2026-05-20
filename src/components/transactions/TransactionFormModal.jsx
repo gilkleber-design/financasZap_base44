@@ -124,24 +124,22 @@ export default function TransactionFormModal({ onClose, onSaved }) {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Membro</Label>
+              <Select value={form.member} onValueChange={v => set('member', v)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="eu">Eu</SelectItem>
+                  <SelectItem value="conjuge">Cônjuge</SelectItem>
+                  <SelectItem value="familia">Família</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {form.type === 'income' && (
-              <>
-                <div>
-                  <Label>Alíquota Imposto (%)</Label>
-                  <Input type="number" value={form.tax_rate} onChange={e => set('tax_rate', e.target.value)} className="mt-1" placeholder="0" />
-                </div>
-                <div>
-                  <Label>Membro</Label>
-                  <Select value={form.member} onValueChange={v => set('member', v)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="eu">Eu</SelectItem>
-                      <SelectItem value="conjuge">Cônjuge</SelectItem>
-                      <SelectItem value="familia">Família</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <div>
+                <Label>Alíquota Imposto (%)</Label>
+                <Input type="number" value={form.tax_rate} onChange={e => set('tax_rate', e.target.value)} className="mt-1" placeholder="0" />
+              </div>
             )}
           </div>
         </div>

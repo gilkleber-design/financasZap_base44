@@ -122,6 +122,7 @@ export default function Transactions() {
                     </span>
                     {tx.category && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{CATEGORY_LABELS[tx.category] || tx.category}</Badge>}
                     {tx.member && tx.member !== 'eu' && <Badge variant="secondary" className="text-xs py-0 h-4 px-1.5">{tx.member}</Badge>}
+                    {tx.created_by && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5 text-slate-500 bg-slate-50">👤 {tx.created_by.split('@')[0]}</Badge>}
                     {tx.tax_rate > 0 && <Badge className="text-xs py-0 h-4 px-1.5 bg-amber-100 text-amber-700 border-0">IR {tx.tax_rate}%</Badge>}
                   </div>
                 </div>
