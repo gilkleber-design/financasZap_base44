@@ -14,14 +14,7 @@ import { LinkIcon, AlertCircle } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-// Verifica se dois textos têm similaridade por palavras em comum
-function hasSimilarity(a, b) {
-  if (!a || !b) return false;
-  const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
-  const wordsA = normalize(a);
-  const wordsB = normalize(b);
-  return wordsA.some(w => wordsB.includes(w));
-}
+// Removed hasSimilarity - auto matching is disabled
 
 export default function TransactionFormModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -29,19 +22,7 @@ export default function TransactionFormModal({ onClose, onSaved }) {
     category: '', date: format(new Date(), 'yyyy-MM-dd'), tax_rate: '', member: 'eu', source: 'manual', origin: '',
   });
   const [saving, setSaving] = useState(false);
-  const [matchSuggestion, setMatchSuggestion] = useState(null); // { item, entityType }
-
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const { data: receivables = [] } = useQuery({
-    queryKey: ['receivables'],
-    queryFn: () => base44.entities.Receivable.list('-due_date', 100),
-  });
-
-  const { data: payables = [] } = useQuery({
-    queryKey: ['payables'],
-    queryFn: () => base44.entities.Payable.list('-due_date', 100),
-  });
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounts'],
@@ -53,29 +34,8 @@ export default function TransactionFormModal({ onClose, onSaved }) {
     queryFn: () => base44.entities.Card.list('', 100),
   });
 
-  const findMatch = (description, type) => {
-    if (type === 'income') {
-      const match = receivables.find(r => r.status === 'pending' && hasSimilarity(description, r.description));
-      if (match) return { item: match, entityType: 'receivable' };
-    } else {
-      const match = payables.find(p => p.status === 'pending' && hasSimilarity(description, p.description));
-      if (match) return { item: match, entityType: 'payable' };
-    }
-    return null;
-  };
-
-  const handleSave = async (reconcileWith = null) => {
+  const handleSave = async () => {
     if (!form.description || !form.amount || !form.date) return toast.error('Preencha os campos obrigatórios');
-
-    // Se ainda não verificou sugestões, faz a checagem agora
-    if (matchSuggestion === undefined) return;
-    if (matchSuggestion === null) {
-      const match = findMatch(form.description, form.type);
-      if (match) {
-        setMatchSuggestion(match);
-        return; // Pausa para mostrar sugestão
-      }
-    }
 
     setSaving(true);
     const taxRate = parseFloat(form.tax_rate) || 0;
@@ -98,116 +58,14 @@ export default function TransactionFormModal({ onClose, onSaved }) {
     if (isAccount) txData.account_id = originId;
     if (isCard) txData.card_id = originId;
 
-    let finalTxData = { ...txData, reconciled: false };
-    
-    if (reconcileWith) {
-      if (reconcileWith.entityType === 'receivable') finalTxData.receivable_id = reconcileWith.item.id;
-      if (reconcileWith.entityType === 'payable') finalTxData.payable_id = reconcileWith.item.id;
-    } else {
-      // Proibido transações órfãs: Criar Payable/Receivable se não houver match
-      if (form.type === 'income') {
-        const rec = await base44.entities.Receivable.create({
-          description: form.description,
-          amount: txData.amount,
-          net_amount: txData.net_amount || txData.amount,
-          due_date: form.date,
-          status: 'received',
-          account_id: txData.account_id
-        });
-        finalTxData.receivable_id = rec.id;
-      } else {
-        const pay = await base44.entities.Payable.create({
-          description: form.description,
-          amount: txData.amount,
-          due_date: form.date,
-          status: 'paid',
-          account_id: txData.account_id,
-          origin_id: txData.account_id || txData.card_id,
-          origin_type: txData.account_id ? 'account' : 'card',
-          category: txData.category
-        });
-        finalTxData.payable_id = pay.id;
-      }
-    }
+    // Pipeline único: registra apenas a transação.
+    const finalTxData = { ...txData, reconciled: false };
+    await base44.entities.Transaction.create(finalTxData);
 
-    const tx = await base44.entities.Transaction.create(finalTxData);
-
-    // Atualiza status do item conciliado ou recém criado
-    if (reconcileWith) {
-      if (reconcileWith.entityType === 'receivable') {
-        await base44.entities.Receivable.update(reconcileWith.item.id, { status: 'received', transaction_id: tx.id });
-      } else {
-        await base44.entities.Payable.update(reconcileWith.item.id, { status: 'paid', transaction_id: tx.id });
-      }
-      toast.success('Lançamento criado e conciliado!');
-    } else {
-      if (form.type === 'income') {
-        await base44.entities.Receivable.update(finalTxData.receivable_id, { transaction_id: tx.id });
-      } else {
-        await base44.entities.Payable.update(finalTxData.payable_id, { transaction_id: tx.id });
-      }
-      toast.success('Lançamento criado e provisionado automaticamente!');
-    }
-
+    toast.success('Lançamento salvo!');
     setSaving(false);
     onSaved();
   };
-
-  const handleDescriptionBlur = () => {
-    if (form.description.length > 2) {
-      const match = findMatch(form.description, form.type);
-      setMatchSuggestion(match || null);
-    }
-  };
-
-  // Tela de confirmação de conciliação
-  if (matchSuggestion) {
-    const { item, entityType } = matchSuggestion;
-    const label = entityType === 'receivable' ? 'conta a receber' : 'conta a pagar';
-    return (
-      <Dialog open onOpenChange={onClose}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-amber-500" />
-              Possível conciliação encontrada
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-2 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Encontrei uma <strong>{label}</strong> pendente com nome similar ao seu lançamento. É referente a isso?
-            </p>
-            <div className="bg-accent/30 rounded-xl p-4 border border-border space-y-1">
-              <p className="text-sm font-semibold">{item.description}</p>
-              <p className="text-sm text-emerald-600 font-bold">{fmt(item.net_amount || item.amount)}</p>
-              {item.due_date && <p className="text-xs text-muted-foreground">Vencimento: {format(new Date(item.due_date), 'dd/MM/yyyy')}</p>}
-            </div>
-            <div className="flex flex-col gap-2 pt-1">
-              <Button
-                className="w-full gap-2"
-                onClick={() => handleSave(matchSuggestion)}
-                disabled={saving}
-              >
-                <LinkIcon className="w-4 h-4" />
-                Sim, conciliar com essa {label}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => { setMatchSuggestion(false); handleSave(null); }}
-                disabled={saving}
-              >
-                Não, são lançamentos diferentes
-              </Button>
-              <Button variant="ghost" className="w-full text-muted-foreground" onClick={onClose}>
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -221,20 +79,14 @@ export default function TransactionFormModal({ onClose, onSaved }) {
             <Input
               value={form.description}
               onChange={e => set('description', e.target.value)}
-              onBlur={handleDescriptionBlur}
               className="mt-1"
               placeholder="Ex: Almoço no restaurante"
             />
-            {matchSuggestion && (
-              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> Possível conciliação encontrada
-              </p>
-            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Tipo *</Label>
-              <Select value={form.type} onValueChange={v => { set('type', v); setMatchSuggestion(null); }}>
+              <Select value={form.type} onValueChange={v => set('type', v)}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="expense">Despesa</SelectItem>

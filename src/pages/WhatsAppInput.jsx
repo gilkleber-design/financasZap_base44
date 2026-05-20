@@ -23,15 +23,7 @@ export default function WhatsAppInput() {
     queryFn: () => base44.entities.IncomeSource.list(),
   });
 
-  const { data: payables = [] } = useQuery({
-    queryKey: ['payables'],
-    queryFn: () => base44.entities.Payable.list('-due_date', 100),
-  });
-
-  const { data: receivables = [] } = useQuery({
-    queryKey: ['receivables'],
-    queryFn: () => base44.entities.Receivable.list('-due_date', 100),
-  });
+  // Removido payables e receivables (não entram no pipeline único de IA)
 
   const { data: cards = [] } = useQuery({
     queryKey: ['cards'],
@@ -45,9 +37,6 @@ export default function WhatsAppInput() {
 
   const processInput = async (inputText, fileUrl = null, fileType = null) => {
     setProcessing(true);
-    const pendingPayables = payables.filter(p => p.status === 'pending');
-    const pendingReceivables = receivables.filter(r => r.status === 'pending');
-
     const prompt = `Você é um assistente financeiro pessoal brasileiro. Analise a mensagem abaixo e extraia as informações de um lançamento financeiro.
 
 MENSAGEM/CONTEÚDO: "${inputText || 'Analise o arquivo anexado'}"
@@ -56,24 +45,18 @@ ${fileUrl ? `ARQUIVO ANEXADO: ${fileUrl} (tipo: ${fileType})` : ''}
 FONTES DE RENDA CADASTRADAS:
 ${incomeSources.map(s => `- ${s.name} (${s.type.toUpperCase()}, alíquota padrão: ${s.default_tax_rate || 0}%)`).join('\n') || 'Nenhuma cadastrada'}
 
-CONTAS A PAGAR PENDENTES (para conciliação automática):
-${pendingPayables.map(p => `- ID:${p.id} | ${p.description} | R$${p.amount} | venc:${p.due_date}`).join('\n') || 'Nenhuma'}
-
-CONTAS A RECEBER PENDENTES (para conciliação automática):
-${pendingReceivables.map(r => `- ID:${r.id} | ${r.description} | R$${r.amount} | venc:${r.due_date}`).join('\n') || 'Nenhuma'}
+REGRA DE TIPO:
+Se a mensagem não começar exatamente com "recebi", "entrou" ou "caiu", o lançamento DEVE OBRIGATORIAMENTE ser classificado como "expense" (Despesa).
 
 Extraia e retorne em JSON:
 - description: string (descrição clara do lançamento)
 - amount: number (valor bruto)
 - net_amount: number (valor líquido - se PJ, desconte o imposto; se CLT ou despesa, igual ao amount)
-- type: "income" | "expense"
+- type: "income" | "expense" (Seguindo estritamente a REGRA DE TIPO acima)
 - category: uma de: alimentacao, transporte, moradia, saude, educacao, lazer, vestuario, servicos, impostos, salario_clt, receita_pj, outros
 - date: string no formato YYYY-MM-DD (use a data mencionada ou hoje: ${format(new Date(), 'yyyy-MM-dd')})
 - tax_rate: number ou null (alíquota % se for PJ)
 - tax_amount: number ou null (valor do imposto)
-- payable_id: string ou null (ID da conta a pagar que este lançamento quita, se identificado)
-- receivable_id: string ou null (ID da conta a receber que este lançamento concilia, se identificado)
-- reconciled: boolean (true se conciliou com alguma conta)
 - income_source_id: string ou null (ID da fonte de renda, se receita)
 - confidence: number 0-1 (confiança na extração)
 - notes: string (observações ou dúvidas)`;
@@ -92,9 +75,6 @@ Extraia e retorne em JSON:
           date: { type: 'string' },
           tax_rate: { type: 'number' },
           tax_amount: { type: 'number' },
-          payable_id: { type: 'string' },
-          receivable_id: { type: 'string' },
-          reconciled: { type: 'boolean' },
           income_source_id: { type: 'string' },
           confidence: { type: 'number' },
           notes: { type: 'string' },
@@ -121,44 +101,10 @@ Extraia e retorne em JSON:
   };
 
   const handleSave = async (data) => {
-    let finalTxData = { ...data, reconciled: false };
+    // Pipeline Único: cria somente a transação real. Nenhuma criação automática de previsão.
+    const finalTxData = { ...data, reconciled: false };
     
-    // Proibido transações órfãs: Criar Payable/Receivable se não houver match
-    if (finalTxData._create_provision) {
-      delete finalTxData._create_provision;
-      if (finalTxData.type === 'income') {
-        const rec = await base44.entities.Receivable.create({
-          description: finalTxData.description,
-          amount: finalTxData.amount,
-          net_amount: finalTxData.net_amount || finalTxData.amount,
-          due_date: finalTxData.date,
-          status: 'received',
-          account_id: finalTxData.account_id
-        });
-        finalTxData.receivable_id = rec.id;
-      } else {
-        const pay = await base44.entities.Payable.create({
-          description: finalTxData.description,
-          amount: finalTxData.amount,
-          due_date: finalTxData.date,
-          status: 'paid',
-          account_id: finalTxData.account_id,
-          origin_id: finalTxData.account_id || finalTxData.card_id,
-          origin_type: finalTxData.account_id ? 'account' : 'card',
-          category: finalTxData.category
-        });
-        finalTxData.payable_id = pay.id;
-      }
-    }
-    
-    const tx = await base44.entities.Transaction.create(finalTxData);
-
-    if (finalTxData.payable_id) {
-      await base44.entities.Payable.update(finalTxData.payable_id, { status: 'paid', transaction_id: tx.id });
-    }
-    if (finalTxData.receivable_id) {
-      await base44.entities.Receivable.update(finalTxData.receivable_id, { status: 'received', transaction_id: tx.id });
-    }
+    await base44.entities.Transaction.create(finalTxData);
 
     queryClient.invalidateQueries();
     setPreview(null);
@@ -241,8 +187,6 @@ Extraia e retorne em JSON:
         <TransactionPreviewModal
           data={preview}
           incomeSources={incomeSources}
-          payables={payables}
-          receivables={receivables}
           cards={cards}
           accounts={accounts}
           onSave={handleSave}

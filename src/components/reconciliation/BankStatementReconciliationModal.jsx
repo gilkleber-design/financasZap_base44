@@ -217,7 +217,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   
   const [statementRows, setStatementRows] = useState([]);
   const [ignoredRows, setIgnoredRows] = useState({});
-  const [manualMatches, setManualMatches] = useState({});
+  const [manualMatches, setManualMatches] = useState({}); // Agora guarda arrays: { [rowId]: [candidate1, candidate2] }
   const [hideProcessed, setHideProcessed] = useState(false);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [editingOrphan, setEditingOrphan] = useState(null);
@@ -303,16 +303,27 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     };
   }, [payables, receivables, transactions, selectedAccountId, showOtherAccounts]);
 
+  const toggleCandidate = (rowId, candidate) => {
+    setManualMatches(prev => {
+      const current = prev[rowId] || [];
+      const exists = current.find(c => c.id === candidate.id);
+      if (exists) {
+        return { ...prev, [rowId]: current.filter(c => c.id !== candidate.id) };
+      } else {
+        return { ...prev, [rowId]: [...current, candidate] };
+      }
+    });
+  };
+
   const rowsWithState = useMemo(() => {
     if (!selectedAccountId) return [];
     
     const poolReconciled = [...reconciledTransactions];
-    const poolCandidates = [...candidates];
 
     return statementRows.map((row) => {
       if (ignoredRows[row.id]) return { ...row, status: 'to_ignore' };
 
-      // 1. Busca Match Exato na Conta Selecionada
+      // Identifica se já foi processado antes (match exato com transação já reconciliada)
       const processedIdx = poolReconciled.findIndex(t => getRecordAccountId(t) === selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
       if (processedIdx !== -1) {
         const match = poolReconciled[processedIdx];
@@ -320,41 +331,22 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         return { ...row, status: 'processed', match };
       }
 
-      // 2. Busca Quarentena (Conta Errada) nos Processados
-      if (showOtherAccounts) {
-        const foreignProcessedIdx = poolReconciled.findIndex(t => getRecordAccountId(t) !== selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
-        if (foreignProcessedIdx !== -1) {
-          const match = poolReconciled[foreignProcessedIdx];
-          return { ...row, status: 'foreign_match', match };
-        }
-      }
-
-      if (manualMatches[row.id]) return { ...row, status: 'manual_match', match: manualMatches[row.id] };
       if (row.isDraftResolved) return { ...row, status: 'draft_ready' };
 
-      // 3. Busca Match Exato nos Candidatos Pendentes
-      const autoIdx = poolCandidates.findIndex(c => getRecordAccountId(c) === selectedAccountId && matchesBankAmount(c, row.amount) && isDateNear(candidateDate(c), row.date));
-      if (autoIdx !== -1) {
-        const match = poolCandidates[autoIdx];
-        poolCandidates.splice(autoIdx, 1);
-        return { ...row, status: 'auto_match', match };
-      }
-
-      // 4. Busca Quarentena (Conta Errada) nos Candidatos
-      if (showOtherAccounts) {
-        const foreignAutoIdx = poolCandidates.findIndex(c => getRecordAccountId(c) !== selectedAccountId && matchesBankAmount(c, row.amount) && isDateNear(candidateDate(c), row.date));
-        if (foreignAutoIdx !== -1) {
-          const match = poolCandidates[foreignAutoIdx];
-          return { ...row, status: 'foreign_match', match };
-        }
+      // Se há matches manuais selecionados
+      if (manualMatches[row.id] && manualMatches[row.id].length > 0) {
+        const selected = manualMatches[row.id];
+        const sum = selected.reduce((acc, c) => acc + (c.amount || 0), 0);
+        const isReady = toCents(sum) === toCents(row.amount);
+        return { ...row, status: isReady ? 'manual_match_ready' : 'manual_match_pending', selected, sum };
       }
 
       return { ...row, status: 'orphan' };
     });
-  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches, selectedAccountId, showOtherAccounts]);
+  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches, selectedAccountId]);
 
   const itemsToProcess = rowsWithState.filter(r => 
-    ['auto_match', 'manual_match', 'draft_ready', 'to_ignore'].includes(r.status)
+    ['manual_match_ready', 'draft_ready', 'to_ignore'].includes(r.status)
   ).length;
 
   const handleReclassify = async (match) => {
@@ -378,7 +370,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const executeBatchMutation = useMutation({
     mutationFn: async () => {
       const toProcess = rowsWithState.filter(r => 
-        ['auto_match', 'manual_match', 'draft_ready', 'to_ignore'].includes(r.status)
+        ['manual_match_ready', 'draft_ready', 'to_ignore'].includes(r.status)
       );
 
       for (const row of toProcess) {
@@ -396,34 +388,9 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
           });
         } 
         else if (row.status === 'draft_ready') {
-          const isInstallment = row.recurrence === 'installment';
-          const isFixed = row.recurrence === 'fixed';
-          const isExpense = row.type === 'expense';
-          const EntityProvider = isExpense ? base44.entities.Payable : base44.entities.Receivable;
-          
-          const baseDesc = row.description;
-          const currentDesc = isInstallment ? `${baseDesc} (1/${row.installmentsCount})` : baseDesc;
-
-          const parentPayload = {
-            description: currentDesc,
-            category: row.preSelectedCategory || undefined,
-            due_date: row.date,
-            status: isExpense ? 'paid' : 'received',
-            account_id: selectedAccountId,
-            ...(isExpense && { origin_id: selectedAccountId, origin_type: 'account' }),
-          };
-          
-          if (isExpense) {
-            parentPayload.amount = row.amount;
-          } else {
-            parentPayload.amount = row.amount;
-            parentPayload.net_amount = row.amount;
-          }
-          
-          const parentEntity = await EntityProvider.create(parentPayload);
-
-          const transactionPayload = {
-            description: currentDesc,
+          // Apenas cria a transação real. Payables e Receivables não entram mais no fluxo real via conciliação.
+          await base44.entities.Transaction.create({
+            description: row.description,
             amount: row.amount,
             type: row.type,
             category: row.preSelectedCategory || undefined,
@@ -432,93 +399,53 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             reconciled: true,
             notes: 'Criado e Categorizado na Conciliação',
             account_id: selectedAccountId,
-          };
-          
-          if (!isExpense) transactionPayload.net_amount = row.amount;
-          if (isExpense) transactionPayload.payable_id = parentEntity.id;
-          else transactionPayload.receivable_id = parentEntity.id;
-
-          const transaction = await base44.entities.Transaction.create(transactionPayload);
-
-          await EntityProvider.update(parentEntity.id, {
-            transaction_id: transaction.id,
-            ...(isFixed && { recurrent: true })
           });
-
-          if (isInstallment && row.installmentsCount > 1) {
-            const startAt = (Number(row.currentInstallment) || 1) + 1; 
-            for (let i = startAt; i <= row.installmentsCount; i++) {
-              const nextDate = addMonths(parseISO(row.date), i - Number(row.currentInstallment || 1));
-              const futurePayload = {
-                description: `${baseDesc} (${i}/${row.installmentsCount})`,
-                category: row.preSelectedCategory || undefined,
-                due_date: format(nextDate, 'yyyy-MM-dd'),
-                status: 'pending',
-                account_id: selectedAccountId,
-                ...(isExpense && { origin_id: selectedAccountId, origin_type: 'account' }),
-              };
-              
-              if (isExpense) {
-                futurePayload.amount = row.amount;
-              } else {
-                futurePayload.amount = row.amount;
-                futurePayload.net_amount = row.amount;
-              }
-              await EntityProvider.create(futurePayload);
-            }
-          }
         } 
-        else if (row.status === 'auto_match' || row.status === 'manual_match') {
-          if (row.match.kind === 'transaction') {
-            await base44.entities.Transaction.update(row.match.id, {
-              amount: row.amount, 
-              date: row.date,    
-              type: row.type, 
-              reconciled: true,
-              account_id: selectedAccountId,
-              notes: row.match.notes || 'Conciliado com extrato',
-            });
-          } else if (row.match.kind === 'payable') {
-            const transaction = await base44.entities.Transaction.create({
-              description: row.description || row.match.description,
-              amount: row.amount,
-              type: row.type, 
-              category: row.match.category,
-              date: row.date,
-              source: 'manual',
-              payable_id: row.match.id,
-              reconciled: true,
-              account_id: selectedAccountId,
-              notes: 'Pagamento de despesa conciliado em lote',
-            });
-            await base44.entities.Payable.update(row.match.id, {
-              amount: row.amount, 
-              status: 'paid',
-              account_id: selectedAccountId,
-              origin_id: selectedAccountId,
-              origin_type: 'account',
-              transaction_id: transaction.id,
-            });
-          } else if (row.match.kind === 'receivable') {
-            const transaction = await base44.entities.Transaction.create({
-              description: row.description || row.match.description,
-              amount: row.match.amount || row.amount,
-              net_amount: row.amount,
-              type: row.type, 
-              category: row.match.category,
-              date: row.date,
-              source: 'manual',
-              receivable_id: row.match.id,
-              reconciled: true,
-              account_id: selectedAccountId,
-              notes: 'Receita conciliada em lote',
-            });
-            await base44.entities.Receivable.update(row.match.id, {
-              net_amount: row.amount, 
-              status: 'received',
-              account_id: selectedAccountId,
-              transaction_id: transaction.id,
-            });
+        else if (row.status === 'manual_match_ready') {
+          // Para cada item selecionado que compõe o valor do extrato, criamos/atualizamos a transação real.
+          for (const match of row.selected) {
+            if (match.kind === 'transaction') {
+              await base44.entities.Transaction.update(match.id, {
+                reconciled: true,
+                account_id: selectedAccountId,
+                notes: match.notes ? match.notes + ' | Conciliado com extrato' : 'Conciliado com extrato',
+              });
+            } else if (match.kind === 'payable') {
+              const transaction = await base44.entities.Transaction.create({
+                description: match.description,
+                amount: match.amount,
+                type: 'expense', 
+                category: match.category,
+                date: row.date,
+                source: 'manual',
+                payable_id: match.id,
+                reconciled: true,
+                account_id: selectedAccountId,
+                notes: 'Pagamento conciliado na mesa',
+              });
+              await base44.entities.Payable.update(match.id, {
+                status: 'paid',
+                transaction_id: transaction.id,
+              });
+            } else if (match.kind === 'receivable') {
+              const transaction = await base44.entities.Transaction.create({
+                description: match.description,
+                amount: match.amount,
+                net_amount: match.amount,
+                type: 'income', 
+                category: match.category,
+                date: row.date,
+                source: 'manual',
+                receivable_id: match.id,
+                reconciled: true,
+                account_id: selectedAccountId,
+                notes: 'Recebimento conciliado na mesa',
+              });
+              await base44.entities.Receivable.update(match.id, {
+                status: 'received',
+                transaction_id: transaction.id,
+              });
+            }
           }
         }
       }
@@ -632,10 +559,10 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     const isForeign = row.status === 'foreign_match';
     
     let badgeClass = "bg-slate-100 text-slate-500";
-    if (row.status === 'auto_match' || row.status === 'manual_match') badgeClass = "bg-green-100 text-green-700";
+    if (row.status === 'manual_match_ready') badgeClass = "bg-green-100 text-green-700";
+    if (row.status === 'manual_match_pending') badgeClass = "bg-amber-100 text-amber-700";
     if (row.status === 'orphan') badgeClass = "bg-red-100 text-red-700";
     if (row.status === 'draft_ready') badgeClass = "bg-blue-100 text-blue-700";
-    if (isForeign) badgeClass = "bg-orange-100 text-orange-700";
     
     return (
       <TableRow key={row.id} className={`${isProcessed || isIgnored ? 'bg-slate-50/50 opacity-50 grayscale' : 'hover:bg-slate-50'} transition-all`}>
@@ -648,21 +575,30 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         </TableCell>
         <TableCell className="border-r text-right font-black text-sm">{formatCurrency(row.amount)}</TableCell>
         <TableCell className="max-w-[500px]">
-          {row.match ? (
-              <p className={`truncate text-sm font-bold ${isProcessed ? 'text-slate-500' : 'text-slate-700'}`}>{row.match.description}</p>
+          {row.selected && row.selected.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                {row.selected.map(s => (
+                  <p key={s.id} className="truncate text-xs font-bold text-slate-700">✓ {s.description} ({formatCurrency(s.amount)})</p>
+                ))}
+                {row.status === 'manual_match_pending' && (
+                  <p className="text-xs text-amber-600 font-bold mt-1">Faltam: {formatCurrency(Math.abs(row.amount - row.sum))}</p>
+                )}
+              </div>
+          ) : row.match ? (
+              <p className="truncate text-sm font-bold text-slate-500">{row.match.description}</p>
           ) : (
               <span className="text-[11px] font-bold text-slate-400 uppercase">
-                {row.status === 'draft_ready' ? `Categoria: ${row.preSelectedCategory}` : 'Nenhum vínculo'}
+                {row.status === 'draft_ready' ? `Novo: ${row.preSelectedCategory}` : 'Nenhum selecionado'}
               </span>
           )}
         </TableCell>
         <TableCell>
           <Badge className={`${badgeClass} border-none font-bold uppercase text-[9px]`}>
-              {row.status === 'processed' ? 'Já Salvo no Banco' : 
-               row.status === 'auto_match' || row.status === 'manual_match' ? 'Conciliado - Match' :
-               row.status === 'draft_ready' ? 'Pronto p/ Criar' :
-               row.status === 'to_ignore' ? 'Ignorado' : 
-               isForeign ? 'Em Outra Conta' : 'Órfão'}
+              {row.status === 'processed' ? 'Já Salvo' : 
+               row.status === 'manual_match_ready' ? 'Pronto p/ Conciliar' :
+               row.status === 'manual_match_pending' ? 'Divergente (Soma !=)' :
+               row.status === 'draft_ready' ? 'Criar Avulso' :
+               row.status === 'to_ignore' ? 'Ignorado' : 'Órfão'}
           </Badge>
         </TableCell>
         <TableCell className="text-right">
@@ -670,25 +606,19 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               <Button size="sm" variant="ghost" onClick={() => toggleIgnore(row.id)}>
                   {row.status === 'to_ignore' ? <Undo2 className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </Button>
-              
-              {isForeign && (
-                <Button size="sm" variant="destructive" className="text-xs" onClick={() => handleReclassify(row.match)}>
-                  Reclassificar
-                </Button>
-              )}
 
-              {(row.status === 'orphan' || row.status === 'draft_ready') && (
+              {(row.status === 'orphan' || row.status === 'draft_ready' || row.status.startsWith('manual_match')) && (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => { setEditingOrphan(row); setRecurrenceType(row.recurrence || 'single'); }} className="text-blue-600 hover:text-blue-700">
+                    <Button size="sm" variant="outline" onClick={() => { setEditingOrphan(row); setRecurrenceType(row.recurrence || 'single'); }} className="text-blue-600 hover:text-blue-700" title="Criar lançamento avulso para cobrir diferença">
                         {row.status === 'draft_ready' ? <Pencil className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
                     </Button>
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button size="sm" variant="outline"><Search className="h-4 w-4" /></Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[400px] p-0">
+                        <PopoverContent className="w-[400px] p-0" align="end">
                             <Command>
-                                <CommandInput />
+                                <CommandInput placeholder="Buscar lançamentos para compor..." />
                                 <CommandList className="max-h-[300px] overflow-y-auto">
                                     <CommandGroup>
                                         {candidates.filter(c => {
@@ -698,11 +628,20 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                             } else {
                                                 return ['payable', 'expense', 'transfer'].includes(cType);
                                             }
-                                        }).map(c => (
-                                            <CommandItem key={c.id} onSelect={() => setManualMatches({...manualMatches, [row.id]: c})}>
-                                                {c.description} - {formatCurrency(c.amount)}
-                                            </CommandItem>
-                                        ))}
+                                        }).map(c => {
+                                            const isSelected = (row.selected || []).find(s => s.id === c.id);
+                                            return (
+                                              <CommandItem key={c.id} onSelect={() => toggleCandidate(row.id, c)}>
+                                                  <div className="flex items-center gap-2">
+                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
+                                                      {isSelected && <Check className="w-3 h-3 text-white" />}
+                                                    </div>
+                                                    <span className="truncate flex-1">{c.description}</span>
+                                                    <span className="font-bold">{formatCurrency(c.amount)}</span>
+                                                  </div>
+                                              </CommandItem>
+                                            );
+                                        })}
                                     </CommandGroup>
                                 </CommandList>
                             </Command>
@@ -758,10 +697,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
                   {parsingPdf && <span className="text-xs font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap shrink-0">Processando PDF...</span>}
                   
-                  <Button variant="outline" onClick={() => setShowOtherAccounts(!showOtherAccounts)} className={showOtherAccounts ? "bg-orange-50 text-orange-600 border-orange-200" : ""}>
-                      <RefreshCcw className="w-4 h-4 mr-2" />
-                      {showOtherAccounts ? "Esconder Quarentena" : "Buscar em Outras Contas"}
-                  </Button>
+                  {/* Removido Buscar em Outras Contas (Sem automatização) */}
                   
                   <Button variant="outline" onClick={() => setHideProcessed(!hideProcessed)}>
                       {hideProcessed ? <Eye className="w-4 h-4 mr-2" /> : <EyeOff className="w-4 h-4 mr-2" />}

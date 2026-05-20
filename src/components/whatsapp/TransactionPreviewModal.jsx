@@ -19,19 +19,11 @@ const INCOME_CATEGORIES = [
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-function hasSimilarity(a, b) {
-  if (!a || !b) return false;
-  const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
-  const wordsA = normalize(a);
-  const wordsB = normalize(b);
-  return wordsA.some(w => wordsB.includes(w));
-}
+// Removed hasSimilarity
 
-export default function TransactionPreviewModal({ data, incomeSources, payables, receivables, cards = [], accounts = [], onSave, onCancel }) {
+export default function TransactionPreviewModal({ data, incomeSources, cards = [], accounts = [], onSave, onCancel }) {
   const [form, setForm] = useState({ ...data });
   const [paymentMethod, setPaymentMethod] = useState('');
-  const [reconcileSuggestion, setReconcileSuggestion] = useState(null);
-  const [reconcileDecided, setReconcileDecided] = useState(false);
   const [categorySuggestion, setCategorySuggestion] = useState(null); // { slug, name }
   const [suggestingCategory, setSuggestingCategory] = useState(false);
   const suggestionFiredRef = useRef(false);
@@ -69,45 +61,6 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
     }).finally(() => setSuggestingCategory(false));
   }, [form.description, form.type, expenseCategories.length]);
 
-  // Detecta sugestão de conciliação ao montar ou quando descrição/tipo mudam
-  useEffect(() => {
-    if (reconcileDecided) return;
-
-    // Se a IA já identificou uma conciliação, usa ela
-    if (form.receivable_id) {
-      const r = receivables.find(r => r.id === form.receivable_id);
-      if (r) { setReconcileSuggestion({ item: r, entityType: 'receivable' }); return; }
-    }
-    if (form.payable_id) {
-      const p = payables.find(p => p.id === form.payable_id);
-      if (p) { setReconcileSuggestion({ item: p, entityType: 'payable' }); return; }
-    }
-
-    // Busca por similaridade de texto
-    if (form.type === 'income') {
-      const match = receivables.find(r => r.status === 'pending' && hasSimilarity(form.description, r.description));
-      if (match) setReconcileSuggestion({ item: match, entityType: 'receivable' });
-    } else {
-      const match = payables.find(p => p.status === 'pending' && hasSimilarity(form.description, p.description));
-      if (match) setReconcileSuggestion({ item: match, entityType: 'payable' });
-    }
-  }, [form.description, form.type]);
-
-  const confirmReconcile = () => {
-    set('reconciled', false); // Mantém false para passar na mesa de conciliação depois
-    if (reconcileSuggestion.entityType === 'receivable') set('receivable_id', reconcileSuggestion.item.id);
-    if (reconcileSuggestion.entityType === 'payable') set('payable_id', reconcileSuggestion.item.id);
-    setReconcileDecided(true);
-  };
-
-  const rejectReconcile = () => {
-    set('reconciled', false);
-    set('receivable_id', null);
-    set('payable_id', null);
-    setReconcileSuggestion(null);
-    setReconcileDecided(true);
-  };
-
   const handleSave = () => {
     if (!paymentMethod) return;
     const finalData = { ...form };
@@ -119,10 +72,6 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
     if (isAccount) finalData.account_id = originId;
     if (isCard) finalData.card_id = originId;
     
-    if (!finalData.payable_id && !finalData.receivable_id) {
-      finalData._create_provision = true;
-    }
-    
     if (paymentMethod) finalData.notes = `${finalData.notes ? finalData.notes + ' | ' : ''}Pagamento/Recebimento: ID ${originId}`;
     onSave(finalData);
   };
@@ -132,8 +81,6 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
     ...accounts.filter(a => a.active !== false).map(a => ({ id: `account:${a.id}`, label: `🏦 Conta - ${a.name}${a.bank ? ` (${a.bank})` : ''}` })),
     ...cards.filter(c => c.active !== false).map(c => ({ id: `card:${c.id}`, label: `💳 Cartão - ${c.name}` }))
   ];
-
-  const entityLabel = reconcileSuggestion?.entityType === 'receivable' ? 'conta a receber' : 'conta a pagar';
 
   return (
     <Card className="border-2 border-primary/20 shadow-lg">
@@ -156,45 +103,7 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
 
       <CardContent className="space-y-4">
 
-        {/* Alerta de conciliação — DESTAQUE */}
-        {reconcileSuggestion && !reconcileDecided && (
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-amber-600" />
-              <p className="text-sm font-semibold text-amber-800">Encontrei uma {entityLabel} com nome similar!</p>
-            </div>
-            <div className="bg-white rounded-lg p-3 border border-amber-200">
-              <p className="text-sm font-medium">{reconcileSuggestion.item.description}</p>
-              <p className="text-sm font-bold text-emerald-600 mt-0.5">{fmt(reconcileSuggestion.item.net_amount || reconcileSuggestion.item.amount)}</p>
-              {reconcileSuggestion.item.due_date && (
-                <p className="text-xs text-muted-foreground mt-0.5">Vencimento: {reconcileSuggestion.item.due_date}</p>
-              )}
-            </div>
-            <p className="text-xs text-amber-700">Este lançamento é referente a essa {entityLabel}?</p>
-            <div className="flex gap-2">
-              <Button size="sm" className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmReconcile}>
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Sim, conciliar
-              </Button>
-              <Button size="sm" variant="outline" className="flex-1" onClick={rejectReconcile}>
-                <X className="w-3.5 h-3.5 mr-1" /> Não, são diferentes
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Conciliação confirmada */}
-        {reconcileDecided && (form.payable_id || form.receivable_id) && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-xs font-medium text-emerald-700">Conciliação confirmada</p>
-              <p className="text-xs text-emerald-600">{reconcileSuggestion?.item?.description}</p>
-            </div>
-            <Button variant="ghost" size="sm" className="text-xs h-6 text-muted-foreground" onClick={rejectReconcile}>
-              Remover
-            </Button>
-          </div>
-        )}
+        {/* Alertas de conciliação removidos do fluxo */}
 
         {/* Sugestão de categoria via IA */}
         {suggestingCategory && form.type === 'expense' && (
@@ -231,7 +140,7 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
 
           <div>
             <Label className="text-xs">Tipo</Label>
-            <Select value={form.type} onValueChange={v => { set('type', v); setReconcileDecided(false); setReconcileSuggestion(null); }}>
+            <Select value={form.type} onValueChange={v => set('type', v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="income">Receita</SelectItem>
