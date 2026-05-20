@@ -1,15 +1,13 @@
 import React, { useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import { Wallet, Coins, Scale, AlertTriangle, Home, Utensils, Car, Building, Users, Briefcase, MessageCircle, MoreHorizontal, Activity } from 'lucide-react';
+import { Wallet, Coins, Scale, AlertTriangle, MessageCircle, MoreHorizontal, Activity } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isBefore, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // --- HELPER FUNCTIONS ---
-export function cn(...inputs) {
-  return twMerge(clsx(inputs));
+export function cn(...classes) {
+  return classes.filter(Boolean).join(' ');
 }
 
 export const formatCurrency = (val, prefix = 'R$ ') => {
@@ -117,27 +115,36 @@ export default function DashboardPage() {
   // --- LÓGICA DE NEGÓCIO BLINDADA ---
   const stats = useMemo(() => {
     // 1. FILTRO MESTRE: Só entra dinheiro e gasto real (Validado ou Conciliado)
-const validTransactions = rawTransactions.filter(t => t.status === 'registered' || t.status === 'conciliated');
+    const validTransactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
     const monthTransactions = validTransactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
     
-    // KPI 1: Saldo Real em Conta (Histórico completo validado)
+    // KPI 1: Saldo Real em Conta
     const realIncomeTotal = validTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const realExpenseTotal = validTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const realBalance = realIncomeTotal - realExpenseTotal;
 
-    // KPI 2: Meta de Receitas (Mês Corrente)
-    // Usando monthTransactions (que já está filtrado para só transações validadas)
+    // KPI 2: Meta de Receitas (Mês Corrente + Atrasados)
     const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-    const currentMonthReceivables = receivables.filter(r => r.due_date >= monthStart && r.due_date <= monthEnd);
-    const targetIncome = currentMonthReceivables.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0) || (monthIncome + 1);
+    
+    // Pendentes apenas deste mês
+    const pendingCurrentMonth = receivables.filter(r => r.status === 'pending' && r.due_date >= monthStart && r.due_date <= monthEnd);
+    const pendingCurrentTotal = pendingCurrentMonth.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
+    
+    // Pendentes atrasados (de meses anteriores)
+    const pendingPreviousMonths = receivables.filter(r => r.status === 'pending' && r.due_date < monthStart);
+    const pendingOverdueTotal = pendingPreviousMonths.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
+
+    // Cálculos da Meta
+    const baseTarget = monthIncome + pendingCurrentTotal;
+    const overdueTarget = pendingOverdueTotal;
+    const targetIncome = baseTarget + overdueTarget || (monthIncome + 1); // Evita divisão por zero
+    
     const incomePercentage = Math.min((monthIncome / targetIncome) * 100, 100);
 
     // KPI 3: Saúde do Orçamento (Projetada)
-    const pendingReceivablesMonth = receivables.filter(r => r.status === 'pending' && r.due_date >= monthStart && r.due_date <= monthEnd);
     const pendingPayablesMonth = payables.filter(p => p.status === 'pending' && p.due_date >= monthStart && p.due_date <= monthEnd);
     
-    const projectedIncome = monthIncome + pendingReceivablesMonth.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
-    // Usando monthTransactions (garantindo que despesas "pending" não afetem o cálculo realizado)
+    const projectedIncome = monthIncome + pendingCurrentTotal + pendingOverdueTotal; 
     const monthExpense = monthTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const projectedExpense = monthExpense + pendingPayablesMonth.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
     
@@ -156,9 +163,8 @@ const validTransactions = rawTransactions.filter(t => t.status === 'registered' 
       .filter(c => c.type === type)
       .map(cat => {
         const meta = budgets.find(b => b.category_id === cat.id)?.amount || 0;
-        // monthTransactions já está limpo
         const realizado = monthTransactions.filter(t => t.category_id === cat.id).reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-        const pendentes = type === 'expense' ? pendingPayablesMonth : pendingReceivablesMonth;
+        const pendentes = type === 'expense' ? pendingPayablesMonth : pendingCurrentMonth;
         const comprometido = pendentes.filter(p => p.category_id === cat.id).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
         return { ...cat, meta, realizado, comprometido, totalUsage: realizado + comprometido, icon: Activity };
       })
@@ -169,6 +175,8 @@ const validTransactions = rawTransactions.filter(t => t.status === 'registered' 
       realBalance,
       monthIncome,
       targetIncome,
+      baseTarget,
+      overdueTarget,
       incomePercentage,
       projectedBalance,
       healthPercent,
@@ -193,9 +201,12 @@ const validTransactions = rawTransactions.filter(t => t.status === 'registered' 
       title: 'Meta de Receitas (Mês)',
       value: stats.monthIncome,
       target: stats.targetIncome,
+      baseTarget: stats.baseTarget,
+      overdueTarget: stats.overdueTarget,
       percentage: stats.incomePercentage.toFixed(0),
       icon: Coins,
       color: 'emerald',
+      isMetaCard: true, // Flag para renderizar a feature nova
     },
     {
       title: 'Saúde do Orçamento (Projetada)',
@@ -281,12 +292,23 @@ const validTransactions = rawTransactions.filter(t => t.status === 'registered' 
                 </div>
                 <div className="flex-1 space-y-1 min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
+                  
                   {card.title.includes('Saúde') ? (
                     <p className={`text-xl lg:text-2xl xl:text-3xl font-bold whitespace-nowrap truncate ${card.value >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{card.value >= 0 ? '+' : ''}{valueText}</p>
                   ) : (
-                    <div className="flex flex-wrap items-baseline gap-1.5 w-full">
-                      <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap">{valueText}</p>
-                      <span className="text-sm text-slate-400 whitespace-nowrap">/ <CurrencyText value={card.target} /></span>
+                    // LÓGICA DA META DE RECEITAS COM QUEBRA DE ATRASADOS
+                    <div className="flex flex-col items-start w-full">
+                      <div className="flex flex-wrap items-baseline gap-1.5 w-full">
+                        <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap">{valueText}</p>
+                        <span className="text-sm text-slate-400 whitespace-nowrap">/ <CurrencyText value={card.target} /></span>
+                      </div>
+                      
+                      {/* Detalhamento de atrasados */}
+                      {card.isMetaCard === true && card.overdueTarget > 0 && (
+                        <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                          (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atrasos</span>)
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
