@@ -117,7 +117,7 @@ export default function DashboardPage() {
   // --- LÓGICA DE NEGÓCIO BLINDADA ---
   const stats = useMemo(() => {
     // 1. FILTRO MESTRE: Só entra dinheiro e gasto real (Validado ou Conciliado)
-    const validTransactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
+const validTransactions = rawTransactions.filter(t => t.status === 'registered' || t.status === 'conciliated');
     const monthTransactions = validTransactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
     
     // KPI 1: Saldo Real em Conta (Histórico completo validado)
