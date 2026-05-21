@@ -210,13 +210,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
             </div>
           )}
 
-          {expenseType !== 'fixa' && (
-            <div className="border border-emerald-100 bg-emerald-50 rounded-xl p-3 space-y-2">
-              <Label className="text-xs text-emerald-700">Salvar e marcar como pago</Label>
-              <Input type="date" value={form.payment_date} onChange={e => set('payment_date', e.target.value)} className="bg-white" />
-              <p className="text-[10px] text-emerald-700">Se preencher esta data, selecione também a conta de pagamento acima.</p>
-            </div>
-          )}
+
 
           {/* Valor */}
           <div className={`grid gap-3 ${expenseType === 'avulsa' || expenseType === 'parcelada' ? 'grid-cols-2' : 'grid-cols-1'}`}>
