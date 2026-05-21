@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 
 import CategoryManager from '@/components/settings/CategoryManager';
 import CategoryRuleManager from '@/components/settings/CategoryRuleManager';
+import InitialBalanceModal from '@/components/settings/InitialBalanceModal';
 
 
 export default function Settings() {
@@ -27,6 +28,7 @@ export default function Settings() {
   const [showNewSource, setShowNewSource] = useState(false);
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [showNewCard, setShowNewCard] = useState(false);
+  const [showInitialBalance, setShowInitialBalance] = useState(false);
 
 
   const toggleSection = (section) => setOpenSections((p) => ({ ...p, [section]: !p[section] }));
@@ -176,7 +178,14 @@ export default function Settings() {
          <Button variant="ghost" className="w-full flex justify-between p-4 h-auto text-slate-700 font-bold"><div className="flex items-center gap-2"><Landmark className="w-4 h-4 text-primary" /> Contas Bancárias</div>{openSections.accounts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</Button>
        </CollapsibleTrigger>
        <CollapsibleContent className="p-4 border-t space-y-4">
-         <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setShowNewAccount(true)}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Conta</Button></div>
+         <div className="flex justify-end gap-2">
+           <Button size="sm" variant="outline" className="text-slate-600 border-dashed" onClick={() => setShowInitialBalance(true)}>
+             Ajuste de Saldo Geral
+           </Button>
+           <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setShowNewAccount(true)}>
+             <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Conta
+           </Button>
+         </div>
          {(showNewAccount || editingAccountId) &&
           <div className="p-4 bg-accent/20 rounded-lg space-y-3">
              <Input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome" />
@@ -284,6 +293,8 @@ export default function Settings() {
          </a>
        </CardContent>
      </Card>
+
+     <InitialBalanceModal open={showInitialBalance} onOpenChange={setShowInitialBalance} />
    </div>);
 
 }
