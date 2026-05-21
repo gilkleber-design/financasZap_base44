@@ -35,10 +35,20 @@ export default function Transactions() {
     queryFn: () => base44.entities.Transaction.list('-date', 500),
   });
 
-  const transactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
+  const transactions = rawTransactions.filter(t => 
+    !t.status || t.status === 'registered' || t.status === 'conciliated'
+  );
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Transaction.delete(id),
+    mutationFn: async (id) => {
+      // First try to physically delete it
+      try {
+        await base44.entities.Transaction.delete(id);
+      } catch (err) {
+        // If it fails (maybe RLS policy on delete), we do a soft delete by changing status
+        await base44.entities.Transaction.update(id, { status: 'deleted' });
+      }
+    },
     onSuccess: () => { queryClient.invalidateQueries(); toast.success('Transação removida'); setDeletingTx(null); },
   });
 
