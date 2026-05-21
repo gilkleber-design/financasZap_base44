@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export default function ReceivableFormModal({ incomeSources, onClose, onSaved }) {
   const [form, setForm] = useState({
-    description: '', amount: '', due_date: '', income_source_id: '', tax_rate: '', recurrent: false,
+    description: '', amount: '', due_date: '', income_source_id: '', tax_rate: '', recurrent: false, notes: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -30,7 +30,7 @@ export default function ReceivableFormModal({ incomeSources, onClose, onSaved })
     const taxRate = parseFloat(form.tax_rate) || 0;
     const netAmount = taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
     await base44.entities.Receivable.create({
-      ...form, amount, tax_rate: taxRate || undefined, net_amount: netAmount, status: 'pending',
+      ...form, amount, tax_rate: taxRate || undefined, net_amount: netAmount, status: 'pending', notes: form.notes || undefined,
     });
     setSaving(false);
     toast.success('Conta a receber criada!');
@@ -78,6 +78,10 @@ export default function ReceivableFormModal({ incomeSources, onClose, onSaved })
               <Label>Valor Líquido</Label>
               <Input value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(netAmount)} disabled className="mt-1 bg-muted text-muted-foreground" />
             </div>
+          </div>
+          <div>
+            <Label>Observação</Label>
+            <Input value={form.notes} onChange={e => set('notes', e.target.value)} className="mt-1" placeholder="Opcional..." />
           </div>
           <div className="flex items-center justify-between">
             <Label>Recorrente (mensal)?</Label>

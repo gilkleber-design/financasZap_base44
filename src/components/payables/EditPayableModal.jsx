@@ -85,9 +85,9 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar atualização</AlertDialogTitle>
             <AlertDialogDescription>
-              {updateScope === 'this' && 'Vai atualizar apenas este lançamento de "' + payable.description + '"'}
+              {updateScope === 'this' && 'Vai atualizar apenas esta transação de "' + payable.description + '"'}
               {updateScope === 'all' && 'Vai atualizar TODAS as parcelas de "' + payable.description + '"'}
-              {updateScope === 'forward' && 'Vai atualizar este e todos os lançamentos futuros de "' + payable.description + '"'}
+              {updateScope === 'forward' && 'Vai atualizar esta e todas as transações futuras de "' + payable.description + '"'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-2">

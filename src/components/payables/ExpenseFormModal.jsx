@@ -200,11 +200,17 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
             </div>
           )}
 
+          {/* Observação */}
+          <div>
+            <Label>Observação</Label>
+            <Input tabIndex={5} value={form.notes} onChange={e => set('notes', e.target.value)} className="mt-1" placeholder="Opcional..." />
+          </div>
+
           {/* Valor */}
           <div className={`grid gap-3 ${expenseType === 'avulsa' || expenseType === 'parcelada' ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div>
               <Label>{expenseType === 'parcelada' ? 'Valor da Parcela (R$) *' : 'Valor (R$) *'}</Label>
-              <CurrencyInput tabIndex={5} value={form.amount} onChange={(value) => set('amount', value)} className="mt-1" />
+              <CurrencyInput tabIndex={6} value={form.amount} onChange={(value) => set('amount', value)} className="mt-1" />
             </div>
             {(expenseType === 'avulsa') && (
               <div>

@@ -44,7 +44,7 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
       notes: form.notes || undefined,
     });
 
-    toast.success('Lançamento atualizado!');
+    toast.success('Transação atualizada!');
     setSaving(false);
     onSaved();
   };
@@ -53,7 +53,7 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Editar Lançamento</DialogTitle>
+          <DialogTitle>Editar Transação</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div>
@@ -90,6 +90,15 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
                 <Input type="number" value={form.tax_rate} onChange={e => set('tax_rate', e.target.value)} className="mt-1" placeholder="0" />
               </div>
             )}
+            <div className="col-span-2">
+              <Label>Observação</Label>
+              <Input
+                value={form.notes}
+                onChange={e => set('notes', e.target.value)}
+                className="mt-1"
+                placeholder="Observações adicionais..."
+              />
+            </div>
           </div>
         </div>
         <div className="flex gap-2 pt-2">

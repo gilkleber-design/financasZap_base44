@@ -29,6 +29,7 @@ export default function ConfirmPayableModal({ payable, onClose }) {
     date: format(new Date(), 'yyyy-MM-dd'),
     amount: fmtInitial,
     account_id: '',
+    notes: '',
   });
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -60,7 +61,7 @@ export default function ConfirmPayableModal({ payable, onClose }) {
 
     const amount = parseAmount(form.amount);
 
-    // Cria lançamento de despesa
+    // Cria transação de despesa
     const tx = await base44.entities.Transaction.create({
       description: payable.description,
       amount,
@@ -71,6 +72,7 @@ export default function ConfirmPayableModal({ payable, onClose }) {
       payable_id: payable.id,
       reconciled: true,
       source: 'manual',
+      notes: form.notes || undefined,
       ...(form.account_id ? { account_id: form.account_id } : {}),
     });
 
@@ -94,7 +96,7 @@ export default function ConfirmPayableModal({ payable, onClose }) {
             <CheckCircle2 className="w-14 h-14 text-emerald-500" />
             <div className="text-center">
               <p className="text-lg font-bold text-emerald-700">Pagamento confirmado!</p>
-              <p className="text-sm text-muted-foreground mt-1">Lançamento criado com sucesso.</p>
+              <p className="text-sm text-muted-foreground mt-1">Transação criada com sucesso.</p>
             </div>
             <Button onClick={onClose} className="w-full">Fechar</Button>
           </div>
@@ -148,6 +150,15 @@ export default function ConfirmPayableModal({ payable, onClose }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>Observação</Label>
+            <Input
+              value={form.notes}
+              onChange={e => set('notes', e.target.value)}
+              className="mt-1"
+              placeholder="Opcional..."
+            />
           </div>
         </div>
 

@@ -24,6 +24,7 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
     date: format(new Date(), 'yyyy-MM-dd'),
     amount: fmtInitial,
     account_id: '',
+    notes: '',
   });
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -49,7 +50,7 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
     const taxRate = receivable.tax_rate || 0;
     const grossAmount = taxRate > 0 ? amount / (1 - taxRate / 100) : amount;
 
-    // Cria lançamento de receita
+    // Cria transação de receita
     const tx = await base44.entities.Transaction.create({
       description: receivable.description,
       amount: grossAmount,
@@ -63,6 +64,7 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
       receivable_id: receivable.id,
       reconciled: true,
       source: 'manual',
+      notes: form.notes || undefined,
       ...(form.account_id ? { account_id: form.account_id } : {}),
     });
 
@@ -87,16 +89,16 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
             <CheckCircle2 className="w-14 h-14 text-emerald-500" />
             <div className="text-center">
               <p className="text-lg font-bold text-emerald-700">Recebimento confirmado!</p>
-              <p className="text-sm text-muted-foreground mt-1">Lançamento criado com sucesso.</p>
+              <p className="text-sm text-muted-foreground mt-1">Transação criada com sucesso.</p>
             </div>
             <div className="flex gap-2 w-full">
               <Button variant="outline" onClick={onClose} className="flex-1">Fechar</Button>
               <Button
                 className="flex-1"
-                onClick={() => { window.location.href = '/lancamentos'; }}
+                onClick={() => { window.location.href = '/transacoes'; }}
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
-                Editar Lançamento
+                Editar Transação
               </Button>
             </div>
           </div>
@@ -150,6 +152,15 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>Observação</Label>
+            <Input
+              value={form.notes}
+              onChange={e => set('notes', e.target.value)}
+              className="mt-1"
+              placeholder="Opcional..."
+            />
           </div>
         </div>
 

@@ -19,7 +19,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 export default function TransactionFormModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
     description: '', amount: '', net_amount: '', type: 'expense',
-    category: '', date: format(new Date(), 'yyyy-MM-dd'), tax_rate: '', source: 'manual', origin: '',
+    category: '', date: format(new Date(), 'yyyy-MM-dd'), tax_rate: '', source: 'manual', origin: '', notes: '',
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -59,10 +59,10 @@ export default function TransactionFormModal({ onClose, onSaved }) {
     if (isCard) txData.card_id = originId;
 
     // Pipeline único: registra apenas a transação.
-    const finalTxData = { ...txData, reconciled: false, status: 'registered' };
+    const finalTxData = { ...txData, reconciled: false, status: 'registered', notes: form.notes };
     await base44.entities.Transaction.create(finalTxData);
 
-    toast.success('Lançamento salvo!');
+    toast.success('Transação salva!');
     setSaving(false);
     onSaved();
   };
@@ -71,7 +71,7 @@ export default function TransactionFormModal({ onClose, onSaved }) {
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo Lançamento Manual</DialogTitle>
+          <DialogTitle>Nova Transação Manual</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div>
@@ -131,6 +131,15 @@ export default function TransactionFormModal({ onClose, onSaved }) {
                 <Input type="number" value={form.tax_rate} onChange={e => set('tax_rate', e.target.value)} className="mt-1" placeholder="0" />
               </div>
             )}
+            <div className="col-span-2">
+              <Label>Observação</Label>
+              <Input
+                value={form.notes}
+                onChange={e => set('notes', e.target.value)}
+                className="mt-1"
+                placeholder="Observações adicionais..."
+              />
+            </div>
           </div>
         </div>
         <div className="flex gap-2 pt-2">

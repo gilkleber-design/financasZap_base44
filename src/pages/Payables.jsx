@@ -131,7 +131,7 @@ function RecurrencesTab({ onEdit }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir esta Conta Fixa?</AlertDialogTitle>
             <AlertDialogDescription>
-              A conta será permanentemente removida da tabela de recorrências. Lançamentos pendentes serão apagados, mas lançamentos já pagos no passado serão mantidos intactos no seu histórico.
+              A conta será permanentemente removida da tabela de recorrências. Transações pendentes serão apagadas, mas transações já pagas no passado serão mantidas intactas no seu histórico.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
@@ -234,7 +234,7 @@ export default function Payables() {
       queryClient.invalidateQueries({ queryKey: ['payables-list'] });
       queryClient.invalidateQueries({ queryKey: ['recurrences'] });
       setDeletingPayable(null);
-      toast.success('Lançamento excluído.');
+      toast.success('Transação excluída.');
     },
   });
 
@@ -321,7 +321,7 @@ export default function Payables() {
           <Card className="border-0 shadow-sm overflow-hidden bg-white">
             <CardContent className="p-0">
               <div className="divide-y divide-slate-100">
-                {filtered.length === 0 && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum lançamento encontrado</p>}
+                {filtered.length === 0 && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhuma transação encontrada</p>}
                 {filtered.map(p => {
                   const status = getStatus(p);
                   return (
@@ -377,7 +377,7 @@ export default function Payables() {
       <AlertDialog open={!!deletingPayable} onOpenChange={() => setDeletingPayable(null)}>
         <AlertDialogContent className="font-sora">
           <AlertDialogHeader>
-            <AlertDialogTitle>Como deseja excluir este lançamento?</AlertDialogTitle>
+            <AlertDialogTitle>Como deseja excluir esta transação?</AlertDialogTitle>
             <AlertDialogDescription>
               Selecione o escopo da remoção para esta conta:
             </AlertDialogDescription>

@@ -304,7 +304,7 @@ export default function Receivables() {
               <AlertDialogDescription>
                 "{deletingReceivable.description}"
                 {deletingReceivable.status === 'received' && (
-                  <span className="block mt-1 text-amber-600 font-medium">⚠️ Esta conta já foi recebida. O lançamento vinculado NÃO será removido automaticamente.</span>
+                  <span className="block mt-1 text-amber-600 font-medium">⚠️ Esta conta já foi recebida. A transação vinculada NÃO será removida automaticamente.</span>
                 )}
               </AlertDialogDescription>
             </AlertDialogHeader>

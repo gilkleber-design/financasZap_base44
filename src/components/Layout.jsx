@@ -8,7 +8,7 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/calendario', label: 'Calendário', icon: CalendarDays },
   { path: '/hospitais', label: 'Hospitais', icon: Building2 },
-  { path: '/lancamentos', label: 'Transações', icon: Wallet },
+  { path: '/transacoes', label: 'Transações', icon: Wallet },
   { path: '/contas-pagar', label: 'A Pagar', icon: ArrowDownCircle },
   { path: '/contas-receber', label: 'A Receber', icon: ArrowUpCircle },
   { path: '/faturas-cartao', label: 'Faturas Cartão', icon: CreditCard },
