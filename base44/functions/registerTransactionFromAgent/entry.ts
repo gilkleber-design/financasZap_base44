@@ -22,8 +22,8 @@ Deno.serve(async (req) => {
         const isAccount = origin_type === 'account';
         const isCard = origin_type === 'card';
 
-        // Pipeline único: registra apenas a transação real, sem auto-criação de previsão
-        const tx = await base44.entities.Transaction.create({
+        // Create transaction with proper reconciliation status
+        const txData = {
             description,
             amount,
             net_amount: amount,
@@ -33,10 +33,35 @@ Deno.serve(async (req) => {
             source: 'whatsapp_text',
             account_id: isAccount ? origin_id : undefined,
             card_id: isCard ? origin_id : undefined,
-            reconciled: false,
-            status: 'registered',
+            reconciled: !!conciliate_id,
+            status: conciliate_id ? 'conciliated' : 'registered',
             notes: notes || 'Gerado via Assistente'
-        });
+        };
+
+        if (conciliate_id) {
+            if (type === 'income') {
+                txData.receivable_id = conciliate_id;
+            } else {
+                txData.payable_id = conciliate_id;
+            }
+        }
+
+        const tx = await base44.entities.Transaction.create(txData);
+
+        // Auto-update conciliation target if ID was provided
+        if (conciliate_id) {
+            if (type === 'income') {
+                await base44.entities.Receivable.update(conciliate_id, {
+                    status: 'received',
+                    transaction_id: tx.id
+                });
+            } else {
+                await base44.entities.Payable.update(conciliate_id, {
+                    status: 'paid',
+                    transaction_id: tx.id
+                });
+            }
+        }
 
         return Response.json({ success: true, transaction: tx });
     } catch (error) {
