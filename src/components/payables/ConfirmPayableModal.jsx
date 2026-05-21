@@ -22,13 +22,19 @@ export default function ConfirmPayableModal({ payable, onClose }) {
     queryFn: () => base44.entities.Account.list(),
   });
 
+  const { data: cards = [] } = useQuery({
+    queryKey: ['cards'],
+    queryFn: () => base44.entities.Card.list(),
+  });
+
   const initialAmount = payable.amount || 0;
   const fmtInitial = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(initialAmount);
 
   const [form, setForm] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     amount: fmtInitial,
-    account_id: '',
+    origin_id: '',
+    origin_type: '',
     notes: '',
   });
 
@@ -36,9 +42,11 @@ export default function ConfirmPayableModal({ payable, onClose }) {
 
   // Default para primeira conta disponível
   useEffect(() => {
-    if (accounts.length > 0 && !form.account_id) {
+    if (accounts.length > 0 && !form.origin_id) {
       const bradesco = accounts.find(a => a.bank?.toLowerCase().includes('bradesco'));
-      set('account_id', bradesco ? bradesco.id : accounts[0].id);
+      const defaultAccount = bradesco ? bradesco.id : accounts[0].id;
+      set('origin_id', defaultAccount);
+      set('origin_type', 'account');
     }
   }, [accounts]);
 
@@ -73,7 +81,8 @@ export default function ConfirmPayableModal({ payable, onClose }) {
       reconciled: true,
       source: 'manual',
       notes: form.notes || undefined,
-      ...(form.account_id ? { account_id: form.account_id } : {}),
+      ...(form.origin_id && form.origin_type === 'account' ? { account_id: form.origin_id } : {}),
+      ...(form.origin_id && form.origin_type === 'card' ? { card_id: form.origin_id } : {}),
     });
 
     // Marca conta como paga
@@ -138,16 +147,42 @@ export default function ConfirmPayableModal({ payable, onClose }) {
             />
           </div>
           <div>
-            <Label>Conta de Pagamento</Label>
-            <Select value={form.account_id} onValueChange={v => set('account_id', v)}>
+            <Label>Origem do Pagamento</Label>
+            <Select value={form.origin_id || '_none'} onValueChange={(value) => {
+              const acc = accounts.find(o => o.id === value);
+              const crd = cards.find(o => o.id === value);
+              if (acc) {
+                set('origin_id', acc.id);
+                set('origin_type', 'account');
+              } else if (crd) {
+                set('origin_id', crd.id);
+                set('origin_type', 'card');
+              } else {
+                set('origin_id', '');
+                set('origin_type', '');
+              }
+            }}>
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Selecionar conta (opcional)" />
+                <SelectValue placeholder="Selecionar conta ou cartão..." />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">— Nenhuma —</SelectItem>
-                {accounts.map(a => (
-                  <SelectItem key={a.id} value={a.id}>{a.name}{a.bank ? ` — ${a.bank}` : ''}</SelectItem>
-                ))}
+                {accounts.filter(a => a.active !== false).length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Contas Correntes</div>
+                    {accounts.filter(a => a.active !== false).map(a => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}{a.bank ? ` — ${a.bank}` : ''}</SelectItem>
+                    ))}
+                  </>
+                )}
+                {cards.filter(c => c.active !== false).length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">💳 Cartões de Crédito</div>
+                    {cards.filter(c => c.active !== false).map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
