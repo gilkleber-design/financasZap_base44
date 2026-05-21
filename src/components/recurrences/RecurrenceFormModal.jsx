@@ -164,11 +164,16 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
           {/* Origem do pagamento */}
           <div>
             <Label>Origem do Pagamento</Label>
-            <Select value={form.origin_id} onValueChange={(value) => {
+            <Select value={form.origin_id || '_none'} onValueChange={(value) => {
+              if (value === '_none') {
+                set('origin_id', '');
+                set('origin_type', '');
+                return;
+              }
               const origin = origins.find(o => o.id === value);
-              if (!origin || origin.type !== 'account') { set('origin_id', ''); set('origin_type', ''); return; }
+              if (!origin) return;
               set('origin_id', origin.id);
-              set('origin_type', 'account');
+              set('origin_type', origin.type);
             }}>
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Selecionar conta ou cartão..." />
@@ -181,6 +186,16 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
                       <Landmark className="w-3 h-3" /> Contas Correntes
                     </div>
                     {origins.filter(o => o.type === 'account').map(o => (
+                      <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
+                    ))}
+                  </>
+                )}
+                {origins.filter(o => o.type === 'card').length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      💳 Cartões de Crédito
+                    </div>
+                    {origins.filter(o => o.type === 'card').map(o => (
                       <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
                     ))}
                   </>

@@ -33,7 +33,7 @@ async function materializeMonth(base44, monthKey) {
       recurrent: true,
       recurrence_id: recurrence.id,
       origin_id: recurrence.origin_id || undefined,
-      origin_type: recurrence.origin_id ? 'account' : undefined,
+      origin_type: recurrence.origin_type || (recurrence.origin_id ? 'account' : undefined),
       payment_modality: recurrence.payment_modality || 'manual',
       notes: recurrence.notes || undefined,
     });

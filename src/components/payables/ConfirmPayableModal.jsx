@@ -40,15 +40,20 @@ export default function ConfirmPayableModal({ payable, onClose }) {
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  // Default para primeira conta disponível
+  // Usa origem configurada no Payable ou padrão
   useEffect(() => {
-    if (accounts.length > 0 && !form.origin_id) {
-      const bradesco = accounts.find(a => a.bank?.toLowerCase().includes('bradesco'));
-      const defaultAccount = bradesco ? bradesco.id : accounts[0].id;
-      set('origin_id', defaultAccount);
-      set('origin_type', 'account');
+    if (!form.origin_id) {
+      if (payable.origin_id && payable.origin_type) {
+        set('origin_id', payable.origin_id);
+        set('origin_type', payable.origin_type);
+      } else if (accounts.length > 0) {
+        const bradesco = accounts.find(a => a.bank?.toLowerCase().includes('bradesco'));
+        const defaultAccount = bradesco ? bradesco.id : accounts[0].id;
+        set('origin_id', defaultAccount);
+        set('origin_type', 'account');
+      }
     }
-  }, [accounts]);
+  }, [accounts, payable]);
 
   const parseAmount = (str) => {
     const digits = str.replace(/\D/g, '');
