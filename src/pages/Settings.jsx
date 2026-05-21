@@ -152,19 +152,45 @@ export default function Settings() {
      {/* 2. FONTES DE RENDA */}
      <Collapsible open={openSections.sources} onOpenChange={() => toggleSection('sources')} className="border rounded-xl bg-card shadow-sm">
        <CollapsibleTrigger asChild>
-         <Button variant="ghost" className="w-full flex justify-between p-4 h-auto text-slate-700 font-bold"><div className="flex items-center gap-2"><Building2 className="w-4 h-4 text-primary" /> Fontes de Renda</div>{openSections.sources ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</Button>
+         <Button variant="ghost" className="w-full flex justify-between p-4 h-auto text-slate-700 font-bold"><div className="flex items-center gap-2"><Building2 className="w-4 h-4 text-primary" /> Cadastro de PJ</div>{openSections.sources ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</Button>
        </CollapsibleTrigger>
        <CollapsibleContent className="p-4 border-t space-y-4">
-         <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => setShowNewSource(true)}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Fonte</Button></div>
+         <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => {setForm({ name: '', type: 'pj', bank: '', default_tax_rate: 0, notes: '', active: true });setShowNewSource(true)}}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar PJ</Button></div>
          {(showNewSource || editingSourceId) &&
-          <div className="p-4 bg-accent/20 rounded-lg space-y-3">
-             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nome" />
-             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingSourceId(null);setShowNewSource(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertSource.mutate({ ...form, active: true })}>Salvar</Button></div>
+          <div className="p-4 bg-accent/20 rounded-lg space-y-4 border border-primary/10">
+             <div className="space-y-3">
+               <div><Label>Nome *</Label><Input value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nome (ex: Empresa X, Freelance)" /></div>
+               <div className="grid grid-cols-2 gap-3">
+                 <div>
+                   <Label>Tipo</Label>
+                   <Select value={form.type || 'pj'} onValueChange={(v) => setForm({ ...form, type: v })}>
+                     <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="pj">PJ</SelectItem>
+                       <SelectItem value="clt">CLT</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </div>
+                 <div><Label>Alíquota Imposto (%)</Label><Input type="number" step="0.01" value={form.default_tax_rate ?? ''} onChange={(e) => setForm({ ...form, default_tax_rate: parseFloat(e.target.value) || 0 })} placeholder="Ex: 6" /></div>
+               </div>
+               <div><Label>Banco de Recebimento</Label><Input value={form.bank || ''} onChange={(e) => setForm({ ...form, bank: e.target.value })} placeholder="Ex: Itaú" /></div>
+               <div><Label>Observações</Label><Input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Opcional..." /></div>
+               {editingSourceId && (
+                 <div className="flex items-center justify-between p-3 bg-white rounded-lg border">
+                   <span className="text-sm font-medium">Ativo?</span>
+                   <Switch checked={form.active !== false} onCheckedChange={(v) => setForm({ ...form, active: v })} />
+                 </div>
+               )}
+             </div>
+             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingSourceId(null);setShowNewSource(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertSource.mutate({ ...form, active: form.active !== false })}>Salvar</Button></div>
            </div>
           }
          {sources.map((s) =>
-          <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
-             <span className="text-sm font-medium">{s.name}</span>
+          <div key={s.id} className={`flex items-center justify-between p-3 rounded-lg border ${s.active === false ? 'bg-slate-50 opacity-60' : 'bg-white shadow-sm'}`}>
+             <div className="flex flex-col">
+                <span className="text-sm font-bold">{s.name}</span>
+                <span className="text-[10px] text-muted-foreground font-bold uppercase">{s.type === 'clt' ? 'CLT' : 'PJ'} {s.default_tax_rate > 0 && `• IR ${s.default_tax_rate}%`}</span>
+             </div>
              <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => {setEditingSourceId(s.id);setForm(s);setShowNewSource(true);}}><Pencil className="w-3.5 h-3.5" /></Button><Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('IncomeSource', s.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div>
            </div>
           )}
