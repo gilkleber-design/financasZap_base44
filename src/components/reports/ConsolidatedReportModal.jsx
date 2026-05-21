@@ -149,22 +149,46 @@ export default function ConsolidatedReportModal({ open, onOpenChange, currentMon
                   <p className="text-2xl font-bold text-amber-700">{fmt(totalReceitasAberto)}</p>
                 </div>
               </div>
-              {openReceivables.length > 0 && (
-                <div className="mt-4 border rounded-lg overflow-hidden">
-                  <div className="bg-slate-50 px-4 py-2 font-medium text-sm text-slate-600">Receitas em Aberto</div>
-                  <div className="divide-y">
-                    {openReceivables.map(r => (
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                {/* Receitas em Aberto */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-amber-50/50 px-4 py-2 font-medium text-sm text-amber-700 flex justify-between">
+                    <span>A Receber ({openReceivables.length})</span>
+                    <span>{fmt(totalReceitasAberto)}</span>
+                  </div>
+                  <div className="divide-y max-h-64 overflow-y-auto">
+                    {openReceivables.length > 0 ? openReceivables.map(r => (
                       <div key={r.id} className="p-3 text-sm flex justify-between items-center hover:bg-slate-50/50">
-                        <span>{r.description}</span>
-                        <div className="flex gap-4 items-center">
-                          <span className="text-slate-500">{format(new Date(r.due_date), 'dd/MM/yyyy')}</span>
-                          <span className="font-medium text-emerald-600 w-24 text-right">{fmt(r.amount)}</span>
+                        <span className="truncate pr-2">{r.description}</span>
+                        <div className="flex gap-4 items-center shrink-0">
+                          <span className="text-slate-500 text-xs">{format(new Date(r.due_date), 'dd/MM/yyyy')}</span>
+                          <span className="font-medium text-amber-600 w-20 text-right">{fmt(r.amount)}</span>
                         </div>
                       </div>
-                    ))}
+                    )) : <div className="p-4 text-center text-sm text-slate-500">Nenhuma receita pendente</div>}
                   </div>
                 </div>
-              )}
+
+                {/* Receitas Realizadas */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-emerald-50/50 px-4 py-2 font-medium text-sm text-emerald-700 flex justify-between">
+                    <span>Recebidas ({monthIncomes.length})</span>
+                    <span>{fmt(totalReceitasRecebidas)}</span>
+                  </div>
+                  <div className="divide-y max-h-64 overflow-y-auto">
+                    {monthIncomes.length > 0 ? monthIncomes.map(t => (
+                      <div key={t.id} className="p-3 text-sm flex justify-between items-center hover:bg-slate-50/50">
+                        <span className="truncate pr-2">{t.description}</span>
+                        <div className="flex gap-4 items-center shrink-0">
+                          <span className="text-slate-500 text-xs">{format(new Date(t.date), 'dd/MM/yyyy')}</span>
+                          <span className="font-medium text-emerald-600 w-20 text-right">{fmt(t.amount)}</span>
+                        </div>
+                      </div>
+                    )) : <div className="p-4 text-center text-sm text-slate-500">Nenhuma receita registrada</div>}
+                  </div>
+                </div>
+              </div>
             </section>
 
             {/* 2. Despesas */}
@@ -184,22 +208,46 @@ export default function ConsolidatedReportModal({ open, onOpenChange, currentMon
                   <p className="text-2xl font-bold text-amber-700">{fmt(totalDespesasAberto)}</p>
                 </div>
               </div>
-              {openPayables.length > 0 && (
-                <div className="mt-4 border rounded-lg overflow-hidden">
-                  <div className="bg-slate-50 px-4 py-2 font-medium text-sm text-slate-600">Despesas em Aberto</div>
-                  <div className="divide-y">
-                    {openPayables.map(p => (
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                {/* Despesas em Aberto */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-amber-50/50 px-4 py-2 font-medium text-sm text-amber-700 flex justify-between">
+                    <span>A Pagar ({openPayables.length})</span>
+                    <span>{fmt(totalDespesasAberto)}</span>
+                  </div>
+                  <div className="divide-y max-h-64 overflow-y-auto">
+                    {openPayables.length > 0 ? openPayables.map(p => (
                       <div key={p.id} className="p-3 text-sm flex justify-between items-center hover:bg-slate-50/50">
-                        <span>{p.description}</span>
-                        <div className="flex gap-4 items-center">
-                          <span className="text-slate-500">{format(new Date(p.due_date), 'dd/MM/yyyy')}</span>
-                          <span className="font-medium text-rose-600 w-24 text-right">{fmt(p.amount)}</span>
+                        <span className="truncate pr-2">{p.description}</span>
+                        <div className="flex gap-4 items-center shrink-0">
+                          <span className="text-slate-500 text-xs">{format(new Date(p.due_date), 'dd/MM/yyyy')}</span>
+                          <span className="font-medium text-amber-600 w-20 text-right">{fmt(p.amount)}</span>
                         </div>
                       </div>
-                    ))}
+                    )) : <div className="p-4 text-center text-sm text-slate-500">Nenhuma despesa pendente</div>}
                   </div>
                 </div>
-              )}
+
+                {/* Despesas Realizadas */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-rose-50/50 px-4 py-2 font-medium text-sm text-rose-700 flex justify-between">
+                    <span>Pagas ({monthExpenses.length})</span>
+                    <span>{fmt(totalDespesasPagas)}</span>
+                  </div>
+                  <div className="divide-y max-h-64 overflow-y-auto">
+                    {monthExpenses.length > 0 ? monthExpenses.map(t => (
+                      <div key={t.id} className="p-3 text-sm flex justify-between items-center hover:bg-slate-50/50">
+                        <span className="truncate pr-2">{t.description}</span>
+                        <div className="flex gap-4 items-center shrink-0">
+                          <span className="text-slate-500 text-xs">{format(new Date(t.date), 'dd/MM/yyyy')}</span>
+                          <span className="font-medium text-rose-600 w-20 text-right">{fmt(t.amount)}</span>
+                        </div>
+                      </div>
+                    )) : <div className="p-4 text-center text-sm text-slate-500">Nenhuma despesa registrada</div>}
+                  </div>
+                </div>
+              </div>
             </section>
 
             {/* 3 & 4. Resultados */}
