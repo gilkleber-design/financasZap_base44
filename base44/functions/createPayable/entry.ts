@@ -23,7 +23,7 @@ function cleanBasePayload(body) {
     category: body.category || 'outros',
     category_id: body.category_id || undefined,
     origin_id: body.origin_id || undefined,
-    origin_type: body.origin_id ? 'account' : undefined,
+    origin_type: body.origin_type || (body.origin_id ? 'account' : undefined),
     payment_modality: body.payment_modality || 'manual',
     notes: body.notes || undefined,
   };

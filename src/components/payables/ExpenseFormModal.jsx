@@ -90,6 +90,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
         category: form.category || 'outros',
         category_id: getCategoryId(form.category),
         origin_id: form.origin_id || undefined,
+        origin_type: form.origin_type || undefined,
         payment_modality: form.payment_modality,
         payment_date: form.payment_date || undefined,
         installment_total_amount: form.installment_total_amount ? parseFloat(form.installment_total_amount) : undefined,
