@@ -53,7 +53,7 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
       amount,
       net_amount: netAmount,
       type: form.type,
-      category: form.category || undefined,
+      category: form.category || null,
       date: form.date,
       tax_rate: taxRate || undefined,
       tax_amount: taxRate > 0 ? amount * taxRate / 100 : undefined,

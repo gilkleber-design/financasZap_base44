@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
             amount,
             net_amount: amount,
             type: safeType,
-            category: category || 'outros',
+            category: category || undefined,
             date: date || new Date().toISOString().split('T')[0],
             source: 'whatsapp_text',
             account_id: isAccount ? origin_id : undefined,
