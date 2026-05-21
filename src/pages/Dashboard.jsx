@@ -114,13 +114,22 @@ export default function DashboardPage() {
 
   // --- LÓGICA DE NEGÓCIO BLINDADA ---
   const stats = useMemo(() => {
-    // 1. FILTRO MESTRE: Só entra dinheiro e gasto real
+    // Busca segura com optional chaining para evitar crash se alguma categoria não tiver nome
+    const catFaturaCartao = categories.find(c => 
+      c?.name?.toLowerCase()?.includes('faturas de cartão') || 
+      c?.name?.toLowerCase()?.includes('fatura de cartão')
+    );
+    
+    // 1. FILTRO MESTRE: Só entra dinheiro e gasto real validado
     const validTransactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
     const monthTransactions = validTransactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
     
-    // KPI 1: Resultado Mensal (Isolado por data)
+    // KPI 1: Resultado Mensal
     const realIncomeTotal = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-    const realExpenseTotal = monthTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+    const realExpenseTotal = monthTransactions
+      .filter(t => t.type === 'expense' && !t.card_id)
+      .reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+      
     const realBalance = realIncomeTotal - realExpenseTotal;
 
     // KPI 2: Expectativa de Caixa
@@ -135,26 +144,17 @@ export default function DashboardPage() {
     const targetIncome = monthIncome + pendingCurrentTotal + pendingOverdueTotal || (monthIncome + 1);
     const incomePercentage = Math.min((monthIncome / targetIncome) * 100, 100);
 
-    // KPI 3: Saúde do Orçamento (Teto de Gastos)
-    const totalBudget = budgets.reduce((acc, b) => acc + parseFloat(b.amount || 0), 0);
-    const pendingPayablesMonth = payables.filter(p => p.status === 'pending' && p.due_date >= monthStart && p.due_date <= monthEnd);
-    const pendingPayablesTotal = pendingPayablesMonth.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
-    
-    const totalExpenseProjected = realExpenseTotal + pendingPayablesTotal;
-    const budgetBalance = totalBudget - totalExpenseProjected;
-    
-    const healthPercent = totalBudget > 0 ? Math.max(0, Math.min((budgetBalance / totalBudget) * 100, 100)) : 0;
-
     // KPI 4: A Cobrar / Vencidas
     const overdueIncomes = receivables.filter(r => r.status === 'pending' && isBefore(new Date(r.due_date), new Date(todayStr)));
     const overdueIncomeTotal = overdueIncomes.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
 
     // Urgências Despesas
+    const pendingPayablesMonth = payables.filter(p => p.status === 'pending' && p.due_date >= monthStart && p.due_date <= monthEnd);
     const upcomingExpensesList = payables.filter(p => p.status === 'pending' && p.due_date <= nextWeekStr).slice(0, 5);
 
     // Mapeamento Raio-X
     const mapCategoryStats = (type) => categories
-      .filter(c => c.type === type)
+      .filter(c => c.type === type && (type === 'income' || !catFaturaCartao || c.id !== catFaturaCartao.id))
       .map(cat => {
         const meta = budgets.find(b => b.category_id === cat.id)?.amount || 0;
         const realizado = monthTransactions.filter(t => t.category_id === cat.id).reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
@@ -164,6 +164,15 @@ export default function DashboardPage() {
       })
       .filter(c => c.meta > 0 || c.totalUsage > 0)
       .sort((a, b) => b.meta - a.meta);
+
+    const expenseStats = mapCategoryStats('expense');
+    const incomeStats = mapCategoryStats('income');
+
+    // KPI 3: Saúde do Orçamento
+    const totalBudget = budgets.reduce((acc, b) => acc + parseFloat(b.amount || 0), 0);
+    const totalExpenseProjected = expenseStats.reduce((acc, c) => acc + c.totalUsage, 0);
+    const budgetBalance = totalBudget - totalExpenseProjected;
+    const healthPercent = totalBudget > 0 ? Math.max(0, Math.min((budgetBalance / totalBudget) * 100, 100)) : 0;
 
     return {
       realBalance,
@@ -177,8 +186,8 @@ export default function DashboardPage() {
       overdueIncomes,
       overdueIncomeTotal,
       upcomingExpensesList,
-      expenseStats: mapCategoryStats('expense'),
-      incomeStats: mapCategoryStats('income')
+      expenseStats,
+      incomeStats
     };
   }, [rawTransactions, budgets, categories, payables, receivables, monthStart, monthEnd, todayStr, nextWeekStr]);
 
@@ -186,7 +195,7 @@ export default function DashboardPage() {
     {
       title: 'Resultado Mensal',
       value: stats.realBalance,
-      subtitle: '(Receitas vs Despesas de maio)',
+      subtitle: '(Receitas vs Saídas Reais de Conta)',
       icon: Wallet,
       color: 'emerald',
       customBg: true,
@@ -197,7 +206,7 @@ export default function DashboardPage() {
       target: stats.targetIncome,
       baseTarget: stats.baseTarget,
       overdueTarget: stats.overdueTarget,
-      percentage: stats.incomePercentage, // Mantido como número para evitar crash na ProgressBar
+      percentage: stats.incomePercentage,
       icon: Coins,
       color: 'emerald',
       isMetaCard: true,
@@ -248,9 +257,9 @@ export default function DashboardPage() {
                 <div className="p-3 bg-white dark:bg-emerald-900 rounded-2xl border border-emerald-100 shrink-0">
                   <Icon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0">
+                <div className="flex-1 space-y-1 min-w-0 overflow-hidden">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
-                  <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap truncate">{valueText}</p>
+                  <p className="text-xl lg:text-2xl font-bold text-slate-950 dark:text-white truncate">{valueText}</p>
                   <p className="text-[11px] text-muted-foreground truncate">{card.subtitle}</p>
                 </div>
               </div>
@@ -264,13 +273,13 @@ export default function DashboardPage() {
                 <div className="p-3 bg-white dark:bg-rose-900 rounded-2xl border border-rose-100 shrink-0">
                   <Icon className="w-6 h-6 text-rose-600 dark:text-rose-400" />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0">
+                <div className="flex-1 space-y-1 min-w-0 overflow-hidden">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
-                  <div className="flex items-baseline gap-1.5 flex-wrap">
-                    <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap">{card.count}</p>
-                    <span className="text-sm font-medium text-slate-950 dark:text-white whitespace-nowrap">receitas vencidas</span>
+                  <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
+                    <p className="text-xl lg:text-2xl font-bold text-slate-950 dark:text-white truncate">{card.count}</p>
+                    <span className="text-sm font-medium text-slate-950 dark:text-white truncate">receitas vencidas</span>
                   </div>
-                  <p className="text-lg font-semibold text-slate-950 dark:text-white whitespace-nowrap truncate">{valueText}</p>
+                  <p className="text-lg font-semibold text-slate-950 dark:text-white truncate">{valueText}</p>
                   <p className="text-[11px] text-muted-foreground truncate">urgentes para os próximos 7 dias</p>
                 </div>
               </div>
@@ -280,29 +289,31 @@ export default function DashboardPage() {
           return (
             <div key={index} className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-col gap-4 items-start shadow-sm relative min-w-0">
               <button className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><MoreHorizontal className="w-5 h-5" /></button>
-              <div className="flex gap-4 items-start w-full">
+              <div className="flex gap-4 items-start w-full min-w-0">
                 <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 shrink-0">
                   <Icon className={`w-6 h-6 ${card.color === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0">
+                <div className="flex-1 space-y-1 min-w-0 overflow-hidden">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
                   
                   {card.title.includes('Saúde') ? (
-                    <div className="flex flex-col items-start w-full">
-                      <p className={cn("text-xl lg:text-2xl xl:text-3xl font-bold whitespace-nowrap truncate", card.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                        {card.value >= 0 ? 'Sobra: ' : 'Estouro: '}{valueText}
+                    <div className="flex flex-col items-start w-full min-w-0">
+                      <p className={cn("text-xl lg:text-2xl font-bold truncate w-full", card.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                        {card.value >= 0 ? 'Sobra: ' : 'Estouro: '}<CurrencyText value={Math.abs(card.value)} />
                       </p>
-                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Saldo do limite planejado</p>
+                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5 truncate w-full">Saldo do limite planejado</p>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-start w-full">
-                      <div className="flex flex-wrap items-baseline gap-1.5 w-full">
-                        <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap">{valueText}</p>
-                        <span className="text-sm text-slate-400 whitespace-nowrap">/ <CurrencyText value={card.target} /></span>
+                    <div className="flex flex-col items-start w-full min-w-0">
+                      <div className="flex flex-col xl:flex-row xl:items-baseline gap-1 xl:gap-1.5 w-full min-w-0">
+                        <p className="text-xl lg:text-2xl font-bold text-slate-950 dark:text-white truncate max-w-full">{valueText}</p>
+                        {card.target !== undefined && (
+                          <span className="text-sm text-slate-400 truncate max-w-full">/ <CurrencyText value={card.target} /></span>
+                        )}
                       </div>
                       
                       {card.isMetaCard && card.overdueTarget > 0 && (
-                        <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                        <div className="text-[10px] font-semibold text-slate-400 mt-1 truncate w-full">
                           (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atrasos</span>)
                         </div>
                       )}
@@ -317,8 +328,8 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="w-full space-y-1">
-                  <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={card.percentage < 100} className="emerald-bars" />
-                  <p className="text-[11px] text-right text-muted-foreground">{card.percentage.toFixed(0)}% recebido</p>
+                  <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={(card.percentage || 0) < 100} className="emerald-bars" />
+                  <p className="text-[11px] text-right text-muted-foreground">{(card.percentage || 0).toFixed(0)}% recebido</p>
                 </div>
               )}
             </div>
@@ -395,17 +406,17 @@ const XRayTable = ({ categories, type }) => {
           const Icon = cat.icon || Activity;
           return (
             <div key={i} className="grid grid-cols-[1fr,20%,30%] md:grid-cols-[1fr,15%,25%] gap-x-4 p-5 py-4 items-center">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" style={{ borderColor: cat.color }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shrink-0" style={{ borderColor: cat.color }}>
                   <Icon className="w-5 h-5 text-slate-600 dark:text-slate-400" style={{ color: cat.color }} />
                 </div>
-                <div className="flex-grow space-y-1">
-                  <p className="font-semibold text-sm text-slate-950 dark:text-white">{cat.name}</p>
+                <div className="flex-grow space-y-1 min-w-0 overflow-hidden">
+                  <p className="font-semibold text-sm text-slate-950 dark:text-white truncate">{cat.name}</p>
                   <ProgressBar value={cat.realizado} Compromisso={cat.comprometido} max={cat.meta} showHashedCompromisso={isExpense || cat.comprometido > 0} className={isExpense ? "blue-bars" : "emerald-bars"} />
                 </div>
               </div>
-              <div className="text-sm font-semibold text-slate-950 dark:text-white text-right"><CurrencyText value={cat.meta} /></div>
-              <div className="text-sm font-bold text-slate-950 dark:text-white text-right"><CurrencyText value={cat.totalUsage} /></div>
+              <div className="text-sm font-semibold text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.meta} /></div>
+              <div className="text-sm font-bold text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.totalUsage} /></div>
             </div>
           );
         })}
@@ -441,7 +452,7 @@ const SidebarTable = ({ data, type, urgent }) => {
 
         return (
           <div key={i} className={cn("grid grid-cols-[80px,1fr,auto] gap-x-3 px-5 py-3.5 items-center", urgent ? "border-l-4 border-rose-500 bg-rose-50/20 dark:bg-rose-950/10" : "")}>
-            <span className={cn("text-sm", urgent ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400")}>{formattedDate}</span>
+            <span className={cn("text-sm shrink-0", urgent ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400")}>{formattedDate}</span>
             <div className={cn("flex items-center gap-1.5 text-sm min-w-0", urgent ? "font-semibold text-rose-600 dark:text-rose-400" : "font-medium text-slate-950 dark:text-white")}>
                {urgent && <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />}
                <span className="truncate">{item.description}</span>
@@ -452,8 +463,8 @@ const SidebarTable = ({ data, type, urgent }) => {
                </button>
             ) : (
                 <div className="flex items-center gap-2 text-right shrink-0">
-                    <span className="text-sm font-bold text-slate-950 dark:text-white"><CurrencyText value={parseFloat(item.amount)} /></span>
-                    <button className="flex items-center px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold shadow hover:bg-slate-50 transition">
+                    <span className="text-sm font-bold text-slate-950 dark:text-white truncate max-w-[100px]"><CurrencyText value={parseFloat(item.amount)} /></span>
+                    <button className="flex items-center px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold shadow hover:bg-slate-50 transition shrink-0">
                          Dar Baixa
                     </button>
                 </div>
