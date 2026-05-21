@@ -44,27 +44,33 @@ export default function Transactions() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Transaction.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Lançamento removido'); setDeletingTx(null); },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Transação removida'); setDeletingTx(null); },
   });
 
   const uniqueUsers = [...new Set(transactions.map(t => t.created_by).filter(Boolean))];
 
-  const currentYear = new Date().getFullYear();
   const filtered = transactions.filter(t => {
-    const matchSearch = !search || t.description?.toLowerCase().includes(search.toLowerCase());
+    // Permite buscar também pelo ID ou valor se a descrição falhar
+    const searchLower = search.toLowerCase();
+    const matchSearch = !search || 
+      t.description?.toLowerCase().includes(searchLower) ||
+      t.amount?.toString().includes(searchLower) ||
+      t.notes?.toLowerCase().includes(searchLower);
+      
     const matchType = filterType === 'all' || t.type === filterType;
     const matchCat = filterCategory === 'all' || t.category === filterCategory;
     const matchCreatedBy = filterCreatedBy === 'all' || t.created_by === filterCreatedBy;
-    const matchYear = t.date && new Date(t.date).getFullYear() === currentYear;
-    return matchSearch && matchType && matchCat && matchCreatedBy && matchYear;
+    // Removendo o filtro rígido de ano atual para que você possa ver todas as transações, incluindo as de 2025 ou anos seguintes
+    
+    return matchSearch && matchType && matchCat && matchCreatedBy;
   });
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
          <div>
-           <h1 className="text-2xl font-sora font-bold">Lançamentos</h1>
-           <p className="text-muted-foreground text-sm mt-1">{transactions.length} lançamentos no total</p>
+           <h1 className="text-2xl font-sora font-bold">Transações</h1>
+           <p className="text-muted-foreground text-sm mt-1">{transactions.length} transações no total</p>
          </div>
          <div className="flex gap-2">
            <Button variant="outline" onClick={() => setOpenReconciliation(true)}>
@@ -119,7 +125,7 @@ export default function Transactions() {
               <div className="p-8 text-center text-muted-foreground text-sm">Carregando...</div>
             )}
             {!isLoading && filtered.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground text-sm">Nenhum lançamento encontrado</div>
+              <div className="p-8 text-center text-muted-foreground text-sm">Nenhuma transação encontrada</div>
             )}
             {filtered.map(tx => (
               <div key={tx.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors">
@@ -177,10 +183,10 @@ export default function Transactions() {
          <AlertDialog open onOpenChange={() => setDeletingTx(null)}>
            <AlertDialogContent>
              <AlertDialogHeader>
-               <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+               <AlertDialogTitle>Excluir transação?</AlertDialogTitle>
                <AlertDialogDescription>
                  "{deletingTx.description}" — {deletingTx.date ? format(new Date(deletingTx.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}
-                 {deletingTx.status === 'conciliated' && <span className="block mt-1 text-amber-600 font-medium">⚠️ Este lançamento está conciliado com uma conta. A conciliação será desfeita.</span>}
+                 {deletingTx.status === 'conciliated' && <span className="block mt-1 text-amber-600 font-medium">⚠️ Esta transação está conciliada com uma conta. A conciliação será desfeita.</span>}
                </AlertDialogDescription>
              </AlertDialogHeader>
              <div className="flex gap-2">
