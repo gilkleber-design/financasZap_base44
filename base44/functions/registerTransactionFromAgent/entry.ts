@@ -21,13 +21,14 @@ Deno.serve(async (req) => {
 
         const isAccount = origin_type === 'account';
         const isCard = origin_type === 'card';
+        const safeType = type === 'receipt' ? 'income' : type; // defensive fallback
 
         // Create transaction with proper reconciliation status
         const txData = {
             description,
             amount,
             net_amount: amount,
-            type,
+            type: safeType,
             category: category || 'outros',
             date: date || new Date().toISOString().split('T')[0],
             source: 'whatsapp_text',
@@ -39,7 +40,7 @@ Deno.serve(async (req) => {
         };
 
         if (conciliate_id) {
-            if (type === 'income') {
+            if (safeType === 'income') {
                 txData.receivable_id = conciliate_id;
             } else {
                 txData.payable_id = conciliate_id;
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
 
         // Auto-update conciliation target if ID was provided
         if (conciliate_id) {
-            if (type === 'income') {
+            if (safeType === 'income') {
                 await base44.entities.Receivable.update(conciliate_id, {
                     status: 'received',
                     transaction_id: tx.id
