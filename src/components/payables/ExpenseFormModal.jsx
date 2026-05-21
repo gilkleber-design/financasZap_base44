@@ -47,14 +47,22 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const handleOriginChange = (value) => {
-    const origin = origins.find(o => o.id === value && o.type === 'account');
-    if (!origin) { set('origin_id', ''); set('origin_type', ''); return; }
-    set('origin_id', origin.id);
-    set('origin_type', 'account');
+    const accountOrigin = origins.find(o => o.id === value && o.type === 'account');
+    const cardOrigin = origins.find(o => o.id === value && o.type === 'card');
+    if (accountOrigin) {
+      set('origin_id', accountOrigin.id);
+      set('origin_type', 'account');
+    } else if (cardOrigin) {
+      set('origin_id', cardOrigin.id);
+      set('origin_type', 'card');
+    } else {
+      set('origin_id', '');
+      set('origin_type', '');
+    }
   };
 
-  const selectedOrigin = origins.find(o => o.id === form.origin_id && o.type === 'account');
-  const isAccount = !!selectedOrigin;
+  const selectedOrigin = origins.find(o => o.id === form.origin_id && (o.type === 'account' || o.type === 'card'));
+  const isAccount = selectedOrigin?.type === 'account';
 
   const handleSave = async () => {
     try {
@@ -174,6 +182,16 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
                     ))}
                   </>
                 )}
+                {origins.filter(o => o.type === 'card').length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      💳 Cartões de Crédito
+                    </div>
+                    {origins.filter(o => o.type === 'card').map(o => (
+                      <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -199,12 +217,6 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
               <p className="text-[10px] text-emerald-700">Se preencher esta data, selecione também a conta de pagamento acima.</p>
             </div>
           )}
-
-          {/* Observação */}
-          <div>
-            <Label>Observação</Label>
-            <Input tabIndex={5} value={form.notes} onChange={e => set('notes', e.target.value)} className="mt-1" placeholder="Opcional..." />
-          </div>
 
           {/* Valor */}
           <div className={`grid gap-3 ${expenseType === 'avulsa' || expenseType === 'parcelada' ? 'grid-cols-2' : 'grid-cols-1'}`}>
@@ -256,7 +268,13 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
             </div>
           )}
 
-        </div>
+          {/* Observação */}
+          <div>
+            <Label>Observação</Label>
+            <Input tabIndex={5} value={form.notes} onChange={e => set('notes', e.target.value)} className="mt-1" placeholder="Opcional..." />
+          </div>
+
+          </div>
 
         <div className="flex gap-2 pt-2">
           <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
