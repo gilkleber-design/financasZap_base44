@@ -22,19 +22,7 @@
     },
     "category": {
       "type": "string",
-      "enum": [
-        "alimentacao",
-        "transporte",
-        "moradia",
-        "saude",
-        "educacao",
-        "lazer",
-        "vestuario",
-        "servicos",
-        "impostos",
-        "outros"
-      ],
-      "description": "Categoria legada por enum. Use category_id para novas categorias."
+      "description": "Slug da Categoria legada. Use category_id preferencialmente."
     },
     "category_id": {
       "type": "string",
@@ -58,6 +46,10 @@
     "recurrence_id": {
       "type": "string",
       "description": "ID da recorr\u00eancia que materializou este payable"
+    },
+    "account_id": {
+      "type": "string",
+      "description": "ID da conta banc\u00e1ria relacionada \u00e0 conta a pagar"
     },
     "origin_id": {
       "type": "string",

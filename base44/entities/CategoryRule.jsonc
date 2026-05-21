@@ -8,19 +8,7 @@
     },
     "category": {
       "type": "string",
-      "enum": [
-        "alimentacao",
-        "transporte",
-        "moradia",
-        "saude",
-        "educacao",
-        "lazer",
-        "vestuario",
-        "servicos",
-        "impostos",
-        "outros"
-      ],
-      "description": "Categoria que ser\u00e1 atribu\u00edda quando a palavra-chave for encontrada"
+      "description": "Slug da Categoria que ser\u00e1 atribu\u00edda quando a palavra-chave for encontrada"
     },
     "priority": {
       "type": "number",

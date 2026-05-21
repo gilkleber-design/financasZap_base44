@@ -24,21 +24,7 @@
     },
     "category": {
       "type": "string",
-      "enum": [
-        "alimentacao",
-        "transporte",
-        "moradia",
-        "saude",
-        "educacao",
-        "lazer",
-        "vestuario",
-        "servicos",
-        "impostos",
-        "salario_clt",
-        "receita_pj",
-        "outros"
-      ],
-      "description": "Categoria do lan\u00e7amento"
+      "description": "Slug da Categoria do lan\u00e7amento"
     },
     "date": {
       "type": "string",

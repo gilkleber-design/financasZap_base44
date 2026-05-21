@@ -16,18 +16,7 @@
     },
     "category": {
       "type": "string",
-      "enum": [
-        "alimentacao",
-        "transporte",
-        "moradia",
-        "saude",
-        "educacao",
-        "lazer",
-        "vestuario",
-        "servicos",
-        "impostos",
-        "outros"
-      ]
+      "description": "Slug da categoria"
     },
     "category_id": {
       "type": "string",
