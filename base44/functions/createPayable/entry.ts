@@ -35,7 +35,7 @@ async function createPaidTransaction(base44, payable, paymentDate, originId) {
     amount: payable.amount,
     net_amount: payable.amount,
     type: 'expense',
-    category: payable.category || 'outros',
+    category: payable.category_id || payable.category || 'outros',
     date: paymentDate,
     source: 'manual',
     payable_id: payable.id,

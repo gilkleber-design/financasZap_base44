@@ -80,7 +80,7 @@ export default function ConfirmPayableModal({ payable, onClose }) {
       amount,
       net_amount: amount,
       type: 'expense',
-      category: payable.category || 'outros',
+      category: payable.category_id || payable.category || 'outros',
       date: form.date,
       payable_id: payable.id,
       reconciled: true,

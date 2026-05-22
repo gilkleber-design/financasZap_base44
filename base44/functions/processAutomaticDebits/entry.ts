@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
         amount: p.amount,
         net_amount: p.amount,
         type: 'expense',
-        category: p.category || 'outros',
+        category: p.category_id || p.category || 'outros',
         date: new Date().toISOString().split('T')[0],
         payable_id: p.id,
         reconciled: true,

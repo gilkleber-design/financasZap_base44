@@ -157,9 +157,9 @@ export default function DashboardPage() {
       .filter(c => c.type === type && (type === 'income' || !catFaturaCartao || c.id !== catFaturaCartao.id))
       .map(cat => {
         const meta = budgets.find(b => b.category_id === cat.id)?.amount || 0;
-        const realizado = monthTransactions.filter(t => t.category_id === cat.id).reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+        const realizado = monthTransactions.filter(t => t.category === cat.id || t.category === cat.slug).reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
         const pendentes = type === 'expense' ? pendingPayablesMonth : pendingCurrentMonth;
-        const comprometido = pendentes.filter(p => p.category_id === cat.id).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+        const comprometido = pendentes.filter(p => p.category_id === cat.id || p.category === cat.slug).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
         return { ...cat, meta, realizado, comprometido, totalUsage: realizado + comprometido, icon: Activity };
       })
       .filter(c => c.meta > 0 || c.totalUsage > 0)
