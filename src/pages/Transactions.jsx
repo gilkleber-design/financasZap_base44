@@ -26,7 +26,9 @@ export default function Transactions() {
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterCreatedBy, setFilterCreatedBy] = useState('all');
+  const [sortBy, setSortBy] = useState('date_desc'); // Novo estado de ordenação
   const [openReconciliation, setOpenReconciliation] = useState(false);
+  
   const queryClient = useQueryClient();
   const { flatForSelect, getCategoryLabel } = useCategories();
 
@@ -54,8 +56,8 @@ export default function Transactions() {
 
   const uniqueUsers = [...new Set(transactions.map(t => t.created_by).filter(Boolean))];
 
+  // Filtra e depois aplica a ordenação escolhida
   const filtered = transactions.filter(t => {
-    // Permite buscar também pelo ID ou valor se a descrição falhar
     const searchLower = search.toLowerCase();
     const matchSearch = !search || 
       t.description?.toLowerCase().includes(searchLower) ||
@@ -69,9 +71,23 @@ export default function Transactions() {
                      t.category === filterCategory || 
                      normalize(t.category) === normalize(filterCategory);
     const matchCreatedBy = filterCreatedBy === 'all' || t.created_by === filterCreatedBy;
-    // Removendo o filtro rígido de ano atual para que você possa ver todas as transações, incluindo as de 2025 ou anos seguintes
     
     return matchSearch && matchType && matchCat && matchCreatedBy;
+  }).sort((a, b) => {
+    // Lógica de ordenação adicionada
+    if (sortBy === 'date_desc') {
+      return new Date(b.date || 0) - new Date(a.date || 0);
+    }
+    if (sortBy === 'date_asc') {
+      return new Date(a.date || 0) - new Date(b.date || 0);
+    }
+    if (sortBy === 'alpha_asc') {
+      return (a.description || '').localeCompare(b.description || '');
+    }
+    if (sortBy === 'alpha_desc') {
+      return (b.description || '').localeCompare(a.description || '');
+    }
+    return 0;
   });
 
   return (
@@ -93,12 +109,24 @@ export default function Transactions() {
          </div>
        </div>
 
-      {/* Filters */}
+      {/* Filters and Sort */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
+        
+        {/* Adicionado menu de ordenação */}
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="date_desc">Data (Mais recentes)</SelectItem>
+            <SelectItem value="date_asc">Data (Mais antigas)</SelectItem>
+            <SelectItem value="alpha_asc">Ordem Alfabética (A-Z)</SelectItem>
+            <SelectItem value="alpha_desc">Ordem Alfabética (Z-A)</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -107,6 +135,7 @@ export default function Transactions() {
             <SelectItem value="expense">Despesas</SelectItem>
           </SelectContent>
         </Select>
+        
         <Select value={filterCategory} onValueChange={setFilterCategory}>
           <SelectTrigger className="w-44"><SelectValue placeholder="Categoria" /></SelectTrigger>
           <SelectContent>
@@ -118,6 +147,7 @@ export default function Transactions() {
             ))}
           </SelectContent>
         </Select>
+        
         <Select value={filterCreatedBy} onValueChange={setFilterCreatedBy}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Usuário" /></SelectTrigger>
           <SelectContent>
