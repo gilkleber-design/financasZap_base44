@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Wallet, Coins, Scale, AlertTriangle, MessageCircle, MoreHorizontal, Activity } from 'lucide-react';
+import { Wallet, Coins, Scale, AlertTriangle, MessageCircle, MoreHorizontal, Activity, Info } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isBefore, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -20,18 +20,38 @@ const CurrencyText = ({ value, prefix = 'R$ ' }) => (
 );
 
 // --- SHARED UI COMPONENTS ---
-const ProgressBar = ({ value, Compromisso, max, className, showHashedCompromisso }) => {
+const ProgressBar = ({ value, Compromisso, max, className, showHashedCompromisso, variant = 'income' }) => {
   const valueWidth = max > 0 ? (value / max) * 100 : (value > 0 ? 100 : 0);
   const CompromissoWidth = max > 0 ? (Compromisso / max) * 100 : (Compromisso > 0 ? 100 : 0);
+  const totalPercent = Math.min(valueWidth + CompromissoWidth, 100);
+
+  let mainColor = "bg-emerald-500";
+  let compColor = "bg-emerald-200";
+
+  if (variant === 'expense') {
+    if (totalPercent < 50) {
+      mainColor = "bg-emerald-500";
+      compColor = "bg-emerald-200";
+    } else if (totalPercent < 75) {
+      mainColor = "bg-amber-500";
+      compColor = "bg-amber-200";
+    } else if (totalPercent < 90) {
+      mainColor = "bg-orange-500";
+      compColor = "bg-orange-200";
+    } else {
+      mainColor = "bg-rose-500";
+      compColor = "bg-rose-200";
+    }
+  }
 
   return (
     <div className={cn("h-3.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative", className)}>
       <div
-        className={cn("h-full absolute left-0 top-0", showHashedCompromisso ? "bg-emerald-500" : "bg-blue-500")}
+        className={cn("h-full absolute left-0 top-0 transition-colors duration-500", mainColor)}
         style={{ width: `${Math.min(valueWidth, 100)}%`, zIndex: 1 }}
       />
       <div
-        className={cn("h-full absolute top-0", showHashedCompromisso ? "bg-emerald-200" : "bg-blue-200")}
+        className={cn("h-full absolute top-0 transition-colors duration-500", compColor)}
         style={{ width: `${Math.min(CompromissoWidth, 100 - valueWidth)}%`, left: `${Math.min(valueWidth, 100)}%`, zIndex: 0 }}
       >
         {showHashedCompromisso && (
@@ -76,6 +96,19 @@ const CardContent = ({ children, className }) => (
   <div className={cn("p-5", className)}>{children}</div>
 );
 
+// Alterado de <div> para <button> para corrigir erros de ESLint (jsx-a11y)
+const KpiTitle = ({ title, description }) => (
+  <button type="button" className="flex items-center gap-1.5 relative group w-fit cursor-help outline-none">
+    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{title}</p>
+    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0" />
+    
+    <div className="absolute z-50 bottom-full left-0 mb-2 w-64 p-3 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-medium leading-relaxed rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus:opacity-100 group-focus:visible transition-all shadow-xl pointer-events-none normal-case tracking-normal whitespace-normal text-left">
+      {description}
+      <div className="absolute top-full left-4 border-[6px] border-transparent border-t-slate-900 dark:border-t-slate-100" />
+    </div>
+  </button>
+);
+
 // --- MAIN DASHBOARD PAGE ---
 export default function DashboardPage() {
   const now = new Date();
@@ -114,17 +147,14 @@ export default function DashboardPage() {
 
   // --- LÓGICA DE NEGÓCIO BLINDADA ---
   const stats = useMemo(() => {
-    // Busca segura com optional chaining
     const catFaturaCartao = categories.find(c => 
       c?.name?.toLowerCase()?.includes('faturas de cartão') || 
       c?.name?.toLowerCase()?.includes('fatura de cartão')
     );
     
-    // 1. FILTRO MESTRE: Só entra dinheiro e gasto real validado
     const validTransactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
     const monthTransactions = validTransactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
     
-    // KPI 1: Resultado Mensal
     const realIncomeTotal = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const realExpenseTotal = monthTransactions
       .filter(t => t.type === 'expense' && !t.card_id)
@@ -132,7 +162,6 @@ export default function DashboardPage() {
       
     const realBalance = realIncomeTotal - realExpenseTotal;
 
-    // KPI 2: Expectativa de Caixa
     const monthIncome = realIncomeTotal;
     
     const pendingCurrentMonth = receivables.filter(r => r.status === 'pending' && r.due_date >= monthStart && r.due_date <= monthEnd);
@@ -144,15 +173,12 @@ export default function DashboardPage() {
     const targetIncome = monthIncome + pendingCurrentTotal + pendingOverdueTotal || (monthIncome + 1);
     const incomePercentage = Math.min((monthIncome / targetIncome) * 100, 100);
 
-    // KPI 4: A Cobrar / Vencidas
     const overdueIncomes = receivables.filter(r => r.status === 'pending' && isBefore(new Date(r.due_date), new Date(todayStr)));
     const overdueIncomeTotal = overdueIncomes.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
 
-    // Urgências Despesas
     const pendingPayablesMonth = payables.filter(p => p.status === 'pending' && p.due_date >= monthStart && p.due_date <= monthEnd);
     const upcomingExpensesList = payables.filter(p => p.status === 'pending' && p.due_date <= nextWeekStr).slice(0, 5);
 
-    // Mapeamento Raio-X
     const mapCategoryStats = (type) => categories
       .filter(c => c.type === type && (type === 'income' || !catFaturaCartao || c.id !== catFaturaCartao.id))
       .map(cat => {
@@ -168,7 +194,6 @@ export default function DashboardPage() {
     const expenseStats = mapCategoryStats('expense');
     const incomeStats = mapCategoryStats('income');
 
-    // KPI 3: Saúde do Orçamento (Apenas categorias de Despesa)
     const totalExpenseBudget = expenseStats.reduce((acc, c) => acc + c.meta, 0);
     const totalExpenseProjected = expenseStats.reduce((acc, c) => acc + c.totalUsage, 0);
     const budgetBalance = totalExpenseBudget - totalExpenseProjected;
@@ -194,6 +219,7 @@ export default function DashboardPage() {
   const kpiCards = [
     {
       title: 'Resultado Mensal',
+      description: 'Fluxo de caixa real sob regime de caixa. É a matemática seca: dinheiro que de fato pingou na conta menos as saídas consolidadas do mês atual.',
       value: stats.realBalance,
       subtitle: '(Receitas vs Saídas Reais de Conta)',
       icon: Wallet,
@@ -202,6 +228,7 @@ export default function DashboardPage() {
     },
     {
       title: 'Expectativa de Caixa',
+      description: 'Seu norte de faturamento. Receita que já entrou comparada ao total que você espera realizar no mês inteiro (recebido + a receber + atrasados).',
       value: stats.monthIncome,
       target: stats.targetIncome,
       baseTarget: stats.baseTarget,
@@ -213,6 +240,7 @@ export default function DashboardPage() {
     },
     {
       title: 'Saúde do Orçamento',
+      description: 'Controle do teto de gastos. Compara o limite planejado de despesas no mês com o total projetado (o que já foi pago + boletos pendentes).',
       value: stats.projectedBalance,
       healthPercent: stats.healthPercent,
       icon: Scale,
@@ -220,6 +248,7 @@ export default function DashboardPage() {
     },
     {
       title: 'A Cobrar / Vencidas',
+      description: 'Dinheiro na mesa que virou pendência. A soma total de todas as receitas que já passaram do prazo original de vencimento e não foram pagas.',
       value: stats.overdueIncomeTotal,
       count: stats.overdueIncomes.length,
       icon: AlertTriangle,
@@ -257,8 +286,8 @@ export default function DashboardPage() {
                 <div className="p-3 bg-white dark:bg-emerald-900 rounded-2xl border border-emerald-100 shrink-0">
                   <Icon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0 overflow-hidden">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
+                <div className="flex-1 space-y-1 min-w-0 relative">
+                  <KpiTitle title={card.title} description={card.description} />
                   <p className="text-xl lg:text-2xl font-bold text-slate-950 dark:text-white truncate">{valueText}</p>
                   <p className="text-[11px] text-muted-foreground truncate">{card.subtitle}</p>
                 </div>
@@ -273,8 +302,8 @@ export default function DashboardPage() {
                 <div className="p-3 bg-white dark:bg-rose-900 rounded-2xl border border-rose-100 shrink-0">
                   <Icon className="w-6 h-6 text-rose-600 dark:text-rose-400" />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0 overflow-hidden">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
+                <div className="flex-1 space-y-1 min-w-0 relative">
+                  <KpiTitle title={card.title} description={card.description} />
                   <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
                     <p className="text-xl lg:text-2xl font-bold text-slate-950 dark:text-white truncate">{card.count}</p>
                     <span className="text-sm font-medium text-slate-950 dark:text-white truncate">receitas vencidas</span>
@@ -293,8 +322,8 @@ export default function DashboardPage() {
                 <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 shrink-0">
                   <Icon className={`w-6 h-6 ${card.color === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0 overflow-hidden">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
+                <div className="flex-1 space-y-1 min-w-0 relative">
+                  <KpiTitle title={card.title} description={card.description} />
                   
                   {card.title.includes('Saúde') ? (
                     <div className="flex flex-col items-start w-full min-w-0">
@@ -328,7 +357,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="w-full space-y-1">
-                  <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={(card.percentage || 0) < 100} className="emerald-bars" />
+                  <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={(card.percentage || 0) < 100} variant="income" />
                   <p className="text-[11px] text-right text-muted-foreground">{(card.percentage || 0).toFixed(0)}% recebido</p>
                 </div>
               )}
@@ -412,7 +441,7 @@ const XRayTable = ({ categories, type }) => {
                 </div>
                 <div className="flex-grow space-y-1 min-w-0 overflow-hidden">
                   <p className="font-semibold text-sm text-slate-950 dark:text-white truncate">{cat.name}</p>
-                  <ProgressBar value={cat.realizado} Compromisso={cat.comprometido} max={cat.meta} showHashedCompromisso={isExpense || cat.comprometido > 0} className={isExpense ? "blue-bars" : "emerald-bars"} />
+                  <ProgressBar value={cat.realizado} Compromisso={cat.comprometido} max={cat.meta} showHashedCompromisso={isExpense || cat.comprometido > 0} variant={isExpense ? 'expense' : 'income'} />
                 </div>
               </div>
               <div className="text-sm font-semibold text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.meta} /></div>
@@ -421,12 +450,12 @@ const XRayTable = ({ categories, type }) => {
           );
         })}
       </div>
-      <div className="p-4 px-5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-4 text-emerald-600 dark:text-emerald-400 font-medium">
-        <div className="flex items-center gap-1.5 text-sm font-semibold"><div className="w-5 h-2 rounded bg-emerald-500" /> Realizado</div>
+      <div className="p-4 px-5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-4 text-slate-600 dark:text-slate-400 font-medium">
+        <div className="flex items-center gap-1.5 text-sm font-semibold"><div className="w-5 h-2 rounded bg-slate-400 dark:bg-slate-500" /> Realizado</div>
         <div className="flex items-center gap-1.5 text-sm font-semibold relative overflow-hidden">
-          <div className="w-5 h-2 rounded bg-emerald-200" /><div className="absolute left-0 top-0 w-5 h-2 bg-[repeating-linear-gradient(45deg,_transparent,_transparent_2px,_rgba(255,255,255,0.4)_2px,_rgba(255,255,255,0.4)_4px)]" /> Comprometido
+          <div className="w-5 h-2 rounded bg-slate-200 dark:bg-slate-700" /><div className="absolute left-0 top-0 w-5 h-2 bg-[repeating-linear-gradient(45deg,_transparent,_transparent_2px,_rgba(255,255,255,0.4)_2px,_rgba(255,255,255,0.4)_4px)]" /> Comprometido
         </div>
-        <div className="flex items-center gap-1.5 text-sm font-semibold"><div className="w-5 h-2 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200" /> Planejado</div>
+        <div className="flex items-center gap-1.5 text-sm font-semibold"><div className="w-5 h-2 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" /> Planejado</div>
       </div>
     </div>
   );
