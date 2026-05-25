@@ -13,51 +13,27 @@ Deno.serve(async (req) => {
     const { category_slug, month, year } = body;
 
     if (!category_slug || !month || !year) {
-      return Response.json(
-        { error: 'category_slug, month and year are required' },
-        { status: 400 }
-      );
+      return Response.json({ error: 'category_slug, month and year are required' }, { status: 400 });
     }
 
-    // 1) Buscar todas as categorias (necessário p/ identificar raiz e filhas)
+    // 1) Obter a categoria pelo slug
     const categories = await base44.entities.Category.list('name', 500);
-    const catBySlug = {};
-    const catById = {};
-    categories.forEach((c) => {
-      catBySlug[c.slug] = c;
-      catById[c.id] = c;
-    });
-
-    const used = catBySlug[category_slug];
+    const used = categories.find(c => c.slug === category_slug);
+    
     if (!used) {
       return Response.json({ error: `Category not found: ${category_slug}` }, { status: 404 });
     }
 
-    // 2) Identificar a raiz
-    const root = used.parent_id ? catById[used.parent_id] || used : used;
-
-    // 3) Coletar todos os IDs e slugs do grupo (raiz + filhas)
-    const groupIds = [root.id];
-    const groupSlugs = [root.slug];
-    categories.forEach((c) => {
-      if (c.parent_id === root.id) {
-        groupIds.push(c.id);
-        groupSlugs.push(c.slug);
-      }
-    });
-
-    // 4) Buscar Budget: primeiro na categoria usada, depois na raiz
+    // 2) Buscar o Budget estritamente para esta categoria (sem hierarquia)
     const budgets = await base44.entities.Budget.filter({
       month: Number(month),
       year: Number(year),
     });
-    let budget = budgets.find((b) => b.category_id === used.id);
-    if (!budget && used.id !== root.id) {
-      budget = budgets.find((b) => b.category_id === root.id);
-    }
-    const planned = budget?.amount || 0;
+    
+    const budgetEntry = budgets.find((b) => b.category_id === used.id);
+    const planned = budgetEntry ? Number(budgetEntry.amount) : 0;
 
-    // 5) Buscar transactions do mês para todos os slugs do grupo
+    // 3) Buscar transações do mês apenas desta categoria
     const mm = String(month).padStart(2, '0');
     const lastDay = new Date(Number(year), Number(month), 0).getDate();
     const dateStart = `${year}-${mm}-01`;
@@ -69,7 +45,7 @@ Deno.serve(async (req) => {
     }, '-date', 5000);
 
     const rawSpent = transactions
-      .filter((t) => groupSlugs.includes(t.category))
+      .filter((t) => t.category === used.slug)
       .reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
     const spent = Number(rawSpent.toFixed(2));
@@ -79,12 +55,12 @@ Deno.serve(async (req) => {
     return Response.json({
       category_slug: used.slug,
       category_name: used.name,
-      root_slug: root.slug,
-      root_name: root.name,
+      root_slug: used.slug,
+      root_name: used.name,
       month: Number(month),
       year: Number(year),
       has_budget: planned > 0,
-      planned: Number(Number(planned).toFixed(2)),
+      planned: Number(planned.toFixed(2)),
       spent,
       utilization,
       available,
