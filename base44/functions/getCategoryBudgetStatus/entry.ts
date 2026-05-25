@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'category_slug, month and year are required' }, { status: 400 });
     }
 
-    // 1) Obter a categoria pelo slug
+    // 1) Buscar categorias para pegar o ID correto
     const categories = await base44.entities.Category.list('name', 500);
     const used = categories.find(c => c.slug === category_slug);
     
@@ -24,16 +24,17 @@ Deno.serve(async (req) => {
       return Response.json({ error: `Category not found: ${category_slug}` }, { status: 404 });
     }
 
-    // 2) Buscar o Budget estritamente para esta categoria (sem hierarquia)
+    // 2) Buscar Budget para esta categoria específica
     const budgets = await base44.entities.Budget.filter({
       month: Number(month),
       year: Number(year),
     });
     
+    // Filtro direto pelo ID da categoria
     const budgetEntry = budgets.find((b) => b.category_id === used.id);
     const planned = budgetEntry ? Number(budgetEntry.amount) : 0;
 
-    // 3) Buscar transações do mês apenas desta categoria
+    // 3) Buscar transações do mês para esta categoria
     const mm = String(month).padStart(2, '0');
     const lastDay = new Date(Number(year), Number(month), 0).getDate();
     const dateStart = `${year}-${mm}-01`;
