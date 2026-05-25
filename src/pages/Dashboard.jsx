@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Wallet, Coins, Scale, AlertTriangle, MessageCircle, MoreHorizontal, Activity, Info } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isBefore, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import ExpenseCategoryPieChart from '@/components/dashboard/ExpenseCategoryPieChart';
 
 // --- HELPER FUNCTIONS ---
 export function cn(...classes) {
@@ -371,10 +372,13 @@ export default function DashboardPage() {
         <div className="space-y-6">
           <Card className="p-0 overflow-hidden rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
             <CardHeader className="p-5 border-b border-slate-100 dark:border-slate-800 space-y-0.5">
-              <CardTitle className="text-lg font-semibold text-slate-950 dark:text-white">Raio-X de Despesas</CardTitle>
+              <CardTitle className="text-lg font-semibold text-slate-950 dark:text-white">Auditoria de Despesas por Categoria</CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
-              <XRayTable categories={stats.expenseStats} type="despesa" />
+            <CardContent className="space-y-6 p-5">
+              <ExpenseCategoryPieChart categories={stats.expenseStats} />
+              <div className="rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                <XRayTable categories={stats.expenseStats} type="despesa" />
+              </div>
             </CardContent>
           </Card>
 
