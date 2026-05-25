@@ -16,25 +16,41 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'category_slug, month and year are required' }, { status: 400 });
     }
 
-    // 1) Buscar categorias para pegar o ID correto
     const categories = await base44.entities.Category.list('name', 500);
-    const used = categories.find(c => c.slug === category_slug);
-    
+    const catBySlug = {};
+    const catById = {};
+
+    categories.forEach((category) => {
+      catBySlug[category.slug] = category;
+      catById[category.id] = category;
+    });
+
+    const used = catBySlug[category_slug];
     if (!used) {
       return Response.json({ error: `Category not found: ${category_slug}` }, { status: 404 });
     }
 
-    // 2) Buscar Budget para esta categoria específica
+    const root = used.parent_id ? catById[used.parent_id] || used : used;
+    const groupSlugs = [root.slug];
+
+    categories.forEach((category) => {
+      if (category.parent_id === root.id) {
+        groupSlugs.push(category.slug);
+      }
+    });
+
     const budgets = await base44.entities.Budget.filter({
       month: Number(month),
       year: Number(year),
     });
-    
-    // Filtro direto pelo ID da categoria
-    const budgetEntry = budgets.find((b) => b.category_id === used.id);
+
+    let budgetEntry = budgets.find((budget) => budget.category_id === used.id);
+    if (!budgetEntry && used.id !== root.id) {
+      budgetEntry = budgets.find((budget) => budget.category_id === root.id);
+    }
+
     const planned = budgetEntry ? Number(budgetEntry.amount) : 0;
 
-    // 3) Buscar transações do mês para esta categoria
     const mm = String(month).padStart(2, '0');
     const lastDay = new Date(Number(year), Number(month), 0).getDate();
     const dateStart = `${year}-${mm}-01`;
@@ -46,8 +62,8 @@ Deno.serve(async (req) => {
     }, '-date', 5000);
 
     const rawSpent = transactions
-      .filter((t) => t.category === used.slug)
-      .reduce((s, t) => s + (Number(t.amount) || 0), 0);
+      .filter((transaction) => groupSlugs.includes(transaction.category))
+      .reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0);
 
     const spent = Number(rawSpent.toFixed(2));
     const utilization = planned > 0 ? Number(((spent / planned) * 100).toFixed(2)) : 0;
@@ -56,8 +72,8 @@ Deno.serve(async (req) => {
     return Response.json({
       category_slug: used.slug,
       category_name: used.name,
-      root_slug: used.slug,
-      root_name: used.name,
+      root_slug: root.slug,
+      root_name: root.name,
       month: Number(month),
       year: Number(year),
       has_budget: planned > 0,
