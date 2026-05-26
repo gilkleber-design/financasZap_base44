@@ -15,60 +15,25 @@ import AuditCategoryPieChart from '@/components/reports/AuditCategoryPieChart';
 import OverviewPlannedVsActual from '@/components/reports/OverviewPlannedVsActual';
 import OverviewFiscalSummary from '@/components/reports/OverviewFiscalSummary';
 
-// --- MAPAS DE CORES E NORMALIZAÇÃO ---
+// --- MAPA DE CORES ---
 const coresCategorias = {
-  'Moradia':              '#0D3B66',
-  'Funcionários':         '#0FA3A3',
-  'Alimentação':          '#F0A030',
-  'Transporte':           '#3A86FF',
-  'Saúde':                '#E74C3C',
-  'Educação':             '#8B5CF6',
-  'Impostos e Taxas':     '#C0622A',
-  'Lazer':                '#10B981',
-  'Vestuário':            '#EC4899',
-  'Serviços':             '#6366F1',
-  'Serviços Domésticos':  '#64748B',
-  'Investimentos':        '#0A6E50',
-  'Família':              '#F59E0B',
-  'Assinaturas':          '#06B6D4',
-  'Outros':               '#94A3B8',
-  'Retiradas':            '#CBD5E1',
+  'Moradia': '#0D3B66',
+  'Funcionários': '#0FA3A3',
+  'Alimentação': '#F0A030',
+  'Transporte': '#3A86FF',
+  'Saúde': '#E74C3C',
+  'Educação': '#8B5CF6',
+  'Impostos e Taxas': '#C0622A',
+  'Lazer': '#10B981',
+  'Vestuário': '#EC4899',
+  'Serviços': '#6366F1',
+  'Serviços Domésticos': '#64748B',
+  'Investimentos': '#0A6E50',
+  'Família': '#F59E0B',
+  'Assinaturas': '#06B6D4',
+  'Outros': '#94A3B8',
+  'Retiradas': '#CBD5E1',
 };
-
-function normalizarCategoria(raw) {
-  if (!raw) return '—';
-  const mapa = {
-    passivos_de_transicao:   'Passivos de Transição',
-    impostos_taxas:          'Impostos e Taxas',
-    funcionarios:            'Funcionários',
-    alimentacao:             'Alimentação',
-    alimentação:             'Alimentação',
-    moradia:                 'Moradia',
-    transporte:              'Transporte',
-    saude:                   'Saúde',
-    saúde:                   'Saúde',
-    educacao:                'Educação',
-    educação:                'Educação',
-    lazer:                   'Lazer',
-    vestuario:               'Vestuário',
-    vestuário:               'Vestuário',
-    servicos:                'Serviços',
-    serviços:                'Serviços',
-    servicos_domesticos:     'Serviços Domésticos',
-    serviços_domésticos:     'Serviços Domésticos',
-    investimentos:           'Investimentos',
-    outros:                  'Outros',
-    familia:                 'Família',
-    família:                 'Família',
-    assinaturas:             'Assinaturas',
-    retiradas:               'Retiradas',
-  };
-  const key = raw.toLowerCase().trim().replace(/\s+/g, '_');
-  if (mapa[key]) return mapa[key];
-  const keyRaw = raw.toLowerCase().trim();
-  if (mapa[keyRaw]) return mapa[keyRaw];
-  return raw.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-}
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -115,6 +80,20 @@ export default function Reports() {
   const handlePayableClick = (payable) => {
     setSelectedPayable(payable);
     setDrawerOpen(true);
+  };
+
+  const categoryBySlug = useMemo(
+    () => categories.reduce((acc, category) => {
+      const slug = String(category.slug || '').toLowerCase();
+      if (slug) acc[slug] = category;
+      return acc;
+    }, {}),
+    [categories]
+  );
+
+  const getCategoryNameBySlug = (slug) => {
+    const normalizedSlug = String(slug || '').toLowerCase();
+    return categoryBySlug[normalizedSlug]?.name || 'Outros';
   };
 
   // ---- LÓGICA DE AUDITORIA ----
@@ -164,18 +143,18 @@ export default function Reports() {
 
   const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
 
-  // Deduplicação e normalização de categorias
   const mapaCategoria = {};
   let valorPassivosTransicao = 0;
 
   monthTx.filter(t => t.type === 'expense').forEach(t => {
-    const label = normalizarCategoria(t.category || 'outros');
-    
-    if (label === 'Passivos de Transição') {
+    const slug = String(t.category || 'outros').toLowerCase();
+    const label = getCategoryNameBySlug(slug);
+
+    if (slug === 'passivos_de_transicao') {
       valorPassivosTransicao += t.amount;
       return;
     }
-    if (label === 'Retiradas') return;
+    if (slug === 'retiradas') return;
 
     if (!mapaCategoria[label]) mapaCategoria[label] = 0;
     mapaCategoria[label] += t.amount;
@@ -187,7 +166,8 @@ export default function Reports() {
 
   // Orçado vs Realizado
   const plannedVsActual = useMemo(() => {
-    const categoryIdToSlug = new Map(categories.map((category) => [category.id, category.slug]));
+    const categoryIdToSlug = new Map(categories.map((category) => [category.id, String(category.slug || '').toLowerCase()]));
+
     const budgetBySlug = budgets.reduce((acc, budget) => {
       const slug = categoryIdToSlug.get(budget.category_id);
       if (!slug) return acc;
@@ -200,26 +180,21 @@ export default function Reports() {
     const actualBySlug = monthTx
       .filter((tx) => tx.type === 'expense')
       .reduce((acc, tx) => {
-        const rawSlug = String(tx.category || 'outros');
-        const normalized = normalizarCategoria(rawSlug);
-        
-        if (normalized === 'Passivos de Transição' || normalized === 'Retiradas') return acc;
-        
-        acc[normalized] = (acc[normalized] || 0) + Number(tx.amount || 0);
+        const slug = String(tx.category || 'outros').toLowerCase();
+        if (slug === 'passivos_de_transicao' || slug === 'retiradas') return acc;
+        acc[slug] = (acc[slug] || 0) + Number(tx.amount || 0);
         return acc;
       }, {});
 
-    const items = Object.keys({ ...budgetBySlug, ...actualBySlug }).map((key) => {
-      // Tenta achar o slug original ou usa a chave normalizada
-      const slug = Array.from(categoryIdToSlug.values()).find(s => normalizarCategoria(s) === key) || key;
-      const actual = actualBySlug[key] || 0;
-      const limit = Number(budgetBySlug[slug] || budgetBySlug[key] || 0);
+    const items = Object.keys(actualBySlug).map((slug) => {
+      const actual = actualBySlug[slug] || 0;
+      const limit = Number(budgetBySlug[slug] || 0);
       const hasLimit = limit > 0;
       const percent = hasLimit ? (actual / limit) * 100 : 0;
-      
+
       return {
         slug,
-        name: key, // Nome já normalizado
+        name: getCategoryNameBySlug(slug),
         actual,
         limit,
         hasLimit,
