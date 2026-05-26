@@ -88,20 +88,18 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
 }
 
 function StatusPill({ status, amount, partialAmount }) {
-  const Icon = STATUS_ICONS[status] || CalendarClock;
   const label = status === 'vencido'
     ? 'Vencido'
     : status === 'parcial'
-      ? `~ ${formatCompactCurrency(partialAmount)}/${formatCompactCurrency(amount)}`
+      ? `${formatCompactCurrency(partialAmount)}/${formatCompactCurrency(amount)}`
       : status === 'recebido'
-        ? `✓ ${formatCompactCurrency(amount)}`
+        ? formatCompactCurrency(amount)
         : status === 'futuro'
-          ? `📅 ${formatCompactCurrency(amount)}`
-          : `⏳ ${formatCompactCurrency(amount)}`;
+          ? formatCompactCurrency(amount)
+          : formatCompactCurrency(amount);
 
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${STATUS_STYLES[status] || STATUS_STYLES.futuro}`}>
-      <Icon className="h-3 w-3" />
       {label}
     </span>
   );
