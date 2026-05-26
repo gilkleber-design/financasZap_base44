@@ -341,33 +341,44 @@ export default function Payables() {
 
   const urgencySections = useMemo(() => {
     const today = new Date();
-    const tomorrow = addDays(today, 1);
-    const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+    const tomorrow = addDays(todayStart, 1);
+    const weekEnd = endOfWeek(todayStart, { weekStartsOn: 0 });
     const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 12, 0, 0);
 
-    const mapped = filtered.map((item) => {
-      const dueDate = new Date(`${(item.due_date || item.competencia)}T12:00:00`);
-      const overdue = item.status !== 'paid' && dueDate < new Date(new Date().toDateString());
-      const autoDebit = item.payment_modality === 'automatic_debit';
-      return {
-        id: item.id,
-        description: item.description,
-        category: item.category,
-        dueDate,
-        dueDateLabel: format(dueDate, 'dd/MM', { locale: ptBR }),
-        amount: Number(item.amount || 0),
-        installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
-        pill: item.status === 'paid' ? 'paid' : autoDebit ? 'auto' : overdue ? 'overdue' : 'pending',
-        pillLabel: item.status === 'paid' ? 'Pago' : autoDebit ? 'Automático' : overdue ? 'Vencido' : 'Pendente',
-        style: overdue ? 'overdue' : (isSameDay(dueDate, today) || isSameDay(dueDate, tomorrow)) ? 'urgent' : 'default',
-        autoDebit,
-        canPay: item.status !== 'paid',
-        original: item,
-      };
-    });
+    const parseItemDate = (value) => {
+      if (!value) return null;
+      const normalized = String(value).includes('T') ? String(value) : `${value}T12:00:00`;
+      const parsed = new Date(normalized);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const mapped = filtered
+      .map((item) => {
+        const dueDate = parseItemDate(item.due_date || item.competencia);
+        if (!dueDate) return null;
+        const overdue = item.status !== 'paid' && dueDate < todayStart;
+        const autoDebit = item.payment_modality === 'automatic_debit';
+        return {
+          id: item.id,
+          description: item.description,
+          category: item.category,
+          dueDate,
+          dueDateLabel: format(dueDate, 'dd/MM', { locale: ptBR }),
+          amount: Number(item.amount || 0),
+          installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
+          pill: item.status === 'paid' ? 'paid' : autoDebit ? 'auto' : overdue ? 'overdue' : 'pending',
+          pillLabel: item.status === 'paid' ? 'Pago' : autoDebit ? 'Automático' : overdue ? 'Vencido' : 'Pendente',
+          style: overdue ? 'overdue' : (isSameDay(dueDate, todayStart) || isSameDay(dueDate, tomorrow)) ? 'urgent' : 'default',
+          autoDebit,
+          canPay: item.status !== 'paid',
+          original: item,
+        };
+      })
+      .filter(Boolean);
 
     return [
-      { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.original.status !== 'paid' && item.dueDate < new Date(new Date().toDateString()) && !item.autoDebit) },
+      { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.original.status !== 'paid' && item.dueDate < todayStart && !item.autoDebit) },
       { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
       { key: 'week', title: 'Esta Semana', icon: PAYABLE_SECTION_ICONS.week, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && item.dueDate > tomorrow && item.dueDate <= weekEnd) },
       { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
@@ -376,12 +387,28 @@ export default function Payables() {
     ].filter((section) => section.items.length > 0);
   }, [filtered, currentMonth]);
 
-  const kpis = useMemo(() => ({
-    expected: filtered.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-    paid: filtered.filter((item) => item.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
-    open: filtered.filter((item) => item.status === 'pending' && new Date(`${item.due_date}T12:00:00`) >= new Date(new Date().toDateString())).reduce((sum, item) => sum + Number(item.amount || 0), 0),
-    overdue: filtered.filter((item) => item.status === 'pending' && new Date(`${item.due_date}T12:00:00`) < new Date(new Date().toDateString())).reduce((sum, item) => sum + Number(item.amount || 0), 0),
-  }), [filtered]);
+  const kpis = useMemo(() => {
+    const todayStart = new Date(new Date().toDateString());
+    const parseItemDate = (value) => {
+      if (!value) return null;
+      const normalized = String(value).includes('T') ? String(value) : `${value}T12:00:00`;
+      const parsed = new Date(normalized);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    return {
+      expected: filtered.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      paid: filtered.filter((item) => item.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      open: filtered.filter((item) => item.status === 'pending' && (() => {
+        const date = parseItemDate(item.due_date || item.competencia);
+        return date && date >= todayStart;
+      })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      overdue: filtered.filter((item) => item.status === 'pending' && (() => {
+        const date = parseItemDate(item.due_date || item.competencia);
+        return date && date < todayStart;
+      })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    };
+  }, [filtered]);
 
   const updatePayableMutation = useMutation({
     mutationFn: async ({ payable, updatedData }) => {
