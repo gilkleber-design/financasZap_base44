@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,7 +17,7 @@ import {
   ToggleRight,
   CreditCard,
 } from 'lucide-react';
-import { format, isPast, isToday, addMonths, subMonths } from 'date-fns';
+import { format, isPast, isToday, addMonths, subMonths, isSameDay, addDays, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import {
@@ -33,6 +33,10 @@ import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 import EditPayableModal from '@/components/payables/EditPayableModal';
 import RecurrenceFormModal from '@/components/recurrences/RecurrenceFormModal';
 import { useCategories } from '@/hooks/useCategories';
+import PayablesOverview, { PAYABLE_SECTION_ICONS } from '@/components/payables/PayablesOverview';
+import DashboardLogo from '@/components/dashboard/DashboardLogo';
+import { getInitials } from '@/components/dashboard/financaszapTheme';
+import { Bell } from 'lucide-react';
 
 const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', {
@@ -267,7 +271,11 @@ export default function Payables() {
   const [editingPayable, setEditingPayable] = useState(null);
   const [editingRecurrence, setEditingRecurrence] = useState(null);
   const [deletingPayable, setDeletingPayable] = useState(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const stored = localStorage.getItem('contas_mes');
+    return stored ? new Date(`${stored}-01T12:00:00`) : new Date();
+  });
+  const [paidSectionOpen, setPaidSectionOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState('open');
   const [filterBy, setFilterBy] = useState('due_date');
   const [creditCardOnly, setCreditCardOnly] = useState(false);
@@ -326,6 +334,54 @@ export default function Payables() {
   };
 
   const totalFiltered = filtered.reduce((s, p) => s + (p.amount || 0), 0);
+
+  if (viewMode === 'mensal') {
+    localStorage.setItem('contas_mes', format(currentMonth, 'yyyy-MM'));
+  }
+
+  const urgencySections = useMemo(() => {
+    const today = new Date();
+    const tomorrow = addDays(today, 1);
+    const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
+    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 12, 0, 0);
+
+    const mapped = filtered.map((item) => {
+      const dueDate = new Date(`${(item.due_date || item.competencia)}T12:00:00`);
+      const overdue = item.status !== 'paid' && dueDate < new Date(new Date().toDateString());
+      const autoDebit = item.payment_modality === 'automatic_debit';
+      return {
+        id: item.id,
+        description: item.description,
+        category: item.category,
+        dueDate,
+        dueDateLabel: format(dueDate, 'dd/MM', { locale: ptBR }),
+        amount: Number(item.amount || 0),
+        installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
+        pill: item.status === 'paid' ? 'paid' : autoDebit ? 'auto' : overdue ? 'overdue' : 'pending',
+        pillLabel: item.status === 'paid' ? 'Pago' : autoDebit ? 'Automático' : overdue ? 'Vencido' : 'Pendente',
+        style: overdue ? 'overdue' : (isSameDay(dueDate, today) || isSameDay(dueDate, tomorrow)) ? 'urgent' : 'default',
+        autoDebit,
+        canPay: item.status !== 'paid',
+        original: item,
+      };
+    });
+
+    return [
+      { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.original.status !== 'paid' && item.dueDate < new Date(new Date().toDateString()) && !item.autoDebit) },
+      { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
+      { key: 'week', title: 'Esta Semana', icon: PAYABLE_SECTION_ICONS.week, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && item.dueDate > tomorrow && item.dueDate <= weekEnd) },
+      { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
+      { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.original.status !== 'paid' && item.autoDebit) },
+      { key: 'paid', title: 'Pagas este mês', icon: PAYABLE_SECTION_ICONS.paid, items: mapped.filter((item) => item.original.status === 'paid'), collapsible: true },
+    ].filter((section) => section.items.length > 0);
+  }, [filtered, currentMonth]);
+
+  const kpis = useMemo(() => ({
+    expected: filtered.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    paid: filtered.filter((item) => item.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    open: filtered.filter((item) => item.status === 'pending' && new Date(`${item.due_date}T12:00:00`) >= new Date(new Date().toDateString())).reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    overdue: filtered.filter((item) => item.status === 'pending' && new Date(`${item.due_date}T12:00:00`) < new Date(new Date().toDateString())).reduce((sum, item) => sum + Number(item.amount || 0), 0),
+  }), [filtered]);
 
   const updatePayableMutation = useMutation({
     mutationFn: async ({ payable, updatedData }) => {
@@ -490,246 +546,58 @@ export default function Payables() {
         <RecurrencesTab onEdit={(r) => setEditingRecurrence(r)} />
       ) : (
         <>
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+          <div className="hidden md:flex items-center justify-between border-b border-border bg-card px-6 py-3 -mx-6 -mt-6 mb-3">
+            <div className="flex items-center gap-3">
+              <DashboardLogo className="h-5 w-5" />
+              <div className="text-lg font-bold"><span className="text-foreground">Finanças</span><span className="text-primary">Zap</span></div>
+              <span className="h-5 w-px bg-border" />
+              <p className="text-sm text-muted-foreground">Contas a Pagar</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative"><Bell className="h-4 w-4 text-muted-foreground" /><span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" /></div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar text-xs font-bold text-white">{getInitials('Usuário')}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
             {['todas', 'fixas', 'parceladas', 'avulsas'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
-                  activeTab === tab
-                    ? 'bg-white shadow text-primary'
-                    : 'text-slate-500'
-                }`}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white shadow text-primary' : 'text-slate-500 bg-slate-100'}`}
               >
                 {tab}
               </button>
             ))}
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {['open', 'overdue', 'paid'].map((s) => (
-              <Button
-                key={s}
-                variant={filterStatus === s ? 'secondary' : 'outline'}
-                size="sm"
-                onClick={() => setFilterStatus(s)}
-                className="text-[10px] font-black uppercase h-7 tracking-tighter"
-              >
-                {s === 'open'
-                  ? 'Em Aberto'
-                  : s === 'overdue'
-                  ? 'Vencidas'
-                  : 'Pagas'}
-              </Button>
-            ))}
-
-            <Button
-              variant={creditCardOnly ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setCreditCardOnly((prev) => !prev)}
-              className="text-[10px] font-black uppercase h-7 tracking-tighter"
-            >
-              <CreditCard className="w-3 h-3 mr-1" />
-              Cartão de Crédito
+            <Button variant={creditCardOnly ? 'secondary' : 'outline'} size="sm" onClick={() => setCreditCardOnly((prev) => !prev)} className="text-[10px] font-black uppercase h-7 tracking-tighter">
+              <CreditCard className="w-3 h-3 mr-1" /> Cartão de Crédito
             </Button>
           </div>
 
-          <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-slate-400"
-                onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-
-              <span className="text-sm font-bold min-w-[120px] text-center capitalize">
-                {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-              </span>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-slate-400"
-                onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-              >
-                <ChevronRight className="w-5 h-5" />
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl">
-              <Button
-                variant={filterBy === 'due_date' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setFilterBy('due_date')}
-                className="text-[9px] font-black h-6 px-3"
-              >
-                VENCIMENTO
-              </Button>
-
-              <Button
-                variant={filterBy === 'competencia' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setFilterBy('competencia')}
-                className="text-[9px] font-black h-6 px-3"
-              >
-                COMPETÊNCIA
-              </Button>
-            </div>
+          <div className="flex items-center justify-between rounded-[14px] border border-border bg-card p-3 shadow-sm">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <span className="text-sm font-bold min-w-[120px] text-center capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+              <ChevronRight className="w-5 h-5" />
+            </Button>
           </div>
 
-          <Card className="border-0 shadow-sm overflow-hidden bg-white">
-            <CardContent className="p-0">
-              <div className="divide-y divide-slate-100">
-                {filtered.length === 0 && (
-                  <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
-                    Nenhuma transação encontrada
-                  </p>
-                )}
+          <PayablesOverview
+            monthLabel={format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+            kpis={kpis}
+            sections={urgencySections}
+            paidOpen={paidSectionOpen}
+            onTogglePaid={() => setPaidSectionOpen((value) => !value)}
+            onOpenNew={() => setShowForm(true)}
+            onOpenManageRecurring={() => setViewMode('gerenciar_fixas')}
+            onOpenPay={(item) => setConfirmingPayable(item)}
+          />
 
-                {filtered.map((p) => {
-                  const status = getStatus(p);
-
-                  const dateToShow =
-                    filterBy === 'competencia'
-                      ? p.competencia || p.due_date
-                      : p.due_date;
-
-                  const parsedDate = new Date(
-                    dateToShow?.includes('T')
-                      ? dateToShow
-                      : `${dateToShow}T12:00:00`
-                  );
-
-                  return (
-                    <div
-                      key={p.id}
-                      className={`flex items-center gap-4 px-5 py-4 transition-colors ${
-                        p.is_projection
-                          ? 'bg-slate-50/60 opacity-60'
-                          : 'hover:bg-slate-50/50'
-                      }`}
-                    >
-                      <div
-                        className={`w-1.5 h-11 rounded-full flex-shrink-0 ${
-                          status === 'paid'
-                            ? 'bg-emerald-500'
-                            : status === 'overdue'
-                            ? 'bg-red-500'
-                            : 'bg-amber-400'
-                        }`}
-                      />
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 font-bold mb-0.5">
-                          <p className="text-sm truncate text-slate-800 uppercase tracking-tight">
-                            {p.description}
-                          </p>
-
-                          {p.is_projection && (
-                            <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] px-2 font-black uppercase">
-                              Projeção
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                          {format(parsedDate, 'dd MMM yyyy', {
-                            locale: ptBR,
-                          })}
-
-                          {p.category && (
-                            <span className="flex items-center gap-1">
-                              <span className="w-1 h-1 rounded-full bg-slate-300" />
-                              {getCategoryLabel(p.category)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="text-right flex-shrink-0 mr-4">
-                        <p className="text-sm font-black text-slate-900">
-                          -{fmt(p.amount)}
-                        </p>
-
-                        <span
-                          className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                            STATUS_COLORS[status] || STATUS_COLORS.pending
-                          }`}
-                        >
-                          {STATUS_LABELS[status] || status}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        {p.is_projection ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 text-slate-300 hover:text-red-500"
-                            onClick={() => setViewMode('gerenciar_fixas')}
-                          >
-                            <Settings className="w-4 h-4" />
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-slate-400 hover:text-primary"
-                              onClick={() => setEditingPayable(p)}
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-
-                            {status !== 'paid' ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-2 text-xs font-bold text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                                onClick={() => setConfirmingPayable(p)}
-                              >
-                                <CheckCircle2 className="w-4 h-4 mr-1" />
-                                PAGAR
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 text-amber-500 hover:bg-amber-50"
-                                onClick={() => undoPaymentMutation.mutate(p)}
-                                disabled={undoPaymentMutation.isPending}
-                                title="Desfazer pagamento"
-                              >
-                                <Undo2
-                                  className={`w-5 h-5 ${
-                                    undoPaymentMutation.isPending
-                                      ? 'animate-spin'
-                                      : ''
-                                  }`}
-                                />
-                              </Button>
-                            )}
-
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-slate-300 hover:text-red-500"
-                              onClick={() => setDeletingPayable(p)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+          <Button onClick={() => setShowForm(true)} className="fixed bottom-20 right-4 z-40 h-12 w-12 rounded-full p-0 shadow-lg md:hidden">
+            <Plus className="h-5 w-5" />
+          </Button>
         </>
       )}
 

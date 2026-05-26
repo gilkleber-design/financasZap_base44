@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
 const sortByName = (items) => [...items].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
 
@@ -28,7 +29,7 @@ export function useCategories() {
 
   const getCategoryLabel = (slug) => {
     const cat = findCategory(slug);
-    return cat?.name || slug;
+    return normalizeCategoryLabel(cat?.name || cat?.slug || slug);
   };
 
   const getCategoryColor = (slug) => {
@@ -44,12 +45,22 @@ export function useCategories() {
 
   // Flat list com APENAS as categorias do banco: raízes primeiro, depois subcategorias
    const flatForSelect = [];
+   const seenLabels = new Set();
    const rootsActive = roots.filter(c => c.active !== false);
    rootsActive.forEach(root => {
-     flatForSelect.push({ value: root.slug, label: root.name, type: root.type || 'expense', isRoot: true });
+     const rootLabel = normalizeCategoryLabel(root.name || root.slug);
+     if (!seenLabels.has(rootLabel)) {
+       flatForSelect.push({ value: root.slug, label: rootLabel, type: root.type || 'expense', isRoot: true });
+       seenLabels.add(rootLabel);
+     }
      const childrenActive = getChildren(root.id).filter(c => c.active !== false);
      childrenActive.forEach(child => {
-       flatForSelect.push({ value: child.slug, label: child.name, type: child.type || root.type || 'expense', isChild: true });
+       const childLabel = normalizeCategoryLabel(child.name || child.slug);
+       const dedupeKey = `${root.id}-${childLabel}`;
+       if (!seenLabels.has(dedupeKey)) {
+         flatForSelect.push({ value: child.slug, label: childLabel, type: child.type || root.type || 'expense', isChild: true });
+         seenLabels.add(dedupeKey);
+       }
      });
    });
 

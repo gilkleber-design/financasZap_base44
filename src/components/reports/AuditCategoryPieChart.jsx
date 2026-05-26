@@ -5,13 +5,15 @@ const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899'
 
 const fmt = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
+import { normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
+
 export default function AuditCategoryPieChart({ auditData, categories }) {
   const chartData = useMemo(() => {
     const categoryMap = new Map((categories || []).map((cat) => [cat.id || cat.slug, cat]));
     const grouped = (auditData || []).reduce((acc, item) => {
       const key = item.category_id || item.category || 'sem_categoria';
       const matched = categoryMap.get(key) || Array.from(categoryMap.values()).find((cat) => cat.slug === key);
-      const name = matched?.name || item.category || 'Sem categoria';
+      const name = normalizeCategoryLabel(matched?.name || matched?.slug || item.category || 'Sem categoria');
       acc[name] = (acc[name] || 0) + Number(item.amount || 0);
       return acc;
     }, {});

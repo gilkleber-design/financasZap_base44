@@ -19,12 +19,24 @@ export const normalizeCategoryLabel = (slug) => {
     funcionarios: 'Funcionários',
     familia: 'Família',
     impostos_taxas: 'Impostos e Taxas',
+    alimentacao: 'Alimentação',
+    'alimentação': 'Alimentação',
+    moradia: 'Moradia',
+    transporte: 'Transporte',
+    saude: 'Saúde',
+    educacao: 'Educação',
+    lazer: 'Lazer',
+    vestuario: 'Vestuário',
+    servicos: 'Serviços',
+    investimentos: 'Investimentos',
+    outros: 'Outros',
     servicos_domesticos: 'Serviços Domésticos',
     assinaturas: 'Assinaturas',
   };
 
-  if (!slug) return 'Sem categoria';
-  return map[slug] || slug.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  if (!slug) return '—';
+  const key = String(slug).toLowerCase().trim();
+  return map[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 };
 
 export const getDaysLate = (dateString) => {

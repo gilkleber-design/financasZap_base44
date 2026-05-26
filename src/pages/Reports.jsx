@@ -12,6 +12,7 @@ import AuditReportAccordion from '@/components/reports/AuditReportAccordion';
 import PayableDetailDrawer from '@/components/reports/PayableDetailDrawer';
 import ConsolidatedReportModal from '@/components/reports/ConsolidatedReportModal';
 import AuditCategoryPieChart from '@/components/reports/AuditCategoryPieChart';
+import { normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
 const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16'];
 
@@ -43,6 +44,11 @@ export default function Reports() {
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: () => base44.entities.Category.list('name', 100),
+  });
+
+  const { data: incomeSources = [] } = useQuery({
+    queryKey: ['income-sources'],
+    queryFn: () => base44.entities.IncomeSource.list('name', 100),
   });
 
   const handlePayableClick = (payable) => {
@@ -115,7 +121,7 @@ export default function Reports() {
     }, {});
 
   const categoryData = Object.entries(expenseByCategory)
-    .map(([name, value]) => ({ name: CATEGORY_LABELS[name] || name, value }))
+    .map(([name, value]) => ({ name: normalizeCategoryLabel(CATEGORY_LABELS[name] || name), value }))
     .sort((a, b) => b.value - a.value);
 
   // Tax report by source (current year only)
@@ -226,7 +232,7 @@ export default function Reports() {
             <div className="space-y-2">
               {Object.entries(taxBySource).map(([sourceId, data]) => (
                 <div key={sourceId} className="flex items-center justify-between text-sm p-2 rounded-lg bg-muted/30">
-                  <span className="font-medium truncate flex-1">{sourceId === 'Outras' ? 'Outras fontes' : sourceId}</span>
+                  <span className="font-medium truncate flex-1">{sourceId === 'Outras' ? 'Outras fontes' : (incomeSources.find((source) => source.id === sourceId)?.name || 'PJ não identificada')}</span>
                   <div className="text-right flex-shrink-0 ml-2">
                     <span className="text-amber-600 font-semibold">{fmt(data.tax)}</span>
                     <span className="text-muted-foreground text-xs ml-1">retido</span>
