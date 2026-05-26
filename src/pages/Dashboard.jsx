@@ -94,15 +94,14 @@ export default function DashboardPage() {
 
     const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
       const hospitalMatchers = [hospital.sigla, hospital.name].filter(Boolean).map((value) => value.toLowerCase());
+      const hospitalReceivables = receivables.filter((item) => {
+        const description = String(item.description || '').toLowerCase();
+        return hospitalMatchers.some((matcher) => description.includes(matcher));
+      });
 
       const cells = pipelineMonths.map((date) => {
         const key = formatMonthKey(date);
-        const receivableMatches = receivables.filter((item) => {
-          const monthMatch = (item.competencia || item.due_date || '').slice(0, 7) === key;
-          const description = String(item.description || '').toLowerCase();
-          const hospitalMatch = hospitalMatchers.some((matcher) => description.includes(matcher));
-          return monthMatch && hospitalMatch;
-        });
+        const receivableMatches = hospitalReceivables.filter((item) => (item.competencia || item.due_date || '').slice(0, 7) === key);
         const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const hasReceived = receivableMatches.some((item) => item.status === 'received');
@@ -117,7 +116,13 @@ export default function DashboardPage() {
         return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
       });
 
-      return { hospitalId: hospital.id, hospitalName: hospital.name, cells };
+      const monthsWithValue = new Set(hospitalReceivables.map((item) => (item.competencia || item.due_date || '').slice(0, 7)).filter(Boolean));
+      const recurringScore = monthsWithValue.size >= 2 ? 0 : monthsWithValue.size === 1 ? 1 : 2;
+
+      return { hospitalId: hospital.id, hospitalName: hospital.name, cells, recurringScore };
+    }).sort((a, b) => {
+      if (a.recurringScore !== b.recurringScore) return a.recurringScore - b.recurringScore;
+      return a.hospitalName.localeCompare(b.hospitalName, 'pt-BR');
     });
 
     const pipelineTotals = pipelineMonthHeaders.map((month) => {
