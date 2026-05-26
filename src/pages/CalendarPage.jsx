@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, addDays, isSameDay } from 'date-fns';
@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescript
 import ShiftModal from '@/components/calendar/ShiftModal';
 import CloseMonthModal from '@/components/calendar/CloseMonthModal';
 import ShiftDetailModal from '@/components/calendar/ShiftDetailModal';
+import MonthlyHospitalSummary from '@/components/calendar/MonthlyHospitalSummary';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -91,6 +92,40 @@ export default function CalendarPage() {
       const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
       return acc + liquido;
     }, 0);
+
+  const monthlyHospitalSummary = useMemo(() => {
+    const summaryMap = new Map();
+
+    monthShifts
+      .filter((shift) => shift.status !== 'cancelled')
+      .forEach((shift) => {
+        const hospital = hospitals.find((item) => item.id === shift.hospital_id);
+        if (!hospital) return;
+
+        const source = sources.find((item) => item.id === hospital.income_source_id);
+        const taxRate = Number(source?.default_tax_rate || 0);
+        const grossAmount = Number(shift.valor || 0);
+        const netAmount = taxRate > 0 ? grossAmount * (1 - taxRate / 100) : grossAmount;
+        const current = summaryMap.get(hospital.id) || {
+          hospitalId: hospital.id,
+          hospitalName: hospital.name,
+          shiftCount: 0,
+          netAmount: 0,
+        };
+
+        current.shiftCount += 1;
+        current.netAmount += netAmount;
+        summaryMap.set(hospital.id, current);
+      });
+
+    const items = Array.from(summaryMap.values()).sort((a, b) => b.netAmount - a.netAmount || b.shiftCount - a.shiftCount || a.hospitalName.localeCompare(b.hospitalName, 'pt-BR'));
+
+    return {
+      items,
+      totalShifts: items.reduce((sum, item) => sum + item.shiftCount, 0),
+      totalAmount: items.reduce((sum, item) => sum + item.netAmount, 0),
+    };
+  }, [monthShifts, hospitals, sources]);
 
   const isMonthClosed = monthShifts.some(s => s.status === 'done' && s.receivable_id && s.shift_kind !== 'avista');
 
@@ -335,6 +370,12 @@ export default function CalendarPage() {
           })}
         </div>
       </div>
+
+      <MonthlyHospitalSummary
+        items={monthlyHospitalSummary.items}
+        totalShifts={monthlyHospitalSummary.totalShifts}
+        totalAmount={monthlyHospitalSummary.totalAmount}
+      />
 
       {/* Legenda */}
       <div className="flex flex-wrap gap-3 text-xs">
