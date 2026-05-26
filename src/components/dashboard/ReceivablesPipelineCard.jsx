@@ -4,10 +4,10 @@ import { formatCompactCurrency } from '@/components/dashboard/financaszapTheme';
 import { Button } from '@/components/ui/button';
 
 const STATUS_STYLES = {
-  recebido: 'bg-[#E6F9F0] border-[#0A9E6A] text-[#0A6E50]',
-  vencido: 'bg-[#FFECEC] border-[#E74C3C] text-[#C0392B]',
+  recebido: 'bg-[#E6F9F0] border-[#0A9E6A] text-[#0A9E6A]',
+  vencido: 'bg-white border-[#E74C3C] text-[#C0392B]',
   parcial: 'bg-[#FFF8EC] border-[#F0C070] text-[#C0622A]',
-  a_receber: 'bg-[#E0F5F5] border-[#0FA3A3] text-[#0A7070]',
+  a_receber: 'bg-[#E8F4FF] border-[#1E5BA8] text-[#1E5BA8]',
   futuro: 'bg-[#F0F4F8] border-[#C8D6E0] text-[#7B92A8]',
 };
 
@@ -76,9 +76,9 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
 
           <div className="mt-4 flex flex-wrap gap-3 text-[10px] font-medium text-muted-foreground">
             <LegendItem color="bg-[#0A9E6A]" label="Recebido" />
-            <LegendItem color="bg-[#E74C3C]" label="Vencido" />
+            <LegendItem color="bg-[#C0392B]" label="Vencido" />
             <LegendItem color="bg-[#F0C070]" label="Parcial" />
-            <LegendItem color="bg-[#0FA3A3]" label="A receber" />
+            <LegendItem color="bg-[#1E5BA8]" label="A receber" />
             <LegendItem color="bg-[#7B92A8]" label="Futuro" />
           </div>
         </div>
@@ -89,7 +89,7 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
 
 function StatusPill({ status, amount, partialAmount }) {
   const label = status === 'vencido'
-    ? 'Vencido'
+    ? formatCompactCurrency(amount)
     : status === 'parcial'
       ? `${formatCompactCurrency(partialAmount)}/${formatCompactCurrency(amount)}`
       : status === 'recebido'
@@ -99,7 +99,7 @@ function StatusPill({ status, amount, partialAmount }) {
           : formatCompactCurrency(amount);
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${STATUS_STYLES[status] || STATUS_STYLES.futuro}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold whitespace-nowrap ${STATUS_STYLES[status] || STATUS_STYLES.futuro}`}>
       {label}
     </span>
   );
