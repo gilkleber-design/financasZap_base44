@@ -95,18 +95,18 @@ export default function DashboardPage() {
     const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
       const cells = pipelineMonths.map((date) => {
         const key = formatMonthKey(date);
-        const receivableMatches = receivables.filter((item) => item.income_source_id === hospital.income_source_id && (item.due_date || '').slice(0, 7) === key);
+        const receivableMatches = receivables.filter((item) => item.income_source_id === hospital.income_source_id && (item.competencia || item.due_date || '').slice(0, 7) === key);
         const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const hasReceived = receivableMatches.some((item) => item.status === 'received');
         const hasPending = receivableMatches.some((item) => item.status !== 'received');
-        const isFutureDueMonth = key > currentMonthKey;
+        const hasOverdue = receivableMatches.some((item) => item.status === 'overdue' || (item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey));
         let status = 'futuro';
         if (hasReceived && !hasPending) status = 'recebido';
         else if (hasReceived && hasPending) status = 'parcial';
         else if (!amount) status = 'futuro';
-        else if (!isFutureDueMonth && receivableMatches.some((item) => item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey)) status = 'vencido';
-        else status = isFutureDueMonth ? 'futuro' : 'a_receber';
+        else if (hasOverdue) status = 'vencido';
+        else status = 'a_receber';
         return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
       });
 
