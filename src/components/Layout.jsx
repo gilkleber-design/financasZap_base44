@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2, Menu, X, CreditCard, LogOut, UserCircle, Target, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
+import DashboardLogo from '@/components/dashboard/DashboardLogo';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -30,12 +31,10 @@ export default function Layout() {
       <aside className="hidden md:flex flex-col w-64 bg-sidebar text-sidebar-foreground fixed inset-y-0 left-0 z-50">
         <div className="p-6 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-white" />
-            </div>
+            <DashboardLogo className="w-9 h-9" />
             <div>
-              <h1 className="font-sora font-bold text-white text-lg leading-none">FinançasZap</h1>
-              <p className="text-xs text-sidebar-foreground/50 mt-0.5">Controle Financeiro</p>
+              <h1 className="font-sora font-bold text-white text-lg leading-none"><span>Finanças</span><span className="text-primary">Zap</span></h1>
+              <p className="text-xs text-sidebar-foreground/70 mt-0.5">Controle Financeiro</p>
             </div>
           </div>
         </div>
@@ -77,10 +76,8 @@ export default function Layout() {
       {/* Mobile Top Bar */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-            <MessageSquare className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-sora font-bold text-white text-base">FinançasZap</span>
+          <DashboardLogo className="w-7 h-7" />
+          <span className="font-sora font-bold text-white text-base"><span>Finanças</span><span className="text-primary">Zap</span></span>
         </div>
         <button
           onClick={() => setMobileOpen(true)}
@@ -108,10 +105,8 @@ export default function Layout() {
             {/* Header */}
             <div className="flex items-center justify-between p-5 border-b border-sidebar-border">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
-                  <MessageSquare className="w-4 h-4 text-white" />
-                </div>
-                <span className="font-sora font-bold text-white text-base">FinançasZap</span>
+                <DashboardLogo className="w-8 h-8" />
+                <span className="font-sora font-bold text-white text-base"><span>Finanças</span><span className="text-primary">Zap</span></span>
               </div>
               <button onClick={() => setMobileOpen(false)} className="text-sidebar-foreground/70 hover:text-white">
                 <X className="w-5 h-5" />

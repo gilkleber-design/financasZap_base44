@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -19,8 +19,23 @@ import CardInvoices from '@/pages/CardInvoices';
 import Planning from '@/pages/Planning';
 import LinkHub from '@/pages/LinkHub';
 
+const routeTitles = {
+  '/': 'Início — FinançasZap',
+  '/relatorios': 'Relatórios — FinançasZap',
+  '/hospitais': 'Hospitais — FinançasZap',
+  '/calendario': 'Calendário — FinançasZap',
+  '/planejamento': 'Planejamento — FinançasZap',
+  '/transacoes': 'Transações — FinançasZap',
+  '/contas-pagar': 'Contas a Pagar — FinançasZap',
+  '/contas-receber': 'Contas a Receber — FinançasZap',
+  '/configuracoes': 'Configurações — FinançasZap',
+};
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const location = useLocation();
+
+  document.title = routeTitles[location.pathname] || 'FinançasZap';
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (

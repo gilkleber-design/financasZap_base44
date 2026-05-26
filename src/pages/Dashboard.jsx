@@ -1,517 +1,204 @@
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { Wallet, Coins, Scale, AlertTriangle, MessageCircle, MoreHorizontal, Activity, Info } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, isBefore, addDays } from 'date-fns';
+import { Bell, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { base44 } from '@/api/base44Client';
+import DashboardLogo from '@/components/dashboard/DashboardLogo';
+import MonthBalanceCard from '@/components/dashboard/MonthBalanceCard';
+import AttentionCard from '@/components/dashboard/AttentionCard';
+import ReceivablesPipelineCard from '@/components/dashboard/ReceivablesPipelineCard';
+import { formatCurrency, getInitials, normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
-// --- HELPER FUNCTIONS ---
-export function cn(...classes) {
-  return classes.filter(Boolean).join(' ');
-}
+const formatMonthKey = (date) => format(date, 'yyyy-MM');
+const formatDateKey = (date) => format(date, 'yyyy-MM-dd');
 
-export const formatCurrency = (val, prefix = 'R$ ') => {
-  if (typeof val !== 'number') return `${prefix}0,00`;
-  return `${prefix}${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
-
-const CurrencyText = ({ value, prefix = 'R$ ' }) => (
-  <span>{formatCurrency(value, prefix)}</span>
-);
-
-// --- SHARED UI COMPONENTS ---
-const ProgressBar = ({ value, Compromisso, max, className, showHashedCompromisso, variant = 'income' }) => {
-  const valueWidth = max > 0 ? (value / max) * 100 : (value > 0 ? 100 : 0);
-  const CompromissoWidth = max > 0 ? (Compromisso / max) * 100 : (Compromisso > 0 ? 100 : 0);
-  const totalPercent = Math.min(valueWidth + CompromissoWidth, 100);
-
-  let mainColor = "bg-emerald-500";
-  let compColor = "bg-emerald-200";
-
-  if (variant === 'expense') {
-    if (totalPercent < 50) {
-      mainColor = "bg-emerald-500";
-      compColor = "bg-emerald-200";
-    } else if (totalPercent < 75) {
-      mainColor = "bg-amber-500";
-      compColor = "bg-amber-200";
-    } else if (totalPercent < 90) {
-      mainColor = "bg-orange-500";
-      compColor = "bg-orange-200";
-    } else {
-      mainColor = "bg-rose-500";
-      compColor = "bg-rose-200";
-    }
-  }
-
-  return (
-    <div className={cn("h-3.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative", className)}>
-      <div
-        className={cn("h-full absolute left-0 top-0 transition-colors duration-500", mainColor)}
-        style={{ width: `${Math.min(valueWidth, 100)}%`, zIndex: 1 }}
-      />
-      <div
-        className={cn("h-full absolute top-0 transition-colors duration-500", compColor)}
-        style={{ width: `${Math.min(CompromissoWidth, 100 - valueWidth)}%`, left: `${Math.min(valueWidth, 100)}%`, zIndex: 0 }}
-      >
-        {showHashedCompromisso && (
-          <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,_transparent,_transparent_4px,_rgba(255,255,255,0.4)_4px,_rgba(255,255,255,0.4)_8px)]" />
-        )}
-      </div>
-    </div>
-  );
-};
-
-const HealthBar = ({ percentage }) => {
-  const segments = [
-    { color: 'bg-rose-500' },
-    { color: 'bg-orange-500' },
-    { color: 'bg-amber-500' },
-    { color: 'bg-emerald-500' },
-    { color: 'bg-emerald-600' },
-  ];
-  return (
-    <div className="h-3 w-full rounded-full bg-slate-100 dark:bg-slate-800 flex overflow-hidden relative border border-slate-200 dark:border-slate-700">
-      {segments.map((s, i) => (
-        <div key={i} className={cn("h-full flex-grow", s.color)} style={{ width: `calc(100% / ${segments.length})`}} />
-      ))}
-      <div
-        className="absolute w-3 h-3 bg-white rounded-full border-2 border-slate-700 shadow top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-500"
-        style={{ left: `${Math.max(0, Math.min(percentage, 100))}%` }}
-      />
-    </div>
-  );
-};
-
-const Card = ({ children, className }) => (
-  <div className={cn("bg-white dark:bg-slate-900 rounded-2xl lg:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col", className)}>{children}</div>
-);
-const CardHeader = ({ children, className }) => (
-  <div className={cn("p-4 border-b border-slate-100 dark:border-slate-800 shrink-0", className)}>{children}</div>
-);
-const CardTitle = ({ children, className }) => (
-  <h3 className={cn("text-base lg:text-lg font-semibold text-slate-950 dark:text-white", className)}>{children}</h3>
-);
-const CardContent = ({ children, className }) => (
-  <div className={cn("p-4 flex-1 min-h-0 flex flex-col overflow-hidden", className)}>{children}</div>
-);
-
-const KpiTitle = ({ title, description }) => (
-  <div className="flex items-center gap-1.5 relative group cursor-help max-w-full w-fit">
-    <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate block">
-      {title}
-    </span>
-    <Info className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors shrink-0" />
-    
-    <div className="absolute z-50 bottom-full left-0 mb-2 w-64 p-3 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-medium leading-relaxed rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all shadow-xl pointer-events-none normal-case tracking-normal whitespace-normal text-left">
-      {description}
-      <div className="absolute top-full left-4 border-[6px] border-transparent border-t-slate-900 dark:border-t-slate-100" />
-    </div>
-  </div>
-);
-
-// --- MAIN DASHBOARD PAGE ---
 export default function DashboardPage() {
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
-  const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
-  const todayStr = format(now, 'yyyy-MM-dd');
-  const nextWeekStr = format(addDays(now, 7), 'yyyy-MM-dd');
+  const monthStart = startOfMonth(now);
+  const monthEnd = endOfMonth(now);
+  const currentMonthKey = formatMonthKey(now);
+  const previousMonthDate = subMonths(now, 1);
+  const previousMonthKey = formatMonthKey(previousMonthDate);
+  const pipelineMonths = Array.from({ length: 4 }, (_, index) => subMonths(now, 3 - index));
 
-  // --- QUERIES ---
-  const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => base44.entities.Category.list('', 500)
-  });
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
+  const { data: transactions = [] } = useQuery({ queryKey: ['dashboard-transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });
+  const { data: payables = [] } = useQuery({ queryKey: ['dashboard-payables'], queryFn: () => base44.entities.Payable.list('-due_date', 1000) });
+  const { data: receivables = [] } = useQuery({ queryKey: ['dashboard-receivables'], queryFn: () => base44.entities.Receivable.list('-due_date', 1000) });
+  const { data: budgets = [] } = useQuery({ queryKey: ['dashboard-budgets'], queryFn: () => base44.entities.Budget.list('-year', 500) });
+  const { data: categories = [] } = useQuery({ queryKey: ['dashboard-categories'], queryFn: () => base44.entities.Category.list('name', 500) });
+  const { data: hospitals = [] } = useQuery({ queryKey: ['dashboard-hospitals'], queryFn: () => base44.entities.Hospital.list('name', 500) });
+  const { data: shifts = [] } = useQuery({ queryKey: ['dashboard-shifts'], queryFn: () => base44.entities.Shift.list('-date', 4000) });
 
-  const { data: budgets = [] } = useQuery({
-    queryKey: ['budgets', month, year],
-    queryFn: () => base44.entities.Budget.filter({ month, year }, '', 500)
-  });
+  const dashboardData = useMemo(() => {
+    const paidTransactionStatuses = new Set(['registered', 'conciliated']);
+    const validTransactions = transactions.filter((item) => !item.status || paidTransactionStatuses.has(item.status));
 
-  const { data: rawTransactions = [] } = useQuery({
-    queryKey: ['transactions'],
-    queryFn: () => base44.entities.Transaction.list('-date', 1000),
-  });
+    const currentMonthTransactions = validTransactions.filter((item) => item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd));
+    const previousMonthRangeStart = formatDateKey(startOfMonth(previousMonthDate));
+    const previousMonthRangeEnd = formatDateKey(endOfMonth(previousMonthDate));
+    const previousMonthTransactions = validTransactions.filter((item) => item.date >= previousMonthRangeStart && item.date <= previousMonthRangeEnd);
 
-  const { data: payables = [] } = useQuery({
-    queryKey: ['payables'],
-    queryFn: () => base44.entities.Payable.list('due_date', 500),
-  });
+    const receivedIncome = currentMonthTransactions.filter((item) => item.type === 'income').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+    const paidExpense = currentMonthTransactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const previousBalance = previousMonthTransactions.filter((item) => item.type === 'income').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0)
+      - previousMonthTransactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-  const { data: receivables = [] } = useQuery({
-    queryKey: ['receivables'],
-    queryFn: () => base44.entities.Receivable.list('due_date', 500),
-  });
+    const currentMonthReceivables = receivables.filter((item) => (item.competencia || item.due_date || '').startsWith(currentMonthKey));
+    const toReceive = currentMonthReceivables.filter((item) => item.status !== 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+    const balance = receivedIncome - paidExpense;
+    const variation = previousBalance === 0 ? (balance === 0 ? 0 : 100) : ((balance - previousBalance) / Math.abs(previousBalance)) * 100;
 
-  // --- LÓGICA DE NEGÓCIO BLINDADA ---
-  const stats = useMemo(() => {
-    const catFaturaCartao = categories.find(c => 
-      c?.name?.toLowerCase()?.includes('faturas de cartão') || 
-      c?.name?.toLowerCase()?.includes('fatura de cartão')
-    );
-    
-    const validTransactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
-    const monthTransactions = validTransactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
-    
-    const realIncomeTotal = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-    const realExpenseTotal = monthTransactions
-      .filter(t => t.type === 'expense' && !t.card_id)
-      .reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-      
-    const realBalance = realIncomeTotal - realExpenseTotal;
+    const overdueReceivables = receivables
+      .filter((item) => item.status !== 'received' && item.due_date && item.due_date < formatDateKey(now))
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .map((item) => ({
+        ...item,
+        amount: Number(item.net_amount || item.amount || 0),
+        hospital_name: hospitals.find((hospital) => hospital.income_source_id === item.income_source_id)?.name || item.description,
+        competencia_label: item.competencia ? format(new Date(`${item.competencia}T12:00:00`), "MMM/yy", { locale: ptBR }) : 'Sem competência',
+      }));
 
-    const monthIncome = realIncomeTotal;
-    
-    const pendingCurrentMonth = receivables.filter(r => r.status === 'pending' && r.due_date >= monthStart && r.due_date <= monthEnd);
-    const pendingCurrentTotal = pendingCurrentMonth.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
-    
-    const pendingPreviousMonths = receivables.filter(r => r.status === 'pending' && r.due_date < monthStart);
-    const pendingOverdueTotal = pendingPreviousMonths.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
+    const urgentPayables = payables
+      .filter((item) => item.status !== 'paid' && item.due_date && item.due_date <= formatDateKey(now))
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .map((item) => ({
+        ...item,
+        amount: Number(item.amount || 0),
+        category_slug: item.category || categories.find((category) => category.id === item.category_id)?.slug,
+      }));
 
-    const targetIncome = monthIncome + pendingCurrentTotal + pendingOverdueTotal || (monthIncome + 1);
-    const incomePercentage = Math.min((monthIncome / targetIncome) * 100, 100);
+    const monthNumber = now.getMonth() + 1;
+    const yearNumber = now.getFullYear();
+    const expenseCategories = categories.filter((item) => item.type === 'expense');
+    const budgetOverruns = expenseCategories.map((category) => {
+      const budget = budgets.find((item) => Number(item.month) === monthNumber && Number(item.year) === yearNumber && item.category_id === category.id);
+      const spent = validTransactions
+        .filter((item) => item.type === 'expense' && item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd) && (item.category === category.slug || item.category === category.id))
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const limit = Number(budget?.amount || 0);
+      return { slug: category.slug, name: category.name || normalizeCategoryLabel(category.slug), budget: limit, spent, overrun: spent - limit };
+    }).filter((item) => item.budget > 0 && item.spent > item.budget).sort((a, b) => b.overrun - a.overrun);
 
-    const overdueIncomes = receivables.filter(r => r.status === 'pending' && isBefore(new Date(r.due_date), new Date(todayStr)));
-    const overdueIncomeTotal = overdueIncomes.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
+    const pipelineMonthHeaders = pipelineMonths.map((date) => ({ key: formatMonthKey(date), label: format(date, 'MMM', { locale: ptBR }).toUpperCase() }));
 
-    const pendingPayablesMonth = payables.filter(p => p.status === 'pending' && p.due_date >= monthStart && p.due_date <= monthEnd);
-    const upcomingExpensesList = payables.filter(p => p.status === 'pending' && p.due_date <= nextWeekStr).slice(0, 5);
+    const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
+      const cells = pipelineMonths.map((date) => {
+        const key = formatMonthKey(date);
+        const monthShifts = shifts.filter((shift) => shift.hospital_id === hospital.id && (shift.status === 'done' || shift.status === 'scheduled') && shift.date?.startsWith(key));
+        const receivableMatches = receivables.filter((item) => item.income_source_id === hospital.income_source_id && (item.competencia || '').startsWith(`${key}-`));
+        const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0) || monthShifts.reduce((sum, shift) => sum + Number(shift.valor || 0), 0);
+        const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+        const hasReceived = receivableMatches.some((item) => item.status === 'received');
+        const hasPending = receivableMatches.some((item) => item.status !== 'received');
+        const expectedDate = hospital.payment_day ? formatDateKey(new Date(date.getFullYear(), date.getMonth() + Number(hospital.payment_months_offset || 1), Math.min(Number(hospital.payment_day || 1), 28))) : null;
+        const isFuture = key > currentMonthKey;
+        let status = 'futuro';
+        if (hasReceived && !hasPending) status = 'recebido';
+        else if (hasReceived && hasPending) status = 'parcial';
+        else if (expectedDate && expectedDate < formatDateKey(now) && amount > 0) status = 'vencido';
+        else if (amount > 0) status = isFuture ? 'futuro' : 'a_receber';
+        return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
+      });
 
-    const mapCategoryStats = (type) => categories
-      .filter(c => c.type === type && (type === 'income' || !catFaturaCartao || c.id !== catFaturaCartao.id))
-      .map(cat => {
-        const meta = budgets.find(b => b.category_id === cat.id)?.amount || 0;
-        const realizado = monthTransactions.filter(t => t.category === cat.id || t.category === cat.slug).reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-        const pendentes = type === 'expense' ? pendingPayablesMonth : pendingCurrentMonth;
-        const comprometido = pendentes.filter(p => p.category_id === cat.id || p.category === cat.slug).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
-        return { ...cat, meta, realizado, comprometido, totalUsage: realizado + comprometido, icon: Activity };
-      })
-      .filter(c => c.meta > 0 || c.totalUsage > 0)
-      .sort((a, b) => b.meta - a.meta);
+      return { hospitalId: hospital.id, hospitalName: hospital.name, cells };
+    });
 
-    const expenseStats = mapCategoryStats('expense');
-    const incomeStats = mapCategoryStats('income');
-
-    const totalExpenseBudget = expenseStats.reduce((acc, c) => acc + c.meta, 0);
-    const totalExpenseProjected = expenseStats.reduce((acc, c) => acc + c.totalUsage, 0);
-    const budgetBalance = totalExpenseBudget - totalExpenseProjected;
-    const healthPercent = totalExpenseBudget > 0 ? Math.max(0, Math.min((budgetBalance / totalExpenseBudget) * 100, 100)) : 0;
+    const pipelineTotals = pipelineMonthHeaders.map((month) => {
+      const columnCells = pipelineRows.map((row) => row.cells.find((cell) => cell.key.endsWith(month.key))).filter(Boolean);
+      const amount = columnCells.reduce((sum, cell) => sum + Number(cell.amount || 0), 0);
+      return {
+        key: month.key,
+        amount,
+        hasOverdue: columnCells.some((cell) => cell.status === 'vencido'),
+        allReceived: columnCells.length > 0 && columnCells.every((cell) => cell.status === 'recebido'),
+        allFuture: columnCells.length > 0 && columnCells.every((cell) => cell.status === 'futuro'),
+      };
+    });
 
     return {
-      realBalance,
-      monthIncome,
-      targetIncome,
-      baseTarget: monthIncome + pendingCurrentTotal,
-      overdueTarget: pendingOverdueTotal,
-      incomePercentage,
-      projectedBalance: budgetBalance,
-      healthPercent,
-      overdueIncomes,
-      overdueIncomeTotal,
-      upcomingExpensesList,
-      expenseStats,
-      incomeStats
+      balance,
+      receivedIncome,
+      paidExpense,
+      toReceive,
+      variation: Number.isFinite(variation) ? variation : 0,
+      previousMonthLabel: format(previousMonthDate, 'MMMM', { locale: ptBR }),
+      hasActivity: receivedIncome > 0 || paidExpense > 0,
+      overdueReceivables,
+      overdueReceivablesTotal: overdueReceivables.reduce((sum, item) => sum + item.amount, 0),
+      urgentPayables,
+      urgentPayablesTotal: urgentPayables.reduce((sum, item) => sum + item.amount, 0),
+      budgetOverruns,
+      pipelineMonthHeaders,
+      pipelineRows,
+      pipelineTotals,
+      hasHospitals: hospitals.length > 0,
     };
-  }, [rawTransactions, budgets, categories, payables, receivables, monthStart, monthEnd, todayStr, nextWeekStr]);
-
-  const kpiCards = [
-    {
-      title: 'Resultado Mensal',
-      description: 'Fluxo de caixa real sob regime de caixa. É a matemática seca: dinheiro que de fato pingou na conta menos as saídas consolidadas do mês atual.',
-      value: stats.realBalance,
-      subtitle: '(Receitas vs Saídas Reais de Conta)',
-      icon: Wallet,
-      color: 'emerald',
-      customBg: true,
-    },
-    {
-      title: 'Expectativa de Caixa',
-      description: 'Seu norte de faturamento. Receita que já entrou comparada ao total que você espera realizar no mês inteiro (recebido + a receber + atrasados).',
-      value: stats.monthIncome,
-      target: stats.targetIncome,
-      baseTarget: stats.baseTarget,
-      overdueTarget: stats.overdueTarget,
-      percentage: stats.incomePercentage,
-      icon: Coins,
-      color: 'emerald',
-      isMetaCard: true,
-    },
-    {
-      title: 'Saúde do Orçamento',
-      description: 'Controle do teto de gastos. Compara o limite planejado de despesas no mês com o total projetado (o que já foi pago + boletos pendentes).',
-      value: stats.projectedBalance,
-      healthPercent: stats.healthPercent,
-      icon: Scale,
-      color: 'amber',
-    },
-    {
-      title: 'A Cobrar / Vencidas',
-      description: 'Dinheiro na mesa que virou pendência. A soma total de todas as receitas que já passaram do prazo original de vencimento e não foram pagas.',
-      value: stats.overdueIncomeTotal,
-      count: stats.overdueIncomes.length,
-      icon: AlertTriangle,
-      color: 'rose',
-      urgent: true,
-    },
-  ];
+  }, [transactions, payables, receivables, budgets, categories, hospitals, shifts]);
 
   return (
-    // Rolagem nativa restaurada com min-h-screen
-    <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 lg:p-6 lg:p-8 space-y-6 lg:space-y-8">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl lg:text-2xl font-bold uppercase tracking-tight text-slate-950 dark:text-white leading-none">PAINEL DE CONTROLE</h1>
-          <p className="text-muted-foreground text-[11px] lg:text-xs uppercase tracking-wider font-semibold mt-1.5">
-            {format(now, "MMMM yyyy", { locale: ptBR })}
-          </p>
+    <div className="min-h-screen bg-background pb-24 md:pb-6">
+      <div className="md:hidden bg-sidebar px-4 pb-5 pt-4 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <DashboardLogo className="h-7 w-7" />
+            <div className="text-base font-bold"><span>Finanças</span><span className="text-primary">Zap</span></div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative"><Bell className="h-4 w-4" /><span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" /></div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold">{getInitials(me?.full_name)}</div>
+          </div>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-slate-950 dark:bg-white text-white dark:text-slate-950 rounded-lg text-sm font-semibold shadow hover:opacity-90 transition-opacity">
-          <span className="text-xl leading-none text-transparent bg-gradient-to-br from-green-400 via-blue-500 to-red-500 bg-clip-text">+</span>
-          Lançamento
-        </button>
-      </div>
-
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
-        {kpiCards.map((card, index) => {
-          const Icon = card.icon;
-          const valueText = <CurrencyText value={card.value} />;
-
-          if (card.customBg && card.color === 'emerald') {
-            return (
-              <div key={index} className="rounded-2xl lg:rounded-3xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-4 lg:p-5 flex gap-3 items-start shadow-sm min-w-0">
-                <div className="p-2.5 bg-white dark:bg-emerald-900 rounded-xl border border-emerald-100 shrink-0">
-                  <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div className="flex-1 space-y-0.5 min-w-0 relative">
-                  <KpiTitle title={card.title} description={card.description} />
-                  <p className="text-lg lg:text-xl xl:text-2xl font-bold leading-none text-slate-950 dark:text-white truncate pt-1 pb-0.5">{valueText}</p>
-                  <p className="text-[10px] lg:text-[11px] text-muted-foreground truncate">{card.subtitle}</p>
-                </div>
-              </div>
-            );
-          }
-
-          if (card.urgent) {
-            return (
-              <div key={index} className="rounded-2xl lg:rounded-3xl border-2 border-rose-200 bg-rose-50 dark:bg-rose-950/30 p-4 lg:p-5 flex gap-3 items-start shadow-sm relative min-w-0">
-                <Icon className="w-4 h-4 text-rose-500 absolute top-4 right-4" />
-                <div className="p-2.5 bg-white dark:bg-rose-900 rounded-xl border border-rose-100 shrink-0">
-                  <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-rose-600 dark:text-rose-400" />
-                </div>
-                <div className="flex-1 space-y-0.5 min-w-0 relative">
-                  <KpiTitle title={card.title} description={card.description} />
-                  <div className="flex items-baseline gap-1.5 flex-wrap min-w-0 pt-1">
-                    <p className="text-lg lg:text-xl xl:text-2xl font-bold leading-none text-slate-950 dark:text-white truncate">{card.count}</p>
-                    <span className="text-xs font-medium text-slate-950 dark:text-white truncate pb-0.5">receitas vencidas</span>
-                  </div>
-                  <p className="text-base lg:text-lg font-semibold leading-none text-slate-950 dark:text-white truncate pb-0.5">{valueText}</p>
-                  <p className="text-[10px] lg:text-[11px] text-muted-foreground truncate">urgentes próximos 7 dias</p>
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <div key={index} className="rounded-2xl lg:rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 lg:p-5 flex flex-col gap-3 items-start shadow-sm relative min-w-0">
-              <button className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><MoreHorizontal className="w-4 h-4" /></button>
-              <div className="flex gap-3 items-start w-full min-w-0">
-                <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 shrink-0">
-                  <Icon className={`w-5 h-5 lg:w-6 lg:h-6 ${card.color === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
-                </div>
-                <div className="flex-1 space-y-0.5 min-w-0 relative">
-                  <KpiTitle title={card.title} description={card.description} />
-                  
-                  {card.title.includes('Saúde') ? (
-                    <div className="flex flex-col items-start w-full min-w-0 pt-1">
-                      <p className={cn("text-lg lg:text-xl xl:text-2xl font-bold leading-none truncate w-full pb-0.5", card.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                        {card.value >= 0 ? 'Sobra: ' : 'Estouro: '}<CurrencyText value={Math.abs(card.value)} />
-                      </p>
-                      <p className="text-[10px] lg:text-[11px] font-semibold text-slate-400 truncate w-full">Saldo limite planejado</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-start w-full min-w-0 pt-1">
-                      <div className="flex flex-col xl:flex-row xl:items-baseline gap-1 w-full min-w-0 pb-0.5">
-                        <p className="text-lg lg:text-xl xl:text-2xl font-bold leading-none text-slate-950 dark:text-white truncate max-w-full">{valueText}</p>
-                        {card.target !== undefined && (
-                          <span className="text-xs text-slate-400 truncate max-w-full">/ <CurrencyText value={card.target} /></span>
-                        )}
-                      </div>
-                      
-                      {card.isMetaCard && card.overdueTarget > 0 && (
-                        <div className="text-[10px] lg:text-[11px] font-semibold text-slate-400 truncate w-full">
-                          (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atraso</span>)
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {card.healthPercent !== undefined ? (
-                <div className="w-full mt-auto space-y-1 pt-2">
-                  <HealthBar percentage={card.healthPercent} />
-                  <p className="text-[10px] text-right text-muted-foreground leading-none">índice limite gastos</p>
-                </div>
-              ) : (
-                <div className="w-full mt-auto space-y-1 pt-2">
-                  <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={(card.percentage || 0) < 100} variant="income" />
-                  <p className="text-[10px] text-right text-muted-foreground leading-none">{(card.percentage || 0).toFixed(0)}% recebido</p>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Main Content (Grid) - Cards com max-h-[500px] para rolar internamente apenas se crescerem demais */}
-      <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] xl:grid-cols-[70%_30%] gap-4 lg:gap-6 items-start">
-        
-        {/* Coluna Esquerda */}
-        <div className="flex flex-col gap-4 lg:gap-6">
-          <Card className="flex flex-col overflow-hidden max-h-[500px]">
-            <CardHeader className="py-4">
-              <CardTitle>Raio-X de Despesas</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-hidden">
-              <XRayTable categories={stats.expenseStats} type="despesa" />
-            </CardContent>
-          </Card>
-
-          <Card className="flex flex-col overflow-hidden max-h-[500px]">
-            <CardHeader className="py-4">
-              <CardTitle>Raio-X de Receitas</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-hidden">
-              <XRayTable categories={stats.incomeStats} type="receita" />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Coluna Direita */}
-        <div className="flex flex-col gap-4 lg:gap-6">
-          <Card className="flex flex-col overflow-hidden max-h-[500px]">
-            <CardHeader className="py-4 border-rose-100 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 flex items-center justify-between">
-              <CardTitle className="text-rose-600 dark:text-rose-400">Receitas Vencidas</CardTitle>
-              <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5 text-rose-500" />
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-hidden">
-              <SidebarTable data={stats.overdueIncomes} type="vencidas" urgent={true} />
-            </CardContent>
-          </Card>
-
-          <Card className="flex flex-col overflow-hidden max-h-[500px]">
-            <CardHeader className="py-4 flex items-center justify-between">
-              <CardTitle>Próximos Vencimentos</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-hidden">
-              <SidebarTable data={stats.upcomingExpensesList} type="proximos" />
-            </CardContent>
-          </Card>
+        <div className="mt-4">
+          <p className="text-[11px] text-white/60">Olá, Dr. {me?.full_name?.split(' ')[0] || 'Usuário'}</p>
+          <p className="mt-1 text-sm font-semibold capitalize text-white">{format(now, 'MMMM yyyy', { locale: ptBR })}</p>
         </div>
       </div>
 
+      <div className="hidden md:flex items-center justify-between border-b border-border bg-card px-6 py-3">
+        <div className="flex items-center gap-3">
+          <DashboardLogo className="h-5 w-5" />
+          <div className="text-lg font-bold"><span className="text-foreground">Finanças</span><span className="text-primary">Zap</span></div>
+          <span className="h-5 w-px bg-border" />
+          <p className="text-sm text-muted-foreground">Olá, Dr. {me?.full_name?.split(' ')[0] || 'Usuário'} — bom dia</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold capitalize text-foreground">{format(now, 'MMMM yyyy', { locale: ptBR })}</span>
+          <div className="relative"><Bell className="h-4 w-4 text-muted-foreground" /><span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" /></div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar text-xs font-bold text-white">{getInitials(me?.full_name)}</div>
+        </div>
+      </div>
+
+      <div className="space-y-3 p-4 md:p-4">
+        <div className="grid gap-3 lg:grid-cols-2">
+          <MonthBalanceCard data={dashboardData} />
+          <AttentionCard data={dashboardData} />
+        </div>
+        <ReceivablesPipelineCard
+          months={dashboardData.pipelineMonthHeaders}
+          rows={dashboardData.pipelineRows}
+          totals={dashboardData.pipelineTotals}
+          hasHospitals={dashboardData.hasHospitals}
+        />
+      </div>
+
+      <div className="fixed bottom-4 left-1/2 z-40 flex w-[calc(100%-24px)] max-w-sm -translate-x-1/2 items-end justify-between rounded-full border border-border bg-card px-4 py-2 shadow-lg md:hidden">
+        <BottomItem to="/" label="Início" active />
+        <BottomItem to="/relatorios" label="Relatórios" />
+        <Link to="/transacoes" className="-mt-6 flex h-11 w-11 items-center justify-center rounded-full bg-sidebar text-white shadow-lg"><Plus className="h-5 w-5" /></Link>
+        <BottomItem to="/calendario" label="Calendário" />
+        <BottomItem to="/configuracoes" label="Config" />
+      </div>
     </div>
   );
 }
 
-// --- SUB-COMPONENTS ---
-const XRayTable = ({ categories, type }) => {
-  const isExpense = type === 'despesa';
-  const headerTarget = isExpense ? 'Teto (Planned)' : 'Meta (Planned)';
-  const headerExec = isExpense ? 'Total Usado' : 'Total Recebido';
-
-  if (!categories || categories.length === 0) {
-    return <div className="p-6 text-center text-muted-foreground text-sm flex-1 flex items-center justify-center">Nenhum dado registrado para este mês.</div>;
-  }
-
+function BottomItem({ to, label, active = false }) {
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="shrink-0 grid grid-cols-[1fr,20%,25%] md:grid-cols-[1fr,15%,25%] gap-4 p-4 py-3 border-b border-slate-100 dark:border-slate-800 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right bg-slate-50/50 dark:bg-slate-900/50">
-        <span className="text-left">Categoria</span>
-        <span>{headerTarget}</span>
-        <span>{headerExec}</span>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 custom-scrollbar">
-        {categories.map((cat, i) => {
-          const Icon = cat.icon || Activity;
-          return (
-            <div key={i} className="grid grid-cols-[1fr,20%,25%] md:grid-cols-[1fr,15%,25%] gap-x-4 p-4 py-3.5 items-center hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2 rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shrink-0" style={{ borderColor: cat.color }}>
-                  <Icon className="w-4 h-4 text-slate-600 dark:text-slate-400" style={{ color: cat.color }} />
-                </div>
-                <div className="flex-grow space-y-1.5 min-w-0 overflow-hidden">
-                  <p className="font-semibold text-xs lg:text-sm leading-none text-slate-950 dark:text-white truncate pb-0.5">{cat.name}</p>
-                  <ProgressBar value={cat.realizado} Compromisso={cat.comprometido} max={cat.meta} showHashedCompromisso={isExpense || cat.comprometido > 0} variant={isExpense ? 'expense' : 'income'} />
-                </div>
-              </div>
-              <div className="text-xs lg:text-sm font-semibold leading-none text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.meta} /></div>
-              <div className="text-xs lg:text-sm font-bold leading-none text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.totalUsage} /></div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="shrink-0 p-3 px-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-4 text-slate-600 dark:text-slate-400 font-medium bg-slate-50/50 dark:bg-slate-900/50">
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold"><div className="w-4 h-1.5 rounded bg-slate-400 dark:bg-slate-500" /> Realizado</div>
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold relative overflow-hidden">
-          <div className="w-4 h-1.5 rounded bg-slate-200 dark:bg-slate-700" /><div className="absolute left-0 top-0 w-4 h-1.5 bg-[repeating-linear-gradient(45deg,_transparent,_transparent_2px,_rgba(255,255,255,0.4)_2px,_rgba(255,255,255,0.4)_4px)]" /> Compromisso
-        </div>
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold"><div className="w-4 h-1.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" /> Meta</div>
-      </div>
-    </div>
+    <Link to={to} className={`flex flex-col items-center gap-1 text-[9px] font-semibold ${active ? 'text-primary' : 'text-muted-foreground'}`}>
+      <span>{label}</span>
+    </Link>
   );
-};
-
-const SidebarTable = ({ data, type, urgent }) => {
-  const isOverdueIncome = type === 'vencidas';
-
-  if (!data || data.length === 0) {
-    return <div className="p-6 text-center text-muted-foreground text-sm flex-1 flex items-center justify-center">Nenhum registro pendente.</div>;
-  }
-
-  return (
-    <div className="w-full h-full flex flex-col">
-      <div className={cn("shrink-0 grid grid-cols-[70px,1fr,auto] gap-x-2 px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800", urgent ? "border-l-4 border-l-rose-500" : "")}>
-        <span>Data</span>
-        <span>Descrição</span>
-        <span>{isOverdueIncome ? '' : 'Valor'}</span>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/50 custom-scrollbar">
-        {data.map((item, i) => {
-          const dateObj = item.due_date ? new Date(item.due_date) : new Date();
-          const formattedDate = format(dateObj, "dd/MM");
-
-          return (
-            <div key={i} className={cn("grid grid-cols-[70px,1fr,auto] gap-x-2 px-4 py-3.5 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors", urgent ? "border-l-4 border-l-rose-500 bg-rose-50/10 dark:bg-rose-950/5" : "")}>
-              <span className={cn("text-xs shrink-0", urgent ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400")}>{formattedDate}</span>
-              <div className={cn("flex items-center gap-1.5 text-xs lg:text-sm min-w-0", urgent ? "font-semibold text-rose-600 dark:text-rose-400" : "font-medium text-slate-950 dark:text-white")}>
-                 {urgent && <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
-                 <span className="truncate">{item.description}</span>
-              </div>
-              {isOverdueIncome ? (
-                 <button className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800 rounded-full text-[10px] uppercase tracking-wider font-bold shadow-sm hover:opacity-90 shrink-0">
-                   <MessageCircle className="w-3 h-3 text-emerald-500" /> Cobrar
-                 </button>
-              ) : (
-                  <div className="flex items-center gap-2 text-right shrink-0">
-                      <span className="text-xs lg:text-sm font-bold leading-none text-slate-950 dark:text-white truncate max-w-[80px]"><CurrencyText value={parseFloat(item.amount)} /></span>
-                      <button className="flex items-center px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] uppercase tracking-wider font-bold shadow-sm hover:bg-slate-50 transition shrink-0">
-                           Baixa
-                      </button>
-                  </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
+}
