@@ -275,6 +275,7 @@ export default function Payables() {
 
   const monthKey = format(currentMonth, 'yyyy-MM');
 
+  // Backend busca TODOS os dados do mês
   const { data: payablesResponse } = useQuery({
     queryKey: ['payables-list', monthKey, listFilter],
     queryFn: () =>
@@ -296,57 +297,59 @@ export default function Payables() {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
-  // Correção Aplicada: Filtro instantâneo não exige mais estritamente p.status === 'pending'
-  const filtered = useMemo(() => {
-    return payablesItems.filter((p) => {
-      // Regra de Ouro: Nunca mostramos contas pagas no painel aberto
-      if (p.status === 'paid') return false;
-
+  // A FONTE DA VERDADE: Define estritamente quais itens pertencem à visão atual (incluindo pagos e abertos)
+  const tabItems = useMemo(() => {
+    return payablesItems.filter(p => {
       const isCard = p.origin_type === 'card';
       const isProvisioned = p.status === 'provisioned';
 
-      // Lógica da view de Cartão
+      // 1. Visão de Cartão de Crédito
       if (creditCardOnly) {
-        return isCard && (p.status === 'pending' || isProvisioned);
+        return isCard;
       }
 
-      // Lógica das Abas Padrão (Oculta tudo do cartão)
+      // 2. Visão 'Todas' (Mostra conta corrente + cartão, exclui provisionado)
+      if (activeTab === 'todas') {
+        return !isProvisioned;
+      }
+
+      // 3. Fixas, Parceladas e Avulsas (Esconde 100% o que for de cartão/provisionado)
       if (isCard || isProvisioned) return false;
 
+      // 4. Regra exclusiva da aba 'Parceladas' (Mostra apenas se estourou o prazo e não tá pago)
       if (activeTab === 'parceladas') {
+        if (p.status === 'paid') return false;
         const dueDate = parseItemDate(p.due_date || p.competencia);
-        const isOverdue = dueDate && dueDate < todayStart;
-        return isOverdue;
+        return dueDate && dueDate < todayStart;
       }
 
-      // Para 'todas', 'fixas' e 'avulsas', mostramos tudo que está em aberto.
-      // Como já barramos 'paid', 'card' e 'provisioned' acima, tudo que descer entra na lista.
+      // Para 'fixas' e 'avulsas' chega aqui (tudo que não for cartão)
       return true;
     });
   }, [payablesItems, activeTab, creditCardOnly, todayStart]);
 
-  const totalFiltered = filtered.reduce((s, p) => s + (p.amount || 0), 0);
-
-  if (viewMode === 'mensal') {
-    localStorage.setItem('contas_mes', format(currentMonth, 'yyyy-MM'));
-  }
-
+  // KPIs agora espelham exatamente os itens filtrados de tabItems
   const kpis = useMemo(() => {
-    const baseItems = creditCardOnly ? payablesItems.filter(p => p.origin_type === 'card') : payablesItems;
-
     return {
-      expected: baseItems.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      paid: baseItems.filter(p => p.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      open: baseItems.filter(p => p.status !== 'paid' && (() => {
+      expected: tabItems.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      paid: tabItems.filter(p => p.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      open: tabItems.filter(p => p.status !== 'paid' && (() => {
         const date = parseItemDate(p.due_date || p.competencia);
         return date && date >= todayStart;
       })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      overdue: baseItems.filter(p => p.status !== 'paid' && (() => {
+      overdue: tabItems.filter(p => p.status !== 'paid' && (() => {
         const date = parseItemDate(p.due_date || p.competencia);
         return date && date < todayStart;
       })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
     };
-  }, [payablesItems, creditCardOnly, todayStart]);
+  }, [tabItems, todayStart]);
+
+  // O filtro final da lista visual só precisa tirar o que já foi pago
+  const filtered = tabItems.filter(p => p.status !== 'paid');
+
+  if (viewMode === 'mensal') {
+    localStorage.setItem('contas_mes', format(currentMonth, 'yyyy-MM'));
+  }
 
   const urgencySections = useMemo(() => {
     const today = new Date();
@@ -378,8 +381,8 @@ export default function Payables() {
       };
     }).filter(Boolean);
 
-    const paidItems = payablesItems
-      .filter(p => p.status === 'paid' && (!creditCardOnly || p.origin_type === 'card'))
+    const paidItems = tabItems
+      .filter(p => p.status === 'paid')
       .map((item) => {
         const dueDate = parseItemDate(item.due_date || item.competencia);
         return {
@@ -414,7 +417,7 @@ export default function Payables() {
       { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.autoDebit) },
       { key: 'paid', title: 'Pagas este mês', icon: PAYABLE_SECTION_ICONS.paid, items: paidItems, collapsible: true },
     ].filter((section) => section.items.length > 0);
-  }, [filtered, payablesItems, currentMonth, creditCardOnly, todayStart]);
+  }, [filtered, tabItems, currentMonth, creditCardOnly, todayStart]);
 
   const updatePayableMutation = useMutation({
     mutationFn: async ({ payable, updatedData }) => {
@@ -514,10 +517,10 @@ export default function Payables() {
           {viewMode === 'mensal' ? (
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
               {creditCardOnly
-                ? `Cartão de Crédito · ${fmt(totalFiltered)}`
+                ? `Cartão de Crédito · ${fmt(kpis.expected)}`
                 : activeTab === 'todas'
-                ? `Total da Seleção · ${fmt(totalFiltered)}`
-                : `${activeTab} · ${fmt(totalFiltered)}`}
+                ? `Total da Seleção · ${fmt(kpis.expected)}`
+                : `${activeTab} · ${fmt(kpis.expected)}`}
             </p>
           ) : (
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
