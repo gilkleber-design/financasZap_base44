@@ -230,7 +230,7 @@ export default function Reports() {
     .sort((a, b) => b.tax - a.tax);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 bg-card rounded-lg">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-sora font-bold">Relatórios</h1>
