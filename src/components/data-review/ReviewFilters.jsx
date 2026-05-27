@@ -26,7 +26,7 @@ export default function ReviewFilters({ search, setSearch, activeType, setActive
       <Input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar por descrição, categoria, status ou ID"
+        placeholder="Buscar por descrição, categoria, status, origem ou ID"
       />
     </div>
   );
