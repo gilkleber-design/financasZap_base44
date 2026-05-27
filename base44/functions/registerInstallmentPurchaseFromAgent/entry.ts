@@ -106,6 +106,10 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Cartão não encontrado' }, { status: 404 });
     }
 
+    const matchedCategory = category
+      ? (await base44.entities.Category.filter({ slug: category }, '-created_date', 1))?.[0] || null
+      : null;
+
     const perInstallmentRaw = Math.round((totalAmount / installmentCount) * 100) / 100;
     const roundedTotal = Math.round(totalAmount * 100);
     const baseInstallmentCents = Math.floor(roundedTotal / installmentCount);
@@ -181,7 +185,8 @@ Deno.serve(async (req) => {
         amount: item.amount,
         due_date: item.due_date,
         competencia: item.competencia,
-        category: category || undefined,
+        category: matchedCategory?.slug || category || undefined,
+        category_id: matchedCategory?.id || undefined,
         origin_id: card_id,
         origin_type: 'card',
         payment_modality: 'manual',
