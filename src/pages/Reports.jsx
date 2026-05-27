@@ -123,7 +123,7 @@ export default function Reports() {
 
   const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
 
-  // Agrupamento de Categorias usando o slug como chave primária
+  // Agrupamento de Categorias
   const mapaCategoria = {};
   let valorPassivosTransicao = 0;
 
@@ -140,14 +140,25 @@ export default function Reports() {
     mapaCategoria[slug] += t.amount;
   });
 
-  // Monta o array final injetando o nome e a cor direto do banco de dados
-  const categoryData = Object.entries(mapaCategoria)
+  // Ordena todas as categorias
+  const allCategoryData = Object.entries(mapaCategoria)
     .map(([slug, value]) => ({
       name: getCategoryNameBySlug(slug),
       color: categoryBySlug[slug]?.color || '#94A3B8', 
       value
     }))
     .sort((a, b) => b.value - a.value);
+
+  // Regra de Triagem: Top 6 + "Demais Categorias"
+  let categoryData = allCategoryData;
+  if (allCategoryData.length > 6) {
+    const top6 = allCategoryData.slice(0, 6);
+    const othersValue = allCategoryData.slice(6).reduce((sum, item) => sum + item.value, 0);
+    categoryData = [
+      ...top6,
+      { name: 'Demais Categorias', color: '#E2E8F0', value: othersValue } // Cor neutra para as demais
+    ];
+  }
 
   // Orçado vs Realizado
   const plannedVsActual = useMemo(() => {
