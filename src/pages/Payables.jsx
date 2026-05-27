@@ -316,8 +316,8 @@ export default function Payables() {
   const payablesItems = payablesResponse?.data?.items || [];
 
   const filtered = creditCardOnly
-    ? payablesItems.filter((p) => p.origin_type === 'card')
-    : payablesItems;
+    ? payablesItems.filter((p) => p.origin_type === 'card' && p.status === 'provisioned')
+    : payablesItems.filter((p) => p.status === 'pending');
 
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
@@ -379,6 +379,12 @@ export default function Payables() {
       })
       .filter(Boolean);
 
+    if (creditCardOnly) {
+      return [
+        { key: 'month', title: 'Parcelas do mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => item.original.status === 'provisioned') },
+      ].filter((section) => section.items.length > 0);
+    }
+
     return [
       { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.original.status === 'pending' && item.dueDate < todayStart && !item.autoDebit) },
       { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => item.original.status === 'pending' && !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
@@ -387,7 +393,7 @@ export default function Payables() {
       { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.original.status === 'pending' && item.autoDebit) },
       { key: 'paid', title: 'Pagas este mês', icon: PAYABLE_SECTION_ICONS.paid, items: mapped.filter((item) => item.original.status === 'paid'), collapsible: true },
     ].filter((section) => section.items.length > 0);
-  }, [filtered, currentMonth]);
+  }, [filtered, currentMonth, creditCardOnly]);
 
   const kpis = useMemo(() => {
     const todayStart = new Date(new Date().toDateString());
@@ -400,7 +406,7 @@ export default function Payables() {
 
     return {
       expected: filtered.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      paid: filtered.filter((item) => item.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      paid: 0,
       open: filtered.filter((item) => item.status === 'pending' && (() => {
         const date = parseItemDate(item.due_date || item.competencia);
         return date && date >= todayStart;
@@ -531,7 +537,7 @@ export default function Payables() {
                 : filterStatus === 'overdue'
                 ? `Vencidas · ${fmt(totalFiltered)}`
                 : `Pagas · ${fmt(totalFiltered)}`}
-              {creditCardOnly ? ' · Cartão de Crédito' : ''}
+              {creditCardOnly ? ' · Cartão de Crédito (Provisionadas)' : ''}
             </p>
           ) : (
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">

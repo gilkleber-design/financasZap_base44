@@ -28,10 +28,10 @@ function dueDateForMonth(monthKey, dueDay) {
 }
 
 function typeMatches(item, filter) {
-  if (filter === 'FIXAS') return (!!item.recurrence_id || !!item.recurrent) && item.status === 'pending';
-  if (filter === 'PARCELADAS') return !!item.installment_group_id && item.status === 'pending' && toDateOnly(item.due_date) < todayKey();
-  if (filter === 'AVULSAS') return !item.recurrence_id && !item.recurrent && !item.installment_group_id && item.status === 'pending';
-  return item.status === 'pending';
+  if (filter === 'FIXAS') return !!item.recurrence_id || !!item.recurrent;
+  if (filter === 'PARCELADAS') return !!item.installment_group_id;
+  if (filter === 'AVULSAS') return !item.recurrence_id && !item.recurrent && !item.installment_group_id;
+  return true;
 }
 
 function monthMatches(item, month, sortBy) {
