@@ -1,11 +1,15 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-// Stop words para limpar o ruído da mensagem do WhatsApp
 const STOP_WORDS = [
-  'recebi', 'paguei', 'caiu', 'hoje', 'ontem', 'amanha', 
-  'de', 'para', 'no', 'na', 'do', 'da', 'em', 'com', 'por', 
+  'recebi', 'paguei', 'caiu', 'hoje', 'ontem', 'amanha',
+  'de', 'para', 'no', 'na', 'do', 'da', 'em', 'com', 'por',
   'um', 'uma', 'os', 'as', 'conta', 'boleto', 'pix', 'transferencia', 'fatura'
 ];
+
+const MONTH_ORDER = {
+  janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6,
+  julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+};
 
 const normalizeText = (value) =>
   String(value || '')
@@ -18,47 +22,64 @@ const normalizeText = (value) =>
 
 const tokenize = (value) => {
   const tokens = normalizeText(value).split(' ').filter((t) => t.length > 2);
-  // Remove números soltos e stop words para focar apenas nos substantivos/nomes
   return tokens.filter((t) => isNaN(Number(t)) && !STOP_WORDS.includes(t));
 };
+
+const extractCompetencySort = (description) => {
+  const normalized = normalizeText(description);
+  for (const [name, num] of Object.entries(MONTH_ORDER)) {
+    if (normalized.includes(name)) {
+      const yearMatch = normalized.match(/\d{4}/);
+      const year = yearMatch ? Number(yearMatch[0]) : 0;
+      return year * 100 + num;
+    }
+  }
+  return 9999;
+};
+
+const formatBRL = (value) =>
+  Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const getAmount = (kind, item) =>
+  kind === 'receivable' && item.net_amount ? Number(item.net_amount) : Number(item.amount);
 
 const scoreOpenItem = ({ item, amount, description, kind }) => {
   const data = item || {};
   let score = 0;
 
-  const itemAmount = kind === 'receivable' && data.net_amount ? Number(data.net_amount) : Number(data.amount);
-  
-  // 1. Destilação e Match de Texto (Recompensa)
   const inputTokens = tokenize(description);
   const itemText = normalizeText(data.description);
-  
+
   let matchedTokensCount = 0;
   inputTokens.forEach((token) => {
     if (itemText.includes(token)) {
-      score += 50; // Recompensa forte por cada palavra útil encontrada
+      score += 50;
       matchedTokensCount++;
     }
   });
 
-  // Se NENHUMA palavra bateu, a pontuação é zero e o item será descartado.
   if (matchedTokensCount === 0) return 0;
 
-  // 2. Bônus de Valor (Critério de desempate, não de eliminação)
-  const diff = Math.abs(itemAmount - Number(amount));
+  const diff = Math.abs(getAmount(kind, data) - Number(amount));
   if (diff <= 5.00) {
-    score += 30; // Bônus alto: valor bateu exatamente ou quase
+    score += 30;
   } else if (diff <= 50.00) {
-    score += 10; // Bônus baixo: valor próximo
+    score += 10;
   }
 
   return score;
 };
 
+const serializeMatch = (m) => ({
+  ...m,
+  formatted_amount: formatBRL(getAmount(m.kind, m.item)),
+});
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
-    
+
     if (!user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -75,44 +96,48 @@ Deno.serve(async (req) => {
       base44.entities.Receivable.filter({}),
     ]);
 
-    // Calcula a pontuação e filtra apenas o que teve match de texto (score > 0)
     const ranked = [
-      ...payables.filter(i => ['pending', 'provisioned', 'open'].includes(i?.status)).map((item) => ({
-        kind: 'payable',
-        item,
-        score: scoreOpenItem({ item, amount, description, kind: 'payable' }),
-      })),
-      ...receivables.filter(i => ['pending', 'open'].includes(i?.status)).map((item) => ({
-        kind: 'receivable',
-        item,
-        score: scoreOpenItem({ item, amount, description, kind: 'receivable' }),
-      })),
+      ...payables
+        .filter((i) => ['pending', 'provisioned', 'open'].includes(i?.status))
+        .map((item) => ({
+          kind: 'payable',
+          item,
+          score: scoreOpenItem({ item, amount, description, kind: 'payable' }),
+        })),
+      ...receivables
+        .filter((i) => ['pending', 'open'].includes(i?.status))
+        .map((item) => ({
+          kind: 'receivable',
+          item,
+          score: scoreOpenItem({ item, amount, description, kind: 'receivable' }),
+        })),
     ]
-      .filter((item) => item.score > 0)
+      .filter((m) => m.score > 0)
       .sort((a, b) => b.score - a.score);
 
-    // Motor de Desambiguação
     let scenario = 'C';
     let bestMatch = null;
     let topMatches = [];
 
     if (ranked.length > 0) {
-      // Se tiver só 1, ou se o 1º colocado tiver uma vantagem de pelo menos 40 pontos sobre o 2º
-      if (ranked.length === 1 || (ranked.length > 1 && ranked[0].score >= ranked[1].score + 40)) {
-        scenario = 'A'; // Tiro certeiro
-        bestMatch = ranked[0];
-        topMatches = [ranked[0]];
+      if (ranked.length === 1 || ranked[0].score >= ranked[1].score + 40) {
+        scenario = 'A';
+        bestMatch = serializeMatch(ranked[0]);
+        topMatches = [bestMatch];
       } else {
-        scenario = 'B'; // Ambiguidade (pontuações próximas)
-        topMatches = ranked.slice(0, 3); // Retorna no máximo os 3 melhores
+        scenario = 'B';
+        topMatches = ranked
+          .slice(0, 3)
+          .sort((a, b) => extractCompetencySort(a.item.description) - extractCompetencySort(b.item.description))
+          .map(serializeMatch);
       }
     }
 
-    return Response.json({ 
-      success: true, 
-      scenario, // 'A' (Certeiro), 'B' (Lista Numerada) ou 'C' (Nenhum)
-      best_match: bestMatch, 
-      matches: topMatches 
+    return Response.json({
+      success: true,
+      scenario,
+      best_match: bestMatch,
+      matches: topMatches,
     });
 
   } catch (error) {
