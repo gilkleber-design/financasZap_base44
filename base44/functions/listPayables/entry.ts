@@ -62,7 +62,7 @@ async function materializeCurrentMonth(base44, month) {
       recurrent: true,
       recurrence_id: recurrence.id,
       origin_id: recurrence.origin_id || undefined,
-      origin_type: recurrence.origin_id ? 'account' : undefined,
+      origin_type: recurrence.origin_type || (recurrence.origin_id ? 'account' : undefined),
       payment_modality: recurrence.payment_modality || 'manual',
       notes: recurrence.notes || undefined,
     });
@@ -85,7 +85,7 @@ function makeProjection(recurrence, month) {
     recurrent: true,
     recurrence_id: recurrence.id,
     origin_id: recurrence.origin_id || null,
-    origin_type: recurrence.origin_id ? 'account' : null,
+    origin_type: recurrence.origin_type || (recurrence.origin_id ? 'account' : null),
     payment_modality: recurrence.payment_modality || 'manual',
     notes: recurrence.notes || null,
     is_projection: true,
