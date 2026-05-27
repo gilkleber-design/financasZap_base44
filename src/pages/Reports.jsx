@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
@@ -14,26 +14,6 @@ import ConsolidatedReportModal from '@/components/reports/ConsolidatedReportModa
 import AuditCategoryPieChart from '@/components/reports/AuditCategoryPieChart';
 import OverviewPlannedVsActual from '@/components/reports/OverviewPlannedVsActual';
 import OverviewFiscalSummary from '@/components/reports/OverviewFiscalSummary';
-
-// --- MAPA DE CORES ---
-const coresCategorias = {
-  'Moradia': '#0D3B66',
-  'Funcionários': '#0FA3A3',
-  'Alimentação': '#F0A030',
-  'Transporte': '#3A86FF',
-  'Saúde': '#E74C3C',
-  'Educação': '#8B5CF6',
-  'Impostos e Taxas': '#C0622A',
-  'Lazer': '#10B981',
-  'Vestuário': '#EC4899',
-  'Serviços': '#6366F1',
-  'Serviços Domésticos': '#64748B',
-  'Investimentos': '#0A6E50',
-  'Família': '#F59E0B',
-  'Assinaturas': '#06B6D4',
-  'Outros': '#94A3B8',
-  'Retiradas': '#CBD5E1',
-};
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -91,10 +71,10 @@ export default function Reports() {
     [categories]
   );
 
-  const getCategoryNameBySlug = (slug) => {
+  const getCategoryNameBySlug = useCallback((slug) => {
     const normalizedSlug = String(slug || '').toLowerCase();
-    return categoryBySlug[normalizedSlug]?.name || null;
-  };
+    return categoryBySlug[normalizedSlug]?.name || 'Outros';
+  }, [categoryBySlug]);
 
   // ---- LÓGICA DE AUDITORIA ----
   const selectedMonthStr = format(currentMonth, 'yyyy-MM');
@@ -143,25 +123,30 @@ export default function Reports() {
 
   const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
 
+  // Agrupamento de Categorias usando o slug como chave primária
   const mapaCategoria = {};
   let valorPassivosTransicao = 0;
 
   monthTx.filter(t => t.type === 'expense').forEach(t => {
-    const slug = String(t.category || '').toLowerCase();
-    const label = getCategoryNameBySlug(slug);
+    const slug = String(t.category || 'outros').toLowerCase();
 
     if (slug === 'passivos_de_transicao') {
       valorPassivosTransicao += t.amount;
       return;
     }
-    if (slug === 'retiradas' || !label) return;
+    if (slug === 'retiradas') return;
 
-    if (!mapaCategoria[label]) mapaCategoria[label] = 0;
-    mapaCategoria[label] += t.amount;
+    if (!mapaCategoria[slug]) mapaCategoria[slug] = 0;
+    mapaCategoria[slug] += t.amount;
   });
 
+  // Monta o array final injetando o nome e a cor direto do banco de dados
   const categoryData = Object.entries(mapaCategoria)
-    .map(([name, value]) => ({ name, value }))
+    .map(([slug, value]) => ({
+      name: getCategoryNameBySlug(slug),
+      color: categoryBySlug[slug]?.color || '#94A3B8', 
+      value
+    }))
     .sort((a, b) => b.value - a.value);
 
   // Orçado vs Realizado
@@ -180,15 +165,13 @@ export default function Reports() {
     const actualBySlug = monthTx
       .filter((tx) => tx.type === 'expense')
       .reduce((acc, tx) => {
-        const slug = String(tx.category || '').toLowerCase();
-        if (slug === 'passivos_de_transicao' || slug === 'retiradas' || !categoryBySlug[slug]) return acc;
+        const slug = String(tx.category || 'outros').toLowerCase();
+        if (slug === 'passivos_de_transicao' || slug === 'retiradas') return acc;
         acc[slug] = (acc[slug] || 0) + Number(tx.amount || 0);
         return acc;
       }, {});
 
-    const validSlugs = Object.keys({ ...budgetBySlug, ...actualBySlug }).filter((slug) => categoryBySlug[slug]);
-
-    const items = validSlugs.map((slug) => {
+    const items = Object.keys({ ...budgetBySlug, ...actualBySlug }).map((slug) => {
       const actual = actualBySlug[slug] || 0;
       const limit = Number(budgetBySlug[slug] || 0);
       const hasLimit = limit > 0;
@@ -210,7 +193,7 @@ export default function Reports() {
       if (b.hasLimit) return 1;
       return b.actual - a.actual;
     });
-  }, [budgets, categories, currentMonth, monthTx]);
+  }, [budgets, categories, currentMonth, monthTx, getCategoryNameBySlug]);
 
   // Resumo Fiscal
   const receivedReceivables = receivables.filter((item) => item.status === 'received' && item.due_date >= monthStart && item.due_date <= monthEnd);
@@ -252,7 +235,6 @@ export default function Reports() {
 
         <TabsContent value="overview" className="mt-6 space-y-6">
           
-          {/* FIX 1 - Relatório CTA Consolidado com CSS aplicado inline via Tailwind */}
           <div className="bg-[#EEF5FB] border-l-[4px] border-l-[#0D3B66] rounded-r-xl py-3.5 px-[18px] flex items-center justify-between gap-4">
             <div>
               <h3 className="text-[14px] font-bold text-[#0D3B66] mb-0.5">Relatório Consolidado</h3>
@@ -326,13 +308,13 @@ export default function Reports() {
                         strokeWidth={2}
                       >
                         {categoryData.map((item, i) => (
-                          <Cell key={item.name || i} fill={coresCategorias[item.name] || '#CBD5E1'} />
+                          <Cell key={item.name || i} fill={item.color} />
                         ))}
                       </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: '#0D3B66', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
                         itemStyle={{ color: '#fff', fontWeight: 'bold' }}
-                        formatter={(value, name, props) => {
+                        formatter={(value, name) => {
                           const total = categoryData.reduce((acc, curr) => acc + curr.value, 0);
                           const pct = ((value / total) * 100).toFixed(1);
                           return [`${fmt(value)} (${pct}%)`, name];
@@ -340,7 +322,8 @@ export default function Reports() {
                       />
                       <Legend 
                         iconType="circle" 
-                        wrapperStyle={{ fontSize: '11px', color: '#0D3B66' }} 
+                        wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} 
+                        formatter={(value) => <span style={{ color: '#7B92A8' }}>{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
