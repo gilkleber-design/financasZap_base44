@@ -29,10 +29,10 @@ export default function OverviewPlannedVsActual({ items, currentMonth }) {
             const cappedPercent = Math.min(item.percent, 100);
             const overLimit = item.hasLimit && item.actual > item.limit;
             return (
-              <div key={item.name} className="flex flex-col gap-3 rounded-[10px] border border-[#E8EDF2] bg-white px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
-                <div className="min-w-0 lg:w-40 lg:flex-shrink-0">
+              <div key={item.slug} className="flex flex-col gap-3 rounded-[10px] border border-[#E8EDF2] bg-white px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
+                <div className="min-w-0 lg:w-52 lg:flex-shrink-0">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-xs font-bold text-[#0D3B66]">{item.name}</span>
+                    <span className="text-xs font-bold text-[#0D3B66]">{item.name}</span>
                     {!item.hasLimit && <Badge className="bg-[#FFECEC] px-1.5 py-0 text-[9px] font-bold text-[#C0392B] hover:bg-[#FFECEC]">sem limite</Badge>}
                   </div>
                 </div>

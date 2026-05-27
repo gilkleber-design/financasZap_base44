@@ -93,7 +93,7 @@ export default function Reports() {
 
   const getCategoryNameBySlug = (slug) => {
     const normalizedSlug = String(slug || '').toLowerCase();
-    return categoryBySlug[normalizedSlug]?.name || 'Outros';
+    return categoryBySlug[normalizedSlug]?.name || null;
   };
 
   // ---- LÓGICA DE AUDITORIA ----
@@ -147,14 +147,14 @@ export default function Reports() {
   let valorPassivosTransicao = 0;
 
   monthTx.filter(t => t.type === 'expense').forEach(t => {
-    const slug = String(t.category || 'outros').toLowerCase();
+    const slug = String(t.category || '').toLowerCase();
     const label = getCategoryNameBySlug(slug);
 
     if (slug === 'passivos_de_transicao') {
       valorPassivosTransicao += t.amount;
       return;
     }
-    if (slug === 'retiradas') return;
+    if (slug === 'retiradas' || !label) return;
 
     if (!mapaCategoria[label]) mapaCategoria[label] = 0;
     mapaCategoria[label] += t.amount;
@@ -180,13 +180,15 @@ export default function Reports() {
     const actualBySlug = monthTx
       .filter((tx) => tx.type === 'expense')
       .reduce((acc, tx) => {
-        const slug = String(tx.category || 'outros').toLowerCase();
-        if (slug === 'passivos_de_transicao' || slug === 'retiradas') return acc;
+        const slug = String(tx.category || '').toLowerCase();
+        if (slug === 'passivos_de_transicao' || slug === 'retiradas' || !categoryBySlug[slug]) return acc;
         acc[slug] = (acc[slug] || 0) + Number(tx.amount || 0);
         return acc;
       }, {});
 
-    const items = Object.keys(actualBySlug).map((slug) => {
+    const validSlugs = Object.keys({ ...budgetBySlug, ...actualBySlug }).filter((slug) => categoryBySlug[slug]);
+
+    const items = validSlugs.map((slug) => {
       const actual = actualBySlug[slug] || 0;
       const limit = Number(budgetBySlug[slug] || 0);
       const hasLimit = limit > 0;
