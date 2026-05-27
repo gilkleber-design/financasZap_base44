@@ -110,9 +110,9 @@ export default function Reports() {
     const d = subMonths(new Date(), 5 - i);
     const start = format(startOfMonth(d), 'yyyy-MM-dd');
     const end = format(endOfMonth(d), 'yyyy-MM-dd');
-    const monthTx = transactions.filter(t => t.date >= start && t.date <= end && new Date(t.date).getFullYear() === currentYear);
-    const income = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
-    const expense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const monthFiltered = transactions.filter(t => t.date >= start && t.date <= end && new Date(t.date).getFullYear() === currentYear);
+    const income = monthFiltered.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
+    const expense = monthFiltered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     return {
       name: format(d, 'MMM', { locale: ptBR }),
       Receitas: income,
@@ -121,7 +121,10 @@ export default function Reports() {
     };
   });
 
-  const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
+  // Estabilizando monthTx para o Linter não reclamar
+  const monthTx = useMemo(() => {
+    return transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
+  }, [transactions, monthStart, monthEnd, currentYear]);
 
   // Agrupamento de Categorias
   const mapaCategoria = {};
@@ -156,7 +159,7 @@ export default function Reports() {
     const othersValue = allCategoryData.slice(6).reduce((sum, item) => sum + item.value, 0);
     categoryData = [
       ...top6,
-      { name: 'Demais Categorias', color: '#E2E8F0', value: othersValue } // Cor neutra para as demais
+      { name: 'Demais Categorias', color: '#E2E8F0', value: othersValue } 
     ];
   }
 
@@ -239,21 +242,31 @@ export default function Reports() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="audit">Auditoria</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 bg-[#E8EDF2] p-1 rounded-xl">
+          <TabsTrigger 
+            value="overview" 
+            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#0D3B66] font-semibold text-[#7B92A8] transition-all"
+          >
+            Visão Geral
+          </TabsTrigger>
+          <TabsTrigger 
+            value="audit" 
+            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#0D3B66] font-semibold text-[#7B92A8] transition-all"
+          >
+            Auditoria
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
           
-          <div className="bg-[#EEF5FB] border-l-[4px] border-l-[#0D3B66] rounded-r-xl py-3.5 px-[18px] flex items-center justify-between gap-4">
+          <div className="bg-white border-[0.5px] border-[#E8EDF2] border-l-[4px] border-l-[#0D3B66] shadow-[0_1px_4px_rgba(13,59,102,0.06)] rounded-xl py-4 px-[18px] flex items-center justify-between gap-4">
             <div>
               <h3 className="text-[14px] font-bold text-[#0D3B66] mb-0.5">Relatório Consolidado</h3>
-              <p className="text-[12px] text-[#0D3B66] opacity-65">Acesse o fechamento detalhado de {format(currentMonth, 'MMMM/yyyy', { locale: ptBR })}</p>
+              <p className="text-[12px] text-[#7B92A8]">Acesse o fechamento detalhado de {format(currentMonth, 'MMMM/yyyy', { locale: ptBR })}</p>
             </div>
             <button
               onClick={() => setConsolidatedModalOpen(true)}
-              className="bg-[#0D3B66] hover:bg-[#0a2f54] text-white border-none rounded-lg py-2 px-4 text-[12px] font-bold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
+              className="bg-[#0D3B66] hover:bg-[#0a2f54] text-white border-none rounded-lg py-2 px-4 text-[12px] font-bold cursor-pointer whitespace-nowrap shrink-0 transition-colors shadow-sm"
             >
               Ver Completo
             </button>
