@@ -1,12 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
+import EditableReviewCell from '@/components/data-review/EditableReviewCell';
 
-function formatValue(value) {
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
-
-export default function ReviewTable({ title, columns, rows }) {
+export default function ReviewTable({ title, columns, rows, getColumnOptions, onCellChange, savingCellKey }) {
   return (
     <Card className="border-border shadow-sm">
       <CardContent className="p-0">
@@ -36,7 +31,13 @@ export default function ReviewTable({ title, columns, rows }) {
                   <tr key={row.id} className="border-b border-border last:border-0">
                     {columns.map((column) => (
                       <td key={column.key} className="px-4 py-3 align-top text-foreground">
-                        <div className="max-w-[260px] break-words">{formatValue(row[column.key])}</div>
+                        <EditableReviewCell
+                          column={column}
+                          row={row}
+                          options={getColumnOptions?.(column, row) || []}
+                          onChange={onCellChange}
+                          isSaving={savingCellKey === `${row.id}:${column.key}`}
+                        />
                       </td>
                     ))}
                   </tr>

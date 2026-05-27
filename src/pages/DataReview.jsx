@@ -1,42 +1,49 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { toast } from 'sonner';
 import ReviewFilters from '@/components/data-review/ReviewFilters';
 import ReviewTable from '@/components/data-review/ReviewTable';
+import { useCategories } from '@/hooks/useCategories';
+import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
+import { normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
 const CONFIG = {
   payables: {
     title: 'Todos os Payables',
+    entityName: 'Payable',
     queryKey: ['data-review-payables'],
     queryFn: () => base44.entities.Payable.list('-created_date', 1000),
     columns: [
       { key: 'description', label: 'Descrição' },
       { key: 'amount', label: 'Valor' },
-      { key: 'status', label: 'Status' },
+      { key: 'status', label: 'Status', editable: true },
       { key: 'due_date', label: 'Vencimento' },
-      { key: 'category', label: 'Categoria' },
-      { key: 'origin_type', label: 'Origem' },
+      { key: 'category', label: 'Categoria', editable: true },
+      { key: 'origin_id', label: 'Origem', editable: true },
       { key: 'recurrence_id', label: 'Recorrência' },
       { key: 'created_date', label: 'Criado em' },
     ],
   },
   receivables: {
     title: 'Todos os Receivables',
+    entityName: 'Receivable',
     queryKey: ['data-review-receivables'],
     queryFn: () => base44.entities.Receivable.list('-created_date', 1000),
     columns: [
       { key: 'description', label: 'Descrição' },
       { key: 'amount', label: 'Valor Bruto' },
       { key: 'net_amount', label: 'Valor Líquido' },
-      { key: 'status', label: 'Status' },
+      { key: 'status', label: 'Status', editable: true },
       { key: 'due_date', label: 'Recebimento' },
-      { key: 'income_source_id', label: 'Origem' },
-      { key: 'account_id', label: 'Conta' },
+      { key: 'income_source_id', label: 'Origem', editable: true },
+      { key: 'account_id', label: 'Conta', editable: true },
       { key: 'created_date', label: 'Criado em' },
     ],
   },
   transactions: {
     title: 'Todas as Transactions',
+    entityName: 'Transaction',
     queryKey: ['data-review-transactions'],
     queryFn: () => base44.entities.Transaction.list('-created_date', 1000),
     columns: [
@@ -44,11 +51,11 @@ const CONFIG = {
       { key: 'amount', label: 'Valor Bruto' },
       { key: 'net_amount', label: 'Valor Líquido' },
       { key: 'type', label: 'Tipo' },
-      { key: 'status', label: 'Status' },
+      { key: 'status', label: 'Status', editable: true },
       { key: 'date', label: 'Data' },
-      { key: 'category', label: 'Categoria' },
-      { key: 'account_id', label: 'Origem Conta' },
-      { key: 'card_id', label: 'Origem Cartão' },
+      { key: 'category', label: 'Categoria', editable: true },
+      { key: 'account_id', label: 'Origem Conta', editable: true },
+      { key: 'card_id', label: 'Origem Cartão', editable: true },
       { key: 'payable_id', label: 'Payable' },
       { key: 'receivable_id', label: 'Receivable' },
       { key: 'created_date', label: 'Criado em' },
@@ -78,7 +85,16 @@ export default function DataReview() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [savingCellKey, setSavingCellKey] = useState('');
 
+  const queryClient = useQueryClient();
+  const { flatForSelect } = useCategories();
+  const { origins, accounts, cards } = usePaymentOrigins();
+  const { data: incomeSources = [] } = useQuery({
+    queryKey: ['income-sources'],
+    queryFn: () => base44.entities.IncomeSource.list('name', 100),
+    initialData: [],
+  });
   const currentConfig = CONFIG[activeType];
 
   const { data = [], isLoading } = useQuery({
@@ -114,6 +130,87 @@ export default function DataReview() {
   const totalAmount = useMemo(() => {
     return filteredRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   }, [filteredRows]);
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ row, column, value }) => {
+      const entityApi = base44.entities[currentConfig.entityName];
+      const payload = { [column.key]: value };
+
+      if (activeType === 'payables' && column.key === 'origin_id') {
+        const selectedOrigin = origins.find((origin) => origin.id === value);
+        payload.origin_type = selectedOrigin?.type || null;
+      }
+
+      if (activeType === 'transactions' && column.key === 'account_id' && value) {
+        payload.card_id = null;
+      }
+
+      if (activeType === 'transactions' && column.key === 'card_id' && value) {
+        payload.account_id = null;
+      }
+
+      return entityApi.update(row.id, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: currentConfig.queryKey });
+      toast.success('Lançamento atualizado.');
+      setSavingCellKey('');
+    },
+  });
+
+  const getColumnOptions = (column) => {
+    if (column.key === 'category') {
+      return flatForSelect.map((item) => ({ value: item.value, label: item.label }));
+    }
+
+    if (column.key === 'origin_id') {
+      return origins.map((item) => ({ value: item.id, label: item.label }));
+    }
+
+    if (column.key === 'income_source_id') {
+      return incomeSources.map((item) => ({ value: item.id, label: normalizeCategoryLabel(item.name) }));
+    }
+
+    if (column.key === 'account_id') {
+      return accounts.map((item) => ({ value: item.id, label: item.name }));
+    }
+
+    if (column.key === 'card_id') {
+      return cards.map((item) => ({ value: item.id, label: item.name }));
+    }
+
+    if (column.key === 'status') {
+      if (activeType === 'payables') {
+        return [
+          { value: 'pending', label: 'Pendente' },
+          { value: 'paid', label: 'Pago' },
+          { value: 'provisioned', label: 'Provisionado' },
+        ];
+      }
+
+      if (activeType === 'receivables') {
+        return [
+          { value: 'pending', label: 'Pendente' },
+          { value: 'received', label: 'Recebido' },
+          { value: 'overdue', label: 'Atrasado' },
+        ];
+      }
+
+      return [
+        { value: 'registered', label: 'Registrado' },
+        { value: 'conciliated', label: 'Conciliado' },
+        { value: 'diverged', label: 'Divergente' },
+        { value: 'ignored', label: 'Ignorado' },
+      ];
+    }
+
+    return [];
+  };
+
+  const handleCellChange = (row, column, value) => {
+    setSavingCellKey(`${row.id}:${column.key}`);
+    updateMutation.mutate({ row, column, value });
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -152,6 +249,9 @@ export default function DataReview() {
           title={currentConfig.title}
           columns={currentConfig.columns}
           rows={filteredRows}
+          getColumnOptions={getColumnOptions}
+          onCellChange={handleCellChange}
+          savingCellKey={savingCellKey}
         />
       )}
     </div>
