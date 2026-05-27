@@ -11,7 +11,8 @@ import {
   X, 
   LogOut, 
   UserCircle, 
-  Plus 
+  Plus,
+  Eye
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
@@ -127,7 +128,7 @@ export default function Layout() {
             </div>
             
             <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-              {[...navItems, { path: '/configuracoes', label: 'Configurações', icon: Settings }].map(({ path, label, icon: Icon }) => (
+              {[...navItems, { path: '/revisao-dados', label: 'Revisão de Dados', icon: Eye }, { path: '/configuracoes', label: 'Configurações', icon: Settings }].map(({ path, label, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}
