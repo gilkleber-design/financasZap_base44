@@ -51,11 +51,16 @@ export default function Recebimentos() {
       .map((hospital) => {
         const hospitalMatchers = [hospital.sigla, hospital.name]
           .filter(Boolean)
-          .map((value) => String(value).toLowerCase());
+          .map((value) => String(value).trim().toLowerCase());
 
         const hospitalReceivables = filteredReceivables.filter((item) => {
-          const description = String(item.description || '').toLowerCase();
-          return hospitalMatchers.some((matcher) => description.includes(matcher));
+          const description = String(item.description || '').trim().toLowerCase();
+          return hospitalMatchers.some((matcher) => {
+            if (!matcher) return false;
+            const escapedMatcher = matcher.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = new RegExp(`(^|[^a-z0-9])${escapedMatcher}([^a-z0-9]|$)`);
+            return pattern.test(description);
+          });
         });
 
         const cells = months.map((date) => {
