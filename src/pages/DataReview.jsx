@@ -63,9 +63,21 @@ const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 2,
 }).format(Number(value || 0));
 
+const DATE_FIELD_MAP = {
+  payables: 'due_date',
+  receivables: 'due_date',
+  transactions: 'date',
+};
+
+const normalizeDate = (value) => String(value || '').slice(0, 10);
+
 export default function DataReview() {
   const [activeType, setActiveType] = useState('payables');
   const [search, setSearch] = useState('');
+  const [dateFilterMode, setDateFilterMode] = useState('month');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const currentConfig = CONFIG[activeType];
 
@@ -77,14 +89,27 @@ export default function DataReview() {
 
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return data;
+    const dateField = DATE_FIELD_MAP[activeType];
 
-    return data.filter((row) =>
-      Object.values(row || {}).some((value) =>
+    return data.filter((row) => {
+      const matchesSearch = !term || Object.values(row || {}).some((value) =>
         String(value ?? '').toLowerCase().includes(term)
-      )
-    );
-  }, [data, search]);
+      );
+
+      const rowDate = normalizeDate(row?.[dateField]);
+      const matchesMonth = dateFilterMode === 'month'
+        ? (!selectedMonth || rowDate.slice(0, 7) === selectedMonth)
+        : true;
+      const matchesStart = dateFilterMode === 'range'
+        ? (!startDate || rowDate >= startDate)
+        : true;
+      const matchesEnd = dateFilterMode === 'range'
+        ? (!endDate || rowDate <= endDate)
+        : true;
+
+      return matchesSearch && matchesMonth && matchesStart && matchesEnd;
+    });
+  }, [activeType, data, dateFilterMode, endDate, search, selectedMonth, startDate]);
 
   const totalAmount = useMemo(() => {
     return filteredRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
@@ -108,6 +133,14 @@ export default function DataReview() {
         setSearch={setSearch}
         activeType={activeType}
         setActiveType={setActiveType}
+        dateFilterMode={dateFilterMode}
+        setDateFilterMode={setDateFilterMode}
+        selectedMonth={selectedMonth}
+        setSelectedMonth={setSelectedMonth}
+        startDate={startDate}
+        setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
       />
 
       {isLoading ? (
