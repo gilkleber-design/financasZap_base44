@@ -29,9 +29,9 @@ export default function PayablesOverview({
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Previsto" value={formatCurrency(kpis.expected, 2)} sub="este mês" />
+        <KpiCard label="Total do mês" value={formatCurrency(kpis.expected, 2)} sub="soma completa" />
         <KpiCard label="Pago" value={formatCurrency(kpis.paid, 2)} sub={`${kpis.expected ? ((kpis.paid / kpis.expected) * 100).toFixed(1) : '0.0'}% do mês`} />
-        <KpiCard label="Em aberto" value={formatCurrency(kpis.open, 2)} sub="a pagar" />
+        <KpiCard label="A vencer" value={formatCurrency(kpis.open, 2)} sub="aguardando prazo" />
         <KpiCard label="Vencido" value={formatCurrency(kpis.overdue, 2)} sub={kpis.overdue > 0 ? 'ação urgente' : 'sem atrasos'} valueClassName={kpis.overdue > 0 ? 'text-[#C0392B]' : 'text-[#0A6E50]'} />
       </div>
 
@@ -59,7 +59,7 @@ export default function PayablesOverview({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-[13px] font-semibold text-[#0D3B66]">{item.description}</p>
-                        {item.installmentLabel && <span className="rounded border border-[#C8D6E0] bg-[#F0F4F8] px-1.5 py-0.5 text-[9px] font-bold text-[#7B92A8]">{item.installmentLabel}</span>}
+                        {item.installmentLabel && <span className="ml-2 rounded border border-[#C8D6E0] bg-[#F0F4F8] px-1.5 py-0.5 text-[9px] font-bold text-[#7B92A8]">{item.installmentLabel}</span>}
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                         <span>{normalizeCategoryLabel(item.category)}</span>
