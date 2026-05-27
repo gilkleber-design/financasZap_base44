@@ -1,6 +1,6 @@
 import { Building2, CalendarClock, CheckCircle2, CircleAlert, Clock3, Landmark } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { formatCompactCurrency } from '@/components/dashboard/financaszapTheme';
+import { formatCurrency } from '@/components/dashboard/financaszapTheme';
 import { Button } from '@/components/ui/button';
 
 const STATUS_STYLES = {
@@ -67,7 +67,7 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
                 <td className="pt-3 pr-4">Total</td>
                 {totals.map((total) => (
                   <td key={total.key} className="pt-3 pr-4 text-foreground">
-                    {formatCompactCurrency(total.amount)} {total.hasOverdue ? '⚠' : ''}
+                    {formatCurrency(total.amount, 2)} {total.hasOverdue ? '⚠' : ''}
                   </td>
                 ))}
               </tr>
@@ -89,14 +89,14 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
 
 function StatusPill({ status, amount, partialAmount }) {
   const label = status === 'vencido'
-    ? formatCompactCurrency(amount)
+    ? formatCurrency(amount, 2)
     : status === 'parcial'
-      ? `${formatCompactCurrency(partialAmount)}/${formatCompactCurrency(amount)}`
+      ? `${formatCurrency(partialAmount, 2)}/${formatCurrency(amount, 2)}`
       : status === 'recebido'
-        ? formatCompactCurrency(amount)
+        ? formatCurrency(amount, 2)
         : status === 'futuro'
-          ? formatCompactCurrency(amount)
-          : formatCompactCurrency(amount);
+          ? formatCurrency(amount, 2)
+          : formatCurrency(amount, 2);
 
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold whitespace-nowrap ${STATUS_STYLES[status] || STATUS_STYLES.futuro}`}>
