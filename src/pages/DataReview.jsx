@@ -60,6 +60,13 @@ const CONFIG = {
   },
 };
 
+const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}).format(Number(value || 0));
+
 export default function DataReview() {
   const [activeType, setActiveType] = useState('payables');
   const [search, setSearch] = useState('');
@@ -83,11 +90,21 @@ export default function DataReview() {
     );
   }, [data, search]);
 
+  const totalAmount = useMemo(() => {
+    return filteredRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  }, [filteredRows]);
+
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Revisão de Dados</h1>
-        <p className="text-sm text-muted-foreground">Acesso completo a Payables, Receivables e Transactions.</p>
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Revisão de Dados</h1>
+          <p className="text-sm text-muted-foreground">Acesso completo a Payables, Receivables e Transactions.</p>
+        </div>
+        <div className="text-left md:text-right">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Total filtrado</p>
+          <p className="text-2xl font-bold text-foreground">{formatCurrency(totalAmount)}</p>
+        </div>
       </div>
 
       <ReviewFilters
