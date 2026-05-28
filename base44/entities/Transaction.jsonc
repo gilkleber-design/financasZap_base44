@@ -26,6 +26,10 @@
       "type": "string",
       "description": "Slug da Categoria do lan\u00e7amento"
     },
+    "category_id": {
+      "type": "string",
+      "description": "ID da categoria do lan\u00e7amento"
+    },
     "date": {
       "type": "string",
       "format": "date",
