@@ -17,11 +17,11 @@ Deno.serve(async (req) => {
     const exactNameMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase() === normalizedQuery);
     const partialNameMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase().includes(normalizedQuery));
 
-    const matches = exactSiglaMatches.length > 0
-      ? exactSiglaMatches
-      : exactNameMatches.length > 0
-        ? exactNameMatches
-        : partialNameMatches;
+    const uniqueMatches = [...exactSiglaMatches, ...exactNameMatches, ...partialNameMatches].filter(
+      (hospital, index, list) => list.findIndex((item) => item.id === hospital.id) === index
+    );
+
+    const matches = uniqueMatches;
 
     const instruction =
       matches.length === 0
