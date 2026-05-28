@@ -14,24 +14,23 @@
       "type": "string",
       "description": "ID da PJ/fonte de renda que recebe por este hospital"
     },
-    "remuneration_model": {
+    "payment_model": {
       "type": "string",
       "enum": [
-        "plantao",
-        "producao"
+        "so_plantao",
+        "plantao_producao",
+        "so_producao"
       ],
-      "default": "plantao",
-      "description": "Modelo de remunera\u00e7\u00e3o: Plant\u00e3o (valores fixos) ou Produ\u00e7\u00e3o (valor por evento)"
+      "default": "so_plantao",
+      "description": "Modelo de pagamento do hospital"
     },
-    "has_productivity": {
-      "type": "boolean",
-      "default": false,
-      "description": "Se o hospital paga produtividade adicional (apenas para modelo Plant\u00e3o)"
+    "valor_medio_pdt": {
+      "type": "number",
+      "description": "Valor m\u00e9dio estimado da produtividade mensal"
     },
-    "productivity_separate_date": {
-      "type": "boolean",
-      "default": false,
-      "description": "Se a produtividade \u00e9 paga em data separada (apenas quando has_productivity=true)"
+    "atraso_medio_pdt": {
+      "type": "number",
+      "description": "Dias m\u00e9dios de atraso do pagamento da produ\u00e7\u00e3o"
     },
     "valor_sd_semana": {
       "type": "number",
@@ -59,7 +58,7 @@
     },
     "payment_months_offset": {
       "type": "number",
-      "description": "Quantos meses ap\u00f3s a compet\u00eancia o pagamento ocorre (ex: 1 = m\u00eas seguinte, 2 = dois meses depois)",
+      "description": "Quantos meses ap\u00f3s a compet\u00eancia o pagamento ocorre",
       "default": 1
     },
     "dias_atraso": {
@@ -73,6 +72,7 @@
   },
   "required": [
     "name",
-    "sigla"
+    "sigla",
+    "payment_model"
   ]
 }

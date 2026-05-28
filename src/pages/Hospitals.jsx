@@ -7,29 +7,33 @@ import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Building2, ChevronDown, ChevronUp, Pencil, X, Factory, Calendar } from 'lucide-react';
+import { Plus, Trash2, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { resolveHospitalPaymentModel } from '@/lib/shifts';
 
-const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+const paymentModelLabels = {
+  so_plantao: 'Só plantão',
+  plantao_producao: 'Plantão + produção',
+  so_producao: 'Só produção',
+};
 
 const emptyForm = {
   name: '', sigla: '', income_source_id: '',
-  remuneration_model: 'plantao',
-  has_productivity: false,
-  productivity_separate_date: false,
+  payment_model: 'so_plantao',
   payment_day: '1', payment_months_offset: '1',
+  valor_medio_pdt: '', atraso_medio_pdt: '',
   valor_sd_semana: '', valor_sn_semana: '', valor_sd_fds: '', valor_sn_fds: '', valor_sobreaviso: '',
 };
 
 function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
-  const isPlantao = form.remuneration_model === 'plantao';
+  const paymentModel = form.payment_model || 'so_plantao';
+  const showShiftFields = paymentModel !== 'so_producao';
+  const showPdtFields = paymentModel !== 'so_plantao';
   const pjSources = sources.filter(s => s.type === 'pj');
 
   return (
     <div className="space-y-4">
-      {/* Nome, Sigla */}
       <div className="col-span-2 grid grid-cols-3 gap-3">
         <div className="col-span-2">
           <Label>Nome *</Label>
@@ -41,32 +45,18 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
         </div>
       </div>
 
-      {/* Modelo de remuneração */}
       <div>
-        <Label>Modelo de Remuneração</Label>
-        <div className="flex gap-2 mt-1">
-          <Button
-            type="button"
-            variant={isPlantao ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => set('remuneration_model', 'plantao')}
-            className="flex-1"
-          >
-            <Calendar className="w-4 h-4 mr-1" /> Plantão
-          </Button>
-          <Button
-            type="button"
-            variant={!isPlantao ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => set('remuneration_model', 'producao')}
-            className="flex-1"
-          >
-            <Factory className="w-4 h-4 mr-1" /> Produção
-          </Button>
-        </div>
+        <Label>Forma de pagamento</Label>
+        <Select value={paymentModel} onValueChange={v => set('payment_model', v)}>
+          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="so_plantao">Só plantão</SelectItem>
+            <SelectItem value="plantao_producao">Plantão + produção (separado)</SelectItem>
+            <SelectItem value="so_producao">Só produção</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* PJ */}
       <div>
         <Label>PJ de Recebimento</Label>
         <Select value={form.income_source_id} onValueChange={v => set('income_source_id', v)}>
@@ -82,31 +72,27 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
         </Select>
       </div>
 
-      {/* Pagamento — apenas para Plantão */}
-      {isPlantao && (
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Dia do pagamento</Label>
-            <Input type="number" min="1" max="31" value={form.payment_day} onChange={e => set('payment_day', e.target.value)} className="mt-1" placeholder="Ex: 1, 10, 15" />
-          </div>
-          <div>
-            <Label>Meses após competência</Label>
-            <Select value={String(form.payment_months_offset)} onValueChange={v => set('payment_months_offset', v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">0 (mês atual)</SelectItem>
-                <SelectItem value="1">1 mês (mês seguinte)</SelectItem>
-                <SelectItem value="2">2 meses</SelectItem>
-                <SelectItem value="3">3 meses</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
-
-      {/* Campos exclusivos de Plantão */}
-      {isPlantao && (
+      {showShiftFields && (
         <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Dia do pagamento</Label>
+              <Input type="number" min="1" max="31" value={form.payment_day} onChange={e => set('payment_day', e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Meses após competência</Label>
+              <Select value={String(form.payment_months_offset)} onValueChange={v => set('payment_months_offset', v)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0 (mês atual)</SelectItem>
+                  <SelectItem value="1">1 mês</SelectItem>
+                  <SelectItem value="2">2 meses</SelectItem>
+                  <SelectItem value="3">3 meses</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-1">Valores dos Plantões</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -126,30 +112,24 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
               <CurrencyInput value={form.valor_sn_fds} onChange={(value) => set('valor_sn_fds', value)} className="mt-1" />
             </div>
             <div>
-              <Label>Adicional Sobreaviso (R$)</Label>
+              <Label>Sobreaviso (R$)</Label>
               <CurrencyInput value={form.valor_sobreaviso} onChange={(value) => set('valor_sobreaviso', value)} className="mt-1" />
             </div>
           </div>
-
-          <div className="space-y-3 border border-border rounded-xl p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Tem Produtividade?</p>
-                <p className="text-xs text-muted-foreground">Recebe bônus de produtividade além do plantão</p>
-              </div>
-              <Switch checked={!!form.has_productivity} onCheckedChange={v => set('has_productivity', v)} />
-            </div>
-            {form.has_productivity && (
-              <div className="flex items-center justify-between pt-2 border-t border-border">
-                <div>
-                  <p className="text-sm font-medium">Recebe em data separada?</p>
-                  <p className="text-xs text-muted-foreground">PDT vence 15 dias após o plantão</p>
-                </div>
-                <Switch checked={!!form.productivity_separate_date} onCheckedChange={v => set('productivity_separate_date', v)} />
-              </div>
-            )}
-          </div>
         </>
+      )}
+
+      {showPdtFields && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Valor médio PDT</Label>
+            <CurrencyInput value={form.valor_medio_pdt} onChange={(value) => set('valor_medio_pdt', value)} className="mt-1" />
+          </div>
+          <div>
+            <Label>Atraso médio PDT (dias)</Label>
+            <Input type="number" min="0" value={form.atraso_medio_pdt} onChange={e => set('atraso_medio_pdt', e.target.value)} className="mt-1" />
+          </div>
+        </div>
       )}
 
       <div className="flex gap-2 pt-1">
@@ -164,7 +144,6 @@ export default function Hospitals() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [expanded, setExpanded] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -176,28 +155,21 @@ export default function Hospitals() {
       name: h.name || '',
       sigla: h.sigla || '',
       income_source_id: h.income_source_id || '',
-      remuneration_model: h.remuneration_model || 'plantao',
-      has_productivity: !!h.has_productivity,
-      productivity_separate_date: !!h.productivity_separate_date,
+      payment_model: resolveHospitalPaymentModel(h),
       payment_day: String(h.payment_day || 1),
       payment_months_offset: String(h.payment_months_offset || 1),
-      valor_sd_semana: String(h.valor_sd_semana || ''),
-      valor_sn_semana: String(h.valor_sn_semana || ''),
-      valor_sd_fds: String(h.valor_sd_fds || ''),
-      valor_sn_fds: String(h.valor_sn_fds || ''),
-      valor_sobreaviso: String(h.valor_sobreaviso || ''),
+      valor_medio_pdt: String(h.valor_medio_pdt || ''),
+      atraso_medio_pdt: String(h.atraso_medio_pdt || ''),
+      valor_sd_semana: String(h.valor_sd_semana ?? ''),
+      valor_sn_semana: String(h.valor_sn_semana ?? ''),
+      valor_sd_fds: String(h.valor_sd_fds ?? ''),
+      valor_sn_fds: String(h.valor_sn_fds ?? ''),
+      valor_sobreaviso: String(h.valor_sobreaviso ?? ''),
     });
   };
 
-  const { data: hospitals = [] } = useQuery({
-    queryKey: ['hospitals'],
-    queryFn: () => base44.entities.Hospital.list(),
-  });
-
-  const { data: sources = [] } = useQuery({
-    queryKey: ['income_sources'],
-    queryFn: () => base44.entities.IncomeSource.list(),
-  });
+  const { data: hospitals = [] } = useQuery({ queryKey: ['hospitals'], queryFn: () => base44.entities.Hospital.list() });
+  const { data: sources = [] } = useQuery({ queryKey: ['income_sources'], queryFn: () => base44.entities.IncomeSource.list() });
 
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.Hospital.create(data),
@@ -223,15 +195,23 @@ export default function Hospitals() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['hospitals'] }); toast.success('Removido'); },
   });
 
+  const parseNumberOrUndefined = (value) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  };
+
   const parseFormData = (f) => ({
     ...f,
     payment_day: parseInt(f.payment_day) || 1,
     payment_months_offset: parseInt(f.payment_months_offset) || 1,
-    valor_sd_semana: parseFloat(f.valor_sd_semana) || 0,
-    valor_sn_semana: parseFloat(f.valor_sn_semana) || 0,
-    valor_sd_fds: parseFloat(f.valor_sd_fds) || 0,
-    valor_sn_fds: parseFloat(f.valor_sn_fds) || 0,
-    valor_sobreaviso: parseFloat(f.valor_sobreaviso) || 0,
+    valor_medio_pdt: parseNumberOrUndefined(f.valor_medio_pdt),
+    atraso_medio_pdt: parseNumberOrUndefined(f.atraso_medio_pdt),
+    valor_sd_semana: parseNumberOrUndefined(f.valor_sd_semana),
+    valor_sn_semana: parseNumberOrUndefined(f.valor_sn_semana),
+    valor_sd_fds: parseNumberOrUndefined(f.valor_sd_fds),
+    valor_sn_fds: parseNumberOrUndefined(f.valor_sn_fds),
+    valor_sobreaviso: parseNumberOrUndefined(f.valor_sobreaviso),
   });
 
   const handleCreate = () => {
@@ -244,7 +224,6 @@ export default function Hospitals() {
     updateMutation.mutate({ id: editingId, data: parseFormData(editForm) });
   };
 
-  const pjSources = sources.filter(s => s.type === 'pj');
   const sortedHospitals = [...hospitals].sort((a, b) => (a.sigla || '').localeCompare(b.sigla || ''));
 
   return (
@@ -265,14 +244,7 @@ export default function Hospitals() {
             <CardTitle className="text-base">Novo Hospital</CardTitle>
           </CardHeader>
           <CardContent>
-            <HospitalForm
-              form={form}
-              set={set}
-              sources={sources}
-              onSave={handleCreate}
-              onCancel={() => setShowForm(false)}
-              saving={createMutation.isPending}
-            />
+            <HospitalForm form={form} set={set} sources={sources} onSave={handleCreate} onCancel={() => setShowForm(false)} saving={createMutation.isPending} />
           </CardContent>
         </Card>
       )}
@@ -283,9 +255,8 @@ export default function Hospitals() {
         )}
         {sortedHospitals.map(h => {
           const pj = sources.find(s => s.id === h.income_source_id);
-          const isExp = expanded === h.id;
           const isEditing = editingId === h.id;
-          const isProducao = h.remuneration_model === 'producao';
+          const paymentModel = resolveHospitalPaymentModel(h);
 
           return (
             <Card key={h.id} className="border-0 shadow-sm">
@@ -294,15 +265,12 @@ export default function Hospitals() {
                   <div className="flex items-center gap-2 flex-wrap flex-1">
                     <p className="font-semibold">{h.sigla}</p>
                     {pj && <Badge className="text-xs py-0 h-4 px-1.5 bg-amber-100 text-amber-700 border-0">{pj.name}</Badge>}
-                    <Badge className={`text-xs py-0 h-4 px-1.5 border-0 ${isProducao ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {isProducao ? 'Produção' : 'Plantão'}
+                    <Badge className="text-xs py-0 h-4 px-1.5 border-0 bg-blue-100 text-blue-700">
+                      {paymentModelLabels[paymentModel]}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <Button
-                      variant="ghost" size="icon" className="w-8 h-8"
-                      onClick={() => { if (isEditing) { setEditingId(null); } else { startEdit(h); } }}
-                    >
+                    <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => { if (isEditing) { setEditingId(null); } else { startEdit(h); } }}>
                       {isEditing ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
                     </Button>
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(h.id)}>
@@ -313,14 +281,7 @@ export default function Hospitals() {
 
                 {isEditing && (
                   <div className="mt-4 pt-4 border-t border-border">
-                    <HospitalForm
-                      form={editForm}
-                      set={setEdit}
-                      sources={sources}
-                      onSave={handleUpdate}
-                      onCancel={() => setEditingId(null)}
-                      saving={updateMutation.isPending}
-                    />
+                    <HospitalForm form={editForm} set={setEdit} sources={sources} onSave={handleUpdate} onCancel={() => setEditingId(null)} saving={updateMutation.isPending} />
                   </div>
                 )}
               </CardContent>
