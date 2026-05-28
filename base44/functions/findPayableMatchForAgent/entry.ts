@@ -40,8 +40,10 @@ const extractCompetencySort = (description) => {
 const formatBRL = (value) =>
   Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const getAmount = (kind, item) =>
-  kind === 'receivable' && item.net_amount ? Number(item.net_amount) : Number(item.amount);
+const getExpectedAmount = (item) => Number(item.amount || 0);
+
+const getReceivedAmount = (kind, item) =>
+  kind === 'receivable' && item.net_amount ? Number(item.net_amount) : Number(item.amount || 0);
 
 const scoreOpenItem = ({ item, amount, description, kind }) => {
   const data = item || {};
@@ -60,11 +62,21 @@ const scoreOpenItem = ({ item, amount, description, kind }) => {
 
   if (matchedTokensCount === 0) return 0;
 
-  const diff = Math.abs(getAmount(kind, data) - Number(amount));
-  if (diff <= 5.00) {
+  const receivedDiff = Math.abs(getReceivedAmount(kind, data) - Number(amount));
+  const expectedDiff = Math.abs(getExpectedAmount(data) - Number(amount));
+
+  if (receivedDiff <= 5.00) {
     score += 30;
-  } else if (diff <= 50.00) {
+  } else if (receivedDiff <= 50.00) {
     score += 10;
+  }
+
+  if (kind === 'receivable') {
+    if (expectedDiff <= 5.00) {
+      score += 8;
+    } else if (expectedDiff <= 50.00) {
+      score += 3;
+    }
   }
 
   return score;
@@ -72,7 +84,8 @@ const scoreOpenItem = ({ item, amount, description, kind }) => {
 
 const serializeMatch = (m) => ({
   ...m,
-  formatted_amount: formatBRL(getAmount(m.kind, m.item)),
+  formatted_amount: formatBRL(getReceivedAmount(m.kind, m.item)),
+  formatted_expected_amount: formatBRL(getExpectedAmount(m.item)),
 });
 
 Deno.serve(async (req) => {
