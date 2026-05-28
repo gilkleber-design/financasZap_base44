@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { CategorySelect } from '@/components/ui/category-select';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -19,6 +20,7 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
     due_date: payable?.due_date ? payable.due_date.split('T')[0] : '',
     competencia: payable?.competencia ? payable.competencia.split('T')[0] : '',
     category: payable?.category || '',
+    due_alert_enabled: payable?.due_alert_enabled === true,
     notes: payable?.notes || '',
   });
   const [saving, setSaving] = useState(false);
@@ -44,6 +46,7 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
         competencia,
         category: form.category,
         notes: form.notes || undefined,
+        due_alert_enabled: form.due_alert_enabled,
       });
     } else if (updateScope === 'all') {
       const allPayables = await base44.entities.Payable.list('-due_date', 500);
@@ -160,6 +163,14 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
               className="mt-1"
             />
             <p className="text-xs text-muted-foreground mt-1">Se não preenchido, usa a data de vencimento</p>
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-border p-3">
+            <div>
+              <Label>Alerta de vencimento</Label>
+              <p className="text-xs text-muted-foreground mt-1">Receber aviso no WhatsApp 1 dia antes e no dia.</p>
+            </div>
+            <Switch checked={form.due_alert_enabled} onCheckedChange={(value) => set('due_alert_enabled', value)} />
           </div>
 
           <div>

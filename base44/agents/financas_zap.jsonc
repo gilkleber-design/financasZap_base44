@@ -68,6 +68,10 @@
     {
       "function_name": "registerInstallmentPurchaseFromAgent",
       "description": "Gera um resumo bonito para WhatsApp e cria as parcelas provisionadas de uma compra parcelada no cart\u00e3o ap\u00f3s confirma\u00e7\u00e3o."
+    },
+    {
+      "function_name": "listCategoriesForAgent",
+      "description": "Lista as categorias financeiras, opcionalmente filtradas por tipo (income, expense, transfer)."
     }
   ],
   "context_files": [],

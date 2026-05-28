@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { CategorySelect } from '@/components/ui/category-select';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { toast } from 'sonner';
@@ -29,6 +30,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
     description: '', amount: '', due_date: getTodayString(), category: '', notes: '',
     origin_id: '', origin_type: '', payment_modality: 'manual', payment_date: '',
+    due_alert_enabled: false,
     // Parcelada
     installment_total_amount: '', installment_count: '', installment_number: '1',
     // Fixa
@@ -97,6 +99,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
         installment_count: form.installment_count ? parseInt(form.installment_count) : undefined,
         installment_number: form.installment_number ? parseInt(form.installment_number) : undefined,
         notes: form.notes || undefined,
+        due_alert_enabled: form.due_alert_enabled,
       });
 
       toast.success(expenseType === 'fixa' ? 'Despesa fixa salva.' : 'Despesa criada com sucesso.');
@@ -266,6 +269,14 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
               )}
             </div>
           )}
+
+          <div className="flex items-center justify-between rounded-xl border border-border p-3">
+            <div>
+              <Label>Alerta de vencimento</Label>
+              <p className="text-xs text-muted-foreground mt-1">Receber aviso no WhatsApp 1 dia antes e no dia.</p>
+            </div>
+            <Switch checked={form.due_alert_enabled} onCheckedChange={(value) => set('due_alert_enabled', value)} />
+          </div>
 
           {/* Observação */}
           <div>
