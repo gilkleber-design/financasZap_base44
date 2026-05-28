@@ -27,7 +27,7 @@ const emptyForm = {
 };
 
 function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
-  const paymentModel = form.payment_model || 'so_plantao';
+  const paymentModel = form.payment_model ?? '';
   const showShiftFields = paymentModel !== 'so_producao';
   const showPdtFields = paymentModel !== 'so_plantao';
   const pjSources = sources.filter(s => s.type === 'pj');
@@ -46,12 +46,12 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
       </div>
 
       <div>
-        <Label>Forma de pagamento</Label>
+        <Label>Modelo de remuneração</Label>
         <Select value={paymentModel} onValueChange={v => set('payment_model', v)}>
-          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o modelo" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="so_plantao">Só plantão</SelectItem>
-            <SelectItem value="plantao_producao">Plantão + produção (separado)</SelectItem>
+            <SelectItem value="plantao_producao">Plantão + produção</SelectItem>
             <SelectItem value="so_producao">Só produção</SelectItem>
           </SelectContent>
         </Select>
