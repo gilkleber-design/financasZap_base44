@@ -13,10 +13,15 @@ Deno.serve(async (req) => {
     const hospitals = await base44.entities.Hospital.list();
     const normalizedQuery = String(query || '').toLowerCase().trim();
 
-    const matches = hospitals.filter((hospital) =>
-      hospital.sigla?.toLowerCase() === normalizedQuery ||
-      hospital.name?.toLowerCase().includes(normalizedQuery)
-    );
+    const exactSiglaMatches = hospitals.filter((hospital) => hospital.sigla?.toLowerCase() === normalizedQuery);
+    const exactNameMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase() === normalizedQuery);
+    const partialNameMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase().includes(normalizedQuery));
+
+    const matches = exactSiglaMatches.length > 0
+      ? exactSiglaMatches
+      : exactNameMatches.length > 0
+        ? exactNameMatches
+        : partialNameMatches;
 
     const instruction =
       matches.length === 0

@@ -59,10 +59,13 @@ const findHospitalMatches = (hospitals, hospitalText) => {
   const normalizedHospitalText = normalizeHospitalText(hospitalText);
   if (!normalizedHospitalText) return [];
 
-  return hospitals.filter((hospital) =>
-    normalizeHospitalText(hospital.sigla) === normalizedHospitalText ||
-    normalizeHospitalText(hospital.name).includes(normalizedHospitalText)
-  );
+  const exactSiglaMatches = hospitals.filter((hospital) => normalizeHospitalText(hospital.sigla) === normalizedHospitalText);
+  if (exactSiglaMatches.length > 0) return exactSiglaMatches;
+
+  const exactNameMatches = hospitals.filter((hospital) => normalizeHospitalText(hospital.name) === normalizedHospitalText);
+  if (exactNameMatches.length > 0) return exactNameMatches;
+
+  return hospitals.filter((hospital) => normalizeHospitalText(hospital.name).includes(normalizedHospitalText));
 };
 
 Deno.serve(async (req) => {
