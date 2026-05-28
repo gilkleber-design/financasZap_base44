@@ -18,13 +18,12 @@ const CONFIG = {
     queryFn: () => base44.entities.Payable.list('-created_date', 1000),
     columns: [
       { key: 'description', label: 'Descrição' },
-      { key: 'amount', label: 'Valor' },
+      { key: 'amount', label: 'Valor Bruto', format: 'currency' },
       { key: 'status', label: 'Status', editable: true },
       { key: 'due_date', label: 'Vencimento' },
       { key: 'category', label: 'Categoria', editable: true },
       { key: 'origin_id', label: 'Origem', editable: true },
       { key: 'recurrence_id', label: 'Recorrência' },
-      { key: 'created_date', label: 'Criado em' },
     ],
   },
   receivables: {
@@ -34,13 +33,13 @@ const CONFIG = {
     queryFn: () => base44.entities.Receivable.list('-created_date', 1000),
     columns: [
       { key: 'description', label: 'Descrição' },
-      { key: 'amount', label: 'Valor Bruto' },
-      { key: 'net_amount', label: 'Valor Líquido' },
+      { key: 'amount', label: 'Valor Bruto', format: 'currency' },
+      { key: 'net_amount', label: 'Valor Líquido', format: 'currency' },
       { key: 'status', label: 'Status', editable: true },
       { key: 'due_date', label: 'Recebimento' },
+      { key: 'category', label: 'Categoria', editable: true },
       { key: 'income_source_id', label: 'Origem', editable: true },
       { key: 'account_id', label: 'Conta', editable: true },
-      { key: 'created_date', label: 'Criado em' },
     ],
   },
   transactions: {
@@ -50,8 +49,8 @@ const CONFIG = {
     queryFn: () => base44.entities.Transaction.list('-created_date', 1000),
     columns: [
       { key: 'description', label: 'Descrição' },
-      { key: 'amount', label: 'Valor Bruto' },
-      { key: 'net_amount', label: 'Valor Líquido' },
+      { key: 'amount', label: 'Valor Bruto', format: 'currency' },
+      { key: 'net_amount', label: 'Valor Líquido', format: 'currency' },
       { key: 'type', label: 'Tipo' },
       { key: 'status', label: 'Status', editable: true },
       { key: 'date', label: 'Data' },
@@ -60,7 +59,6 @@ const CONFIG = {
       { key: 'card_id', label: 'Origem Cartão', editable: true },
       { key: 'payable_id', label: 'Payable' },
       { key: 'receivable_id', label: 'Receivable' },
-      { key: 'created_date', label: 'Criado em' },
     ],
   },
 };
@@ -138,6 +136,17 @@ export default function DataReview() {
       const entityApi = base44.entities[currentConfig.entityName];
       const payload = { [column.key]: value };
 
+      if (column.key === 'category') {
+        payload.category = value;
+        const fullCategory = flatForSelect.find((item) => item.value === value);
+        if ('category_id' in row) {
+          const categoryRecord = fullCategory
+            ? (await base44.entities.Category.filter({ slug: fullCategory.value }))?.[0]
+            : null;
+          payload.category_id = categoryRecord?.id || null;
+        }
+      }
+
       if (activeType === 'payables' && column.key === 'origin_id') {
         const selectedOrigin = origins.find((origin) => origin.id === value);
         payload.origin_type = selectedOrigin?.type || null;
@@ -171,9 +180,16 @@ export default function DataReview() {
     },
   });
 
-  const getColumnOptions = (column) => {
+  const getColumnOptions = (column, row) => {
     if (column.key === 'category') {
-      return flatForSelect.map((item) => ({ value: item.value, label: item.label }));
+      const allowedTypes = activeType === 'receivables'
+        ? ['income']
+        : activeType === 'transactions'
+          ? [row?.type === 'income' ? 'income' : 'expense']
+          : ['expense', 'transfer'];
+      return flatForSelect
+        .filter((item) => allowedTypes.includes(item.type || 'expense'))
+        .map((item) => ({ value: item.value, label: item.label }));
     }
 
     if (column.key === 'origin_id') {
