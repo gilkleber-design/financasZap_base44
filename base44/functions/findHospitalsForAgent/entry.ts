@@ -44,6 +44,14 @@ Deno.serve(async (req) => {
         id: hospital.id,
         name: hospital.name,
         sigla: hospital.sigla,
+        remuneration_model: hospital.remuneration_model,
+        valores: {
+          valor_sd_semana: hospital.valor_sd_semana,
+          valor_sn_semana: hospital.valor_sn_semana,
+          valor_sd_fds: hospital.valor_sd_fds,
+          valor_sn_fds: hospital.valor_sn_fds,
+          valor_sobreaviso: hospital.valor_sobreaviso,
+        },
       })),
       instruction,
     });
