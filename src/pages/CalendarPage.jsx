@@ -136,6 +136,8 @@ export default function CalendarPage() {
       const shift = await base44.entities.Shift.create(shiftData);
       const { hospital, source, bruto, liquido, taxRate, date } = meta;
       const monthLabel = format(new Date(date + 'T12:00:00'), 'MMMM/yyyy', { locale: ptBR });
+      const categories = await base44.entities.Category.filter({ slug: 'plantoes' });
+      const plantaoCategory = categories?.[0] || null;
       const rec = await base44.entities.Receivable.create({
         description: `${hospital.sigla} — À Vista ${format(new Date(date + 'T12:00:00'), 'dd/MM/yyyy')}`,
         amount: bruto,
@@ -143,6 +145,8 @@ export default function CalendarPage() {
         due_date: date,
         competencia: format(startOfMonth(new Date(date + 'T12:00:00')), 'yyyy-MM-dd'),
         income_source_id: hospital.income_source_id || '',
+        category: 'plantoes',
+        category_id: plantaoCategory?.id,
         tax_rate: taxRate || undefined,
         status: 'pending',
         notes: `Plantão à vista`,
@@ -232,6 +236,8 @@ export default function CalendarPage() {
 
     // Gera Receivables usando exatamente o receivablePreview (já filtrado sem cancelados)
     for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt } of receivablePreview) {
+      const categories = await base44.entities.Category.filter({ slug: 'plantoes' });
+      const plantaoCategory = categories?.[0] || null;
       const rec = await createReceivableMutation.mutateAsync({
         description: label,
         amount: isPdt ? 0 : totalBruto,
@@ -239,6 +245,8 @@ export default function CalendarPage() {
         due_date: format(dueDate, 'yyyy-MM-dd'),
         competencia: format(startOfMonth(new Date(hshifts[0].date + 'T12:00:00')), 'yyyy-MM-dd'),
         income_source_id: hospital.income_source_id || source?.id || '',
+        category: 'plantoes',
+        category_id: plantaoCategory?.id,
         tax_rate: isPdt ? 0 : (taxRate || 0),
         status: 'pending',
         notes: isPdt

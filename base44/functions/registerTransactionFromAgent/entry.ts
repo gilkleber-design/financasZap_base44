@@ -25,10 +25,11 @@ Deno.serve(async (req) => {
         const actualAmount = Number(amount);
 
         // Resolver categoria: slug direto > category_id > herdado da conciliação
-        let resolvedCategory = category || undefined;
+        let resolvedCategory = category === 'plantoes_pj' ? 'plantoes' : (category || undefined);
+        let resolvedCategoryId = category_id || undefined;
 
-        if (!resolvedCategory && category_id) {
-            const cats = await base44.entities.Category.filter({ id: category_id });
+        if (!resolvedCategory && resolvedCategoryId) {
+            const cats = await base44.entities.Category.filter({ id: resolvedCategoryId });
             resolvedCategory = cats?.[0]?.slug || undefined;
         }
 
@@ -52,7 +53,10 @@ Deno.serve(async (req) => {
                 );
                 // Fallback: herda categoria do registro conciliado se ainda não resolvida
                 if (!resolvedCategory && conciliationRecord.category) {
-                    resolvedCategory = conciliationRecord.category;
+                    resolvedCategory = conciliationRecord.category === 'plantoes_pj' ? 'plantoes' : conciliationRecord.category;
+                }
+                if (!resolvedCategoryId && conciliationRecord.category_id) {
+                    resolvedCategoryId = conciliationRecord.category_id;
                 }
             }
         }
@@ -63,6 +67,7 @@ Deno.serve(async (req) => {
             net_amount: actualAmount,
             type: safeType,
             category: resolvedCategory,
+            category_id: resolvedCategoryId,
             date: date || new Date().toISOString().split('T')[0],
             source: 'whatsapp_text',
             account_id: isAccount ? origin_id : undefined,

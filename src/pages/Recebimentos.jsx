@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, ChevronLeft, ChevronRight, Download, Landmark } from 'lucide-react';
+import { Bell, Building2, CalendarClock, ChevronLeft, ChevronRight, Download, Landmark, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, subMonths, startOfMonth, endOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -9,6 +9,7 @@ import DashboardLogo from '@/components/dashboard/DashboardLogo';
 import ReceivablesPipelineCard from '@/components/dashboard/ReceivablesPipelineCard';
 import { getInitials, formatCurrency } from '@/components/dashboard/financaszapTheme';
 import { Button } from '@/components/ui/button';
+import ReceivableFormModal from '@/components/receivables/ReceivableFormModal';
 
 const RANGE_OPTIONS = [1, 3, 6, 12];
 
@@ -24,6 +25,7 @@ function getStoredRange() {
 export default function Recebimentos() {
   const [anchorMonth, setAnchorMonth] = useState(getStoredMonth);
   const [range, setRange] = useState(getStoredRange);
+  const [showReceivableForm, setShowReceivableForm] = useState(false);
   const now = new Date();
 
   useEffect(() => {
@@ -41,6 +43,7 @@ export default function Recebimentos() {
   const { data: receivables = [] } = useQuery({ queryKey: ['recebimentos-receivables'], queryFn: () => base44.entities.Receivable.list('-due_date', 1000) });
   const { data: hospitals = [] } = useQuery({ queryKey: ['recebimentos-hospitals'], queryFn: () => base44.entities.Hospital.list('name', 500) });
   const { data: incomeSources = [] } = useQuery({ queryKey: ['recebimentos-income-sources'], queryFn: () => base44.entities.IncomeSource.list('name', 500) });
+  const { data: categories = [] } = useQuery({ queryKey: ['recebimentos-categories'], queryFn: () => base44.entities.Category.list('name', 500) });
 
   const data = useMemo(() => {
     const todayKey = format(now, 'yyyy-MM-dd');
@@ -177,6 +180,10 @@ export default function Recebimentos() {
             <p className="text-sm text-muted-foreground">Visão líquida por período e por PJ.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setShowReceivableForm(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Novo recebível
+            </Button>
             <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1">
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAnchorMonth((current) => subMonths(current, 1))}>
                 <ChevronLeft className="h-4 w-4" />
@@ -271,6 +278,18 @@ export default function Recebimentos() {
             {data.pjGroups.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Nenhum recebimento encontrado no período.</p>}
           </div>
         </section>
+        {showReceivableForm && (
+          <ReceivableFormModal
+            incomeSources={incomeSources}
+            categories={categories}
+            onClose={() => setShowReceivableForm(false)}
+            onSaved={async () => {
+              setShowReceivableForm(false);
+              await base44.entities.Receivable.list('-due_date', 1);
+              window.location.reload();
+            }}
+          />
+        )}
       </div>
     </div>
   );

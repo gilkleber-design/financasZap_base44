@@ -24,6 +24,14 @@
       "format": "date",
       "description": "M\u00eas de compet\u00eancia (primeiro dia do m\u00eas de refer\u00eancia, ex: 2026-01-01)"
     },
+    "category": {
+      "type": "string",
+      "description": "Slug da categoria do receb\u00edvel"
+    },
+    "category_id": {
+      "type": "string",
+      "description": "ID da categoria"
+    },
     "income_source_id": {
       "type": "string",
       "description": "Fonte de renda relacionada"
