@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
 
         if (resolvedCategory) {
             const cats = await base44.entities.Category.filter({ slug: resolvedCategory });
-            resolvedCategoryRecord = cats?.[0] || null;
+            resolvedCategoryRecord = cats?.[0]?.data ? { id: cats[0].id, ...cats[0].data } : (cats?.[0] || null);
             if (!resolvedCategoryId) {
                 resolvedCategoryId = resolvedCategoryRecord?.id || undefined;
             }
@@ -40,9 +40,15 @@ Deno.serve(async (req) => {
             }
         }
 
+        if (!resolvedCategoryRecord && resolvedCategory === 'plantoes') {
+            const legacyCats = await base44.entities.Category.filter({ slug: 'plantoes_pj' });
+            resolvedCategoryRecord = legacyCats?.[0]?.data ? { id: legacyCats[0].id, ...legacyCats[0].data } : (legacyCats?.[0] || null);
+            resolvedCategoryId = resolvedCategoryId || resolvedCategoryRecord?.id || undefined;
+        }
+
         if (!resolvedCategory && resolvedCategoryId) {
             const cats = await base44.entities.Category.filter({ id: resolvedCategoryId });
-            resolvedCategoryRecord = cats?.[0] || null;
+            resolvedCategoryRecord = cats?.[0]?.data ? { id: cats[0].id, ...cats[0].data } : (cats?.[0] || null);
             resolvedCategory = resolvedCategoryRecord?.slug || undefined;
         }
 
@@ -73,12 +79,12 @@ Deno.serve(async (req) => {
                 }
                 if (!resolvedCategoryRecord && resolvedCategoryId) {
                     const cats = await base44.entities.Category.filter({ id: resolvedCategoryId });
-                    resolvedCategoryRecord = cats?.[0] || null;
+                    resolvedCategoryRecord = cats?.[0]?.data ? { id: cats[0].id, ...cats[0].data } : (cats?.[0] || null);
                     resolvedCategory = resolvedCategoryRecord?.slug || resolvedCategory;
                 }
                 if (!resolvedCategoryRecord && resolvedCategory) {
                     const cats = await base44.entities.Category.filter({ slug: resolvedCategory });
-                    resolvedCategoryRecord = cats?.[0] || null;
+                    resolvedCategoryRecord = cats?.[0]?.data ? { id: cats[0].id, ...cats[0].data } : (cats?.[0] || null);
                     resolvedCategoryId = resolvedCategoryId || resolvedCategoryRecord?.id || undefined;
                 }
             }
@@ -123,9 +129,12 @@ Deno.serve(async (req) => {
             }
         }
 
-        const categoryRecord = resolvedCategoryRecord || (resolvedCategory
+        const fetchedCategory = resolvedCategory
             ? (await base44.entities.Category.filter({ slug: resolvedCategory }))?.[0] || null
-            : null);
+            : null;
+        const categoryRecord = resolvedCategoryRecord || (fetchedCategory?.data
+            ? { id: fetchedCategory.id, ...fetchedCategory.data }
+            : fetchedCategory);
 
         const originList = isAccount
             ? await base44.entities.Account.filter({ id: origin_id })
