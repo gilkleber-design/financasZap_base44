@@ -280,7 +280,7 @@ export default function CalendarPage() {
     await Promise.all(updates);
 
     // Gera Receivables usando exatamente o receivablePreview (já filtrado sem cancelados)
-    for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt } of receivablePreview) {
+    for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt, isExtra, sourceId } of receivablePreview) {
       const categories = await base44.entities.Category.filter({ slug: 'plantoes' });
       const plantaoCategory = categories?.[0] || null;
       const rec = await createReceivableMutation.mutateAsync({
@@ -288,24 +288,28 @@ export default function CalendarPage() {
         amount: totalBruto,
         net_amount: total,
         due_date: format(dueDate, 'yyyy-MM-dd'),
-        competencia: format(startOfMonth(new Date(hshifts[0].date + 'T12:00:00')), 'yyyy-MM-dd'),
-        income_source_id: hospital.income_source_id || source?.id || '',
+        competencia: format(startOfMonth(hshifts?.length > 0 ? new Date(hshifts[0].date + 'T12:00:00') : currentMonth), 'yyyy-MM-dd'),
+        income_source_id: hospital?.income_source_id || source?.id || sourceId || '',
         hospital_id: hospital?.id,
         category: 'plantoes',
         category_id: plantaoCategory?.id,
         tax_rate: taxRate || 0,
         status: 'pending',
-        notes: isPdt
-          ? `PDT — valor estimado (${hshifts.length} plantão(s))`
-          : `Fechamento automático: ${hshifts.length} plantão(s)`,
+        notes: isExtra
+          ? `Receita extra adicionada no fechamento`
+          : isPdt
+          ? `PDT — valor estimado (${hshifts?.length || 0} plantão(s))`
+          : `Fechamento automático: ${hshifts?.length || 0} plantão(s)`,
       });
 
-      // Vincula receivable_id apenas nos plantões confirmados (done), não nos cancelados/passados
-      await Promise.all(
-        hshifts
-          .filter(s => statuses[s.id] === 'done')
-          .map(s => updateShiftMutation.mutateAsync({ id: s.id, data: { receivable_id: rec.id } }))
-      );
+      if (hshifts?.length > 0) {
+        // Vincula receivable_id apenas nos plantões confirmados (done), não nos cancelados/passados
+        await Promise.all(
+          hshifts
+            .filter(s => statuses[s.id] === 'done')
+            .map(s => updateShiftMutation.mutateAsync({ id: s.id, data: { receivable_id: rec.id } }))
+        );
+      }
     }
 
     await queryClient.invalidateQueries();
