@@ -99,8 +99,9 @@ export default function DashboardPage() {
     const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
       const hospitalMatchers = [hospital.sigla, hospital.name].filter(Boolean).map((value) => value.toLowerCase());
       const hospitalReceivables = receivables.filter((item) => {
-        if (hospital.income_source_id && item.income_source_id === hospital.income_source_id) return true;
-        if (item.income_source_id) return false;
+        // 1) Amarração direta por hospital_id (novos receivables)
+        if (item.hospital_id) return item.hospital_id === hospital.id;
+        // 2) Fallback para receivables antigos: casar por sigla/nome na descrição
         const description = String(item.description || '').toLowerCase();
         return hospitalMatchers.some((matcher) => description.includes(matcher));
       });

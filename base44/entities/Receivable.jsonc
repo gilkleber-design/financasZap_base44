@@ -36,6 +36,10 @@
       "type": "string",
       "description": "Fonte de renda relacionada"
     },
+    "hospital_id": {
+      "type": "string",
+      "description": "ID do hospital que originou este receb\u00edvel (quando aplic\u00e1vel)"
+    },
     "status": {
       "type": "string",
       "enum": [
