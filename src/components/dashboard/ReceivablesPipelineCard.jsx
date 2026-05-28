@@ -88,12 +88,13 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
 }
 
 function StatusPill({ status, amount, partialAmount }) {
+  const paidAmount = partialAmount ?? amount;
   const label = status === 'vencido'
     ? formatCurrency(amount, 2)
     : status === 'parcial'
-      ? `${formatCurrency(partialAmount, 2)}/${formatCurrency(amount, 2)}`
+      ? formatCurrency(paidAmount, 2)
       : status === 'recebido'
-        ? formatCurrency(amount, 2)
+        ? formatCurrency(paidAmount, 2)
         : status === 'futuro'
           ? formatCurrency(amount, 2)
           : formatCurrency(amount, 2);
