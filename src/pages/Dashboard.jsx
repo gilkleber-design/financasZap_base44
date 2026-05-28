@@ -123,7 +123,7 @@ export default function DashboardPage() {
       const monthsWithValue = new Set(hospitalReceivables.map((item) => (item.competencia || item.due_date || '').slice(0, 7)).filter(Boolean));
       const recurringScore = monthsWithValue.size >= 2 ? 0 : monthsWithValue.size === 1 ? 1 : 2;
 
-      return { hospitalId: hospital.id, hospitalName: hospital.name, cells, recurringScore };
+      return { hospitalId: hospital.id, hospitalName: hospital.sigla || hospital.name, cells, recurringScore };
     }).sort((a, b) => {
       if (a.recurringScore !== b.recurringScore) return a.recurringScore - b.recurringScore;
       return a.hospitalName.localeCompare(b.hospitalName, 'pt-BR');
