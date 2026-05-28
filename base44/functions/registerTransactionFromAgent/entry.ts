@@ -27,10 +27,23 @@ Deno.serve(async (req) => {
         // Resolver categoria: slug direto > category_id > herdado da conciliação
         let resolvedCategory = category === 'plantoes_pj' ? 'plantoes' : (category || undefined);
         let resolvedCategoryId = category_id || undefined;
+        let resolvedCategoryRecord = null;
+
+        if (resolvedCategory) {
+            const cats = await base44.entities.Category.filter({ slug: resolvedCategory });
+            resolvedCategoryRecord = cats?.[0] || null;
+            if (!resolvedCategoryId) {
+                resolvedCategoryId = resolvedCategoryRecord?.id || undefined;
+            }
+            if (!resolvedCategory && resolvedCategoryRecord?.slug) {
+                resolvedCategory = resolvedCategoryRecord.slug;
+            }
+        }
 
         if (!resolvedCategory && resolvedCategoryId) {
             const cats = await base44.entities.Category.filter({ id: resolvedCategoryId });
-            resolvedCategory = cats?.[0]?.slug || undefined;
+            resolvedCategoryRecord = cats?.[0] || null;
+            resolvedCategory = resolvedCategoryRecord?.slug || undefined;
         }
 
         // Buscar registro conciliado (necessário antes de txData)
@@ -57,6 +70,16 @@ Deno.serve(async (req) => {
                 }
                 if (!resolvedCategoryId && conciliationRecord.category_id) {
                     resolvedCategoryId = conciliationRecord.category_id;
+                }
+                if (!resolvedCategoryRecord && resolvedCategoryId) {
+                    const cats = await base44.entities.Category.filter({ id: resolvedCategoryId });
+                    resolvedCategoryRecord = cats?.[0] || null;
+                    resolvedCategory = resolvedCategoryRecord?.slug || resolvedCategory;
+                }
+                if (!resolvedCategoryRecord && resolvedCategory) {
+                    const cats = await base44.entities.Category.filter({ slug: resolvedCategory });
+                    resolvedCategoryRecord = cats?.[0] || null;
+                    resolvedCategoryId = resolvedCategoryId || resolvedCategoryRecord?.id || undefined;
                 }
             }
         }
@@ -100,10 +123,9 @@ Deno.serve(async (req) => {
             }
         }
 
-        const categories = resolvedCategory
-            ? await base44.entities.Category.filter({ slug: resolvedCategory })
-            : [];
-        const categoryRecord = categories?.[0] || null;
+        const categoryRecord = resolvedCategoryRecord || (resolvedCategory
+            ? (await base44.entities.Category.filter({ slug: resolvedCategory }))?.[0] || null
+            : null);
 
         const originList = isAccount
             ? await base44.entities.Account.filter({ id: origin_id })
