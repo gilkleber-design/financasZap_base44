@@ -96,7 +96,7 @@ export default function TransactionFormModal({ onClose, onSaved }) {
             </div>
             <div>
               <Label>Categoria</Label>
-              <CategorySelect value={form.category} onChange={(value) => set('category', value)} className="mt-1" />
+              <CategorySelect value={form.category} onChange={(value) => set('category', value)} allowedTypes={form.type === 'income' ? ['income'] : ['expense', 'transfer']} className="mt-1" />
             </div>
             <div>
               <Label>Valor Bruto (R$) *</Label>

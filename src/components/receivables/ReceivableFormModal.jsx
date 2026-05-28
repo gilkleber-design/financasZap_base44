@@ -76,7 +76,7 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
               <Select value={form.category_id} onValueChange={(value) => set('category_id', value)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar categoria" /></SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
+                  {categories.filter((category) => category.type === 'income').map((category) => (
                     <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
                   ))}
                 </SelectContent>

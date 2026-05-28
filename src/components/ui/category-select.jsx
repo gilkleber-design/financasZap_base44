@@ -35,7 +35,7 @@ export function CategorySelect({
   const typeFilter = Array.isArray(allowedTypes) && allowedTypes.length > 0 ? allowedTypes : null;
   const isAllowed = (category) => !typeFilter || typeFilter.includes(category.type || 'expense');
   const activeCategories = categories.filter(c => c.active !== false && isAllowed(c));
-  const visibleRoots = roots.filter(isAllowed);
+  const visibleRoots = roots.filter(c => c.active !== false && isAllowed(c));
   
   const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   
