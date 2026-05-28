@@ -90,6 +90,14 @@ Deno.serve(async (req) => {
             }
         }
 
+        if (!resolvedCategoryRecord && resolvedCategory === 'plantoes') {
+            const fallbackCats = await base44.entities.Category.filter({ slug: 'plantoes_pj' });
+            resolvedCategoryRecord = fallbackCats?.[0]?.data ? { id: fallbackCats[0].id, ...fallbackCats[0].data } : (fallbackCats?.[0] || null);
+        }
+
+        resolvedCategoryId = resolvedCategoryId || resolvedCategoryRecord?.id || undefined;
+        resolvedCategory = resolvedCategory || resolvedCategoryRecord?.slug || undefined;
+
         const txData = {
             description: conciliationRecord?.description || description,
             amount: actualAmount,
