@@ -386,18 +386,24 @@ function StatusCard({ title, icon, rows, transactions, variant }) {
     (a.hospital || '').localeCompare(b.hospital || '', 'pt-BR')
   );
 
+  const bgHeader = {
+    vencido:   'bg-[#FFF5F5]',
+    recebido:  'bg-[#F0FBF7]',
+    a_receber: 'bg-[#F0FAFA]',
+  };
+
   return (
     <div className="rounded-[14px] border border-border bg-card shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+      <div className={`flex items-center justify-between px-5 py-3 border-b border-border ${bgHeader[variant]}`}>
         <div className="flex items-center gap-2">
-          <span className={`text-xs font-bold uppercase tracking-[0.06em] ${headerColor[variant]}`}>
+          <span className={`text-sm font-bold uppercase tracking-[0.06em] ${headerColor[variant]}`}>
             {icon} {title}
           </span>
           <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${badgeCls[variant]}`}>
             {rows.length}
           </span>
         </div>
-        <span className="text-xs font-bold text-[#0D3B66]">{formatCurrency(total, 2)}</span>
+        <span className="text-sm font-bold text-[#0D3B66]">{formatCurrency(total, 2)}</span>
       </div>
       <div className="divide-y divide-[#F0F4F8]">
         {sortedRows.map(row => (
