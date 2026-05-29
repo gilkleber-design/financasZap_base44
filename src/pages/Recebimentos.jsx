@@ -30,90 +30,72 @@ export default function Recebimentos() {
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const { data: receivables = [] } = useQuery({ queryKey: ['recebimentos-receivables'], queryFn: () => base44.entities.Receivable.list('-due_date', 1000) });
+  const { data: transactions = [] } = useQuery({ queryKey: ['recebimentos-transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });
   const { data: hospitals = [] } = useQuery({ queryKey: ['recebimentos-hospitals'], queryFn: () => base44.entities.Hospital.list('name', 500) });
   const { data: incomeSources = [] } = useQuery({ queryKey: ['recebimentos-income-sources'], queryFn: () => base44.entities.IncomeSource.list('name', 500) });
   const { data: categories = [] } = useQuery({ queryKey: ['recebimentos-categories'], queryFn: () => base44.entities.Category.list('name', 500) });
 
   const data = useMemo(() => {
-    const todayKey = format(now, 'yyyy-MM-dd');
-    const filteredReceivables = receivables.filter((item) => monthKeys.includes((item.due_date || item.competencia || '').slice(0, 7)));
+    const currentMonthKey = format(anchorMonth, 'yyyy-MM');
+    const hoje = format(now, 'yyyy-MM-dd');
 
-    const pipelineRows = hospitals
-      .filter((hospital) => hospital.active !== false)
-      .map((hospital) => {
-        const hospitalMatchers = [hospital.sigla, hospital.name]
-          .filter(Boolean)
-          .map((value) => String(value).trim().toLowerCase());
-
-        const hospitalReceivables = filteredReceivables.filter((item) => {
-          // 1) Amarração direta por hospital_id (novos receivables)
-          if (item.hospital_id) return item.hospital_id === hospital.id;
-          // 2) Fallback para receivables antigos sem hospital_id: casar por sigla/nome na descrição
-          const description = String(item.description || '').trim().toLowerCase();
-          return hospitalMatchers.some((matcher) => description.includes(matcher));
-        });
-
-        const cells = months.map((date) => {
-          const key = format(date, 'yyyy-MM');
-          const receivableMatches = hospitalReceivables.filter((item) => (item.due_date || item.competencia || '').slice(0, 7) === key);
-          const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
-          const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
-          const hasReceived = receivableMatches.some((item) => item.status === 'received');
-          const hasPending = receivableMatches.some((item) => item.status !== 'received');
-          const hasOverdue = receivableMatches.some((item) => item.status === 'overdue' || (item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey));
-          let status = 'futuro';
-          if (hasReceived && !hasPending) status = 'recebido';
-          else if (hasReceived && hasPending) status = 'parcial';
-          else if (!amount) status = 'futuro';
-          else if (hasOverdue) status = 'vencido';
-          else status = 'a_receber';
-          return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
-        });
-
-        return {
-          hospitalId: hospital.id,
-          hospitalName: hospital.sigla || hospital.name,
-          cells,
-          hasMovements: cells.some((cell) => cell.amount > 0),
-        };
-      })
-      .sort((a, b) => Number(b.hasMovements) - Number(a.hasMovements) || a.hospitalName.localeCompare(b.hospitalName));
-
-    const pipelineTotals = months.map((month) => {
-      const key = format(month, 'yyyy-MM');
-      const columnCells = pipelineRows.map((row) => row.cells.find((cell) => cell.key.endsWith(key))).filter(Boolean);
+    const enrichedReceivables = receivables.map(r => {
+      const hosp = hospitals.find(h => h.id === r.hospital_id);
+      const src = incomeSources.find(s => s.id === r.income_source_id);
+      const net = Number(r.net_amount || r.amount || 0);
+      const gross = Number(r.amount || 0);
       return {
-        key,
-        amount: columnCells.reduce((sum, cell) => sum + Number(cell.amount || 0), 0),
-        hasOverdue: columnCells.some((cell) => cell.status === 'vencido'),
+        ...r,
+        hospital: r.description?.split('—')[0]?.trim() || hosp?.sigla || hosp?.name || src?.name || 'Outras',
+        pjName: src?.name || 'Outras',
+        net_amount: net,
+        gross_amount: gross,
+        tax_amount: gross - net,
       };
     });
 
-    const totalEsperado = receivables
-      .filter((item) => {
-        const dueDateKey = (item.due_date || item.competencia || '').slice(0, 7);
-        return monthKeys.includes(dueDateKey);
-      })
-      .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+    const expectedReceivables = enrichedReceivables.filter(item => {
+      const due = (item.due_date || '').slice(0, 7);
+      return due === currentMonthKey;
+    });
 
-    const totalWorked = filteredReceivables.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
-    const totalReceived = filteredReceivables.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
-    const overdueAmount = filteredReceivables.filter((item) => item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey).reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
-    const missingAmount = totalWorked - totalReceived;
+    const totalEsperado = expectedReceivables.reduce((sum, item) => sum + item.net_amount, 0);
 
-    const hospitalPerformance = pipelineRows.map((row) => {
-      const produced = row.cells.reduce((sum, cell) => sum + Number(cell.amount || 0), 0);
-      const received = row.cells.reduce((sum, cell) => sum + Number(cell.partialAmount || (cell.status === 'recebido' ? cell.amount : 0) || 0), 0);
-      return { name: row.hospitalName, rate: produced ? received / produced : 0 };
-    }).sort((a, b) => b.rate - a.rate);
+    const totalRecebido = enrichedReceivables.filter(item => {
+      if (!item.transaction_id) return false;
+      const tx = transactions.find(t => t.id === item.transaction_id);
+      return tx && (tx.date || '').slice(0, 7) === currentMonthKey;
+    }).reduce((sum, item) => sum + item.net_amount, 0);
 
+    const pctRecebido = totalEsperado > 0 ? ((totalRecebido / totalEsperado) * 100).toFixed(1) : '0.0';
+
+    const pendentes = expectedReceivables.filter(item => item.status !== 'received');
+    const totalPendente = pendentes.reduce((sum, item) => sum + item.net_amount, 0);
+    const overdueAmount = pendentes.filter(item => (item.due_date || '') < hoje).reduce((sum, item) => sum + item.net_amount, 0);
+
+    const hospitalStats = {};
+    expectedReceivables.forEach(r => {
+      const hName = r.hospital;
+      if (!hospitalStats[hName]) hospitalStats[hName] = { produced: 0, received: 0 };
+      hospitalStats[hName].produced += r.net_amount;
+      if (r.status === 'received') {
+        hospitalStats[hName].received += r.net_amount;
+      }
+    });
+    
+    const hospitalPerformance = Object.entries(hospitalStats).map(([name, stats]) => ({
+      name,
+      rate: stats.produced ? stats.received / stats.produced : 0
+    })).sort((a, b) => b.rate - a.rate);
+
+    const filteredReceivables = receivables.filter((item) => monthKeys.includes((item.due_date || item.competencia || '').slice(0, 7)));
     const pjGroups = incomeSources.map((source) => {
       const sourceReceivables = filteredReceivables.filter((item) => item.income_source_id === source.id);
       const rows = sourceReceivables.map((item) => {
         const gross = Number(item.amount || 0);
         const net = Number(item.net_amount || item.amount || 0);
         const tax = gross - net;
-        const overdue = item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey;
+        const overdue = item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < hoje;
         return {
           id: item.id,
           hospital: item.description?.split('—')[0]?.trim() || source.name,
@@ -140,17 +122,17 @@ export default function Recebimentos() {
     }).filter(Boolean);
 
     return {
+      currentMonthKey,
+      enrichedReceivables,
       totalEsperado,
-      totalWorked,
-      totalReceived,
-      missingAmount,
+      totalRecebido,
+      pctRecebido,
+      totalPendente,
       overdueAmount,
       bestPayer: hospitalPerformance[0],
-      pipelineRows,
-      pipelineTotals,
       pjGroups,
     };
-  }, [receivables, hospitals, incomeSources, months, monthKeys, now]);
+  }, [receivables, transactions, hospitals, incomeSources, anchorMonth, monthKeys, now]);
 
   const canGoNext = !isAfter(startOfMonth(addOneMonth(anchorMonth)), startOfMonth(now));
 
@@ -193,13 +175,18 @@ export default function Recebimentos() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Total esperado" value={formatCurrency(data.totalEsperado, 2)} sub="a receber no período" />
-          <KpiCard label="Recebido" value={formatCurrency(data.totalReceived, 2)} sub={`${data.totalEsperado ? ((data.totalReceived / data.totalEsperado) * 100).toFixed(1) : '0.0'}% do esperado`} />
-          <KpiCard label="Pendente" value={formatCurrency(data.missingAmount, 2)} sub={data.overdueAmount > 0 ? `${formatCurrency(data.overdueAmount, 2)} vencidos` : 'Tudo dentro do prazo'} valueClassName={data.overdueAmount > 0 ? 'text-[#C0392B]' : 'text-primary'} />
+          <KpiCard label="Total esperado" value={formatCurrency(data.totalEsperado, 2)} sub={`a vencer em ${format(anchorMonth, 'MMM', { locale: ptBR })}`} />
+          <KpiCard label="Recebido" value={formatCurrency(data.totalRecebido, 2)} sub={`pago em ${format(anchorMonth, 'MMM', { locale: ptBR })} · ${data.pctRecebido}%`} />
+          <KpiCard label="Pendente" value={formatCurrency(data.totalPendente, 2)} sub={data.overdueAmount > 0 ? `${formatCurrency(data.overdueAmount, 2)} vencidos` : 'Tudo dentro do prazo'} valueClassName={data.overdueAmount > 0 ? 'text-[#C0392B]' : 'text-primary'} />
           <KpiCard label="Melhor pagador" value={data.bestPayer?.name || '—'} sub={data.bestPayer?.rate === 1 ? 'Sempre em dia' : `${((data.bestPayer?.rate || 0) * 100).toFixed(1)}% recebido`} />
         </div>
 
-        <ReceivimentosPorStatus pjGroups={data.pjGroups} />
+        <ReceivimentosPorStatus 
+          receivables={data.enrichedReceivables} 
+          transactions={transactions} 
+          currentMonthKey={data.currentMonthKey} 
+          mesLabel={format(anchorMonth, 'MMMM', { locale: ptBR })}
+        />
 
         <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -308,20 +295,35 @@ function StatusBadge(props) {
   return <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-bold ${styles[status] || styles.a_receber}`}>{label}</span>;
 }
 
-function ReceivimentosPorStatus({ pjGroups }) {
-  // Achatar todos os rows de todos os grupos, mantendo referência da PJ
-  const allRows = pjGroups.flatMap(group =>
-    group.rows.map(row => ({
-      ...row,
-      pjName: group.name,
-    }))
-  );
+function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, mesLabel }) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  
+  const vencidos = receivables.filter(item => {
+    const due = (item.due_date || '').slice(0, 7);
+    return due === currentMonthKey
+      && item.status !== 'received'
+      && (item.due_date || '') < hoje;
+  });
 
-  const vencidos    = allRows.filter(r => r.status === 'vencido');
-  const aReceber    = allRows.filter(r => r.status === 'a_receber');
-  const recebidos   = allRows.filter(r => r.status === 'recebido');
+  const aReceber = receivables.filter(item => {
+    const due = (item.due_date || '').slice(0, 7);
+    return due === currentMonthKey
+      && item.status !== 'received'
+      && (item.due_date || '') >= hoje;
+  });
 
-  if (allRows.length === 0) {
+  const recebidos = receivables.filter(item => {
+    if (!item.transaction_id) return false;
+    const tx = transactions.find(t => t.id === item.transaction_id);
+    return tx && (tx.date || '').slice(0, 7) === currentMonthKey;
+  });
+
+  const somaVencidos  = vencidos.reduce((s, r) => s + Number(r.net_amount || r.amount || 0), 0);
+  const somaAReceber  = aReceber.reduce((s, r) => s + Number(r.net_amount || r.amount || 0), 0);
+  const somaRecebidos = recebidos.reduce((s, r) => s + Number(r.net_amount || r.amount || 0), 0);
+  const totalReal     = somaVencidos + somaAReceber + somaRecebidos;
+
+  if (vencidos.length === 0 && aReceber.length === 0 && recebidos.length === 0) {
     return (
       <div className="rounded-[14px] border border-border bg-card p-10 text-center shadow-sm">
         <p className="text-sm text-muted-foreground">Nenhum recebimento encontrado no período.</p>
@@ -331,110 +333,117 @@ function ReceivimentosPorStatus({ pjGroups }) {
 
   return (
     <div className="space-y-3">
-      {/* VENCIDOS */}
       {vencidos.length > 0 && (
-        <StatusSection
-          title="Vencido"
-          icon="⚠"
-          count={vencidos.length}
+        <StatusCard
+          title="Vencido" icon="⚠"
           rows={vencidos}
+          transactions={transactions}
           variant="vencido"
         />
       )}
-
-      {/* A RECEBER */}
+      {recebidos.length > 0 && (
+        <StatusCard
+          title="Recebido" icon="✓"
+          rows={recebidos}
+          transactions={transactions}
+          variant="recebido"
+        />
+      )}
       {aReceber.length > 0 && (
-        <StatusSection
-          title="A receber"
-          icon="📅"
-          count={aReceber.length}
+        <StatusCard
+          title="A receber" icon="📅"
           rows={aReceber}
+          transactions={transactions}
           variant="a_receber"
         />
       )}
 
-      {/* RECEBIDOS */}
-      {recebidos.length > 0 && (
-        <StatusSection
-          title="Recebido"
-          icon="✓"
-          count={recebidos.length}
-          rows={recebidos}
-          variant="recebido"
-        />
-      )}
+      <div className="border-t-2 border-border pt-3 flex justify-between items-baseline px-1">
+        <span className="text-sm text-muted-foreground">= Total esperado em {mesLabel}</span>
+        <span className="text-base font-semibold text-[#0D3B66]">{formatCurrency(totalReal, 2)}</span>
+      </div>
     </div>
   );
 }
 
-function StatusSection({ title, icon, count, rows, variant }) {
-  const headerStyles = {
+function StatusCard({ title, icon, rows, transactions, variant }) {
+  const headerColor = {
     vencido:   'text-[#C0392B]',
-    a_receber: 'text-[#0A7070]',
     recebido:  'text-[#0A6E50]',
+    a_receber: 'text-[#0A7070]',
   };
-
-  const badgeStyles = {
+  const badgeCls = {
     vencido:   'bg-[#FFECEC] text-[#C0392B]',
-    a_receber: 'bg-[#E0F5F5] text-[#0A7070]',
     recebido:  'bg-[#E6F9F0] text-[#0A6E50]',
+    a_receber: 'bg-[#E0F5F5] text-[#0A7070]',
   };
-
-  const totalLiquido = rows.reduce((sum, r) => sum + r.net, 0);
+  const total = rows.reduce((s, r) => s + Number(r.net_amount || r.amount || 0), 0);
 
   return (
     <div className="rounded-[14px] border border-border bg-card shadow-sm overflow-hidden">
-      {/* Header da seção */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <span className={`text-xs font-bold uppercase tracking-[0.06em] ${headerStyles[variant]}`}>
+          <span className={`text-xs font-bold uppercase tracking-[0.06em] ${headerColor[variant]}`}>
             {icon} {title}
           </span>
-          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${badgeStyles[variant]}`}>
-            {count}
+          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${badgeCls[variant]}`}>
+            {rows.length}
           </span>
         </div>
-        <span className="text-xs font-bold text-[#0D3B66]">
-          {formatCurrency(totalLiquido, 2)}
-        </span>
+        <span className="text-xs font-bold text-[#0D3B66]">{formatCurrency(total, 2)}</span>
       </div>
-
-      {/* Rows */}
       <div className="divide-y divide-[#F0F4F8]">
-        {rows.map((row) => (
-          <RecebimentoRow key={row.id} row={row} variant={variant} />
+        {rows.map(row => (
+          <StatusRow key={row.id} row={row} transactions={transactions} variant={variant} />
         ))}
       </div>
     </div>
   );
 }
 
-function RecebimentoRow({ row, variant }) {
+function StatusRow({ row, transactions, variant }) {
   const valueColor = {
     vencido:   'text-[#C0392B]',
-    a_receber: 'text-[#0D3B66]',
     recebido:  'text-[#0A6E50]',
+    a_receber: 'text-[#0A7070]',
   };
 
+  const tx = row.transaction_id
+    ? transactions.find(t => t.id === row.transaction_id)
+    : null;
+
   const dueDateLabel = row.due_date
-    ? format(new Date(`${row.due_date.slice(0, 10)}T12:00:00`), 'dd/MMM', { locale: ptBR })
-    : '—';
+    ? format(new Date(`${row.due_date.slice(0, 10)}T12:00:00`), "dd/MMM", { locale: ptBR })
+    : null;
+
+  const paidDateLabel = tx?.date
+    ? format(new Date(`${tx.date.slice(0, 10)}T12:00:00`), "dd/MMM", { locale: ptBR })
+    : null;
+
+  const competenciaLabel = row.competencia
+    ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), "MMM/yy", { locale: ptBR })
+    : null;
+
+  const detalhes = [
+    row.pjName,
+    competenciaLabel ? `comp. ${competenciaLabel}` : null,
+    dueDateLabel     ? `venc. ${dueDateLabel}`     : null,
+    paidDateLabel    ? `pago ${paidDateLabel}`      : null,
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className="flex items-center justify-between px-5 py-3 hover:bg-[#F8FAFC] transition-colors">
       <div className="flex flex-col gap-0.5 min-w-0">
         <span className="text-sm font-semibold text-[#0D3B66] truncate">{row.hospital}</span>
-        <span className="text-[10px] text-[#7B92A8]">
-          {row.pjName} · Venc: {dueDateLabel}
-        </span>
+        <span className="text-[10px] text-[#7B92A8]">{detalhes}</span>
       </div>
       <div className="flex flex-col items-end gap-0.5 ml-4 flex-shrink-0">
         <span className={`text-sm font-bold ${valueColor[variant]}`}>
-          {formatCurrency(row.net, 2)}
+          {formatCurrency(Number(row.net_amount || row.amount || 0), 2)}
         </span>
-        {row.tax > 0 && (
+        {Number(row.tax_amount || 0) > 0 && (
           <span className="text-[9px] text-[#7B92A8]">
-            bruto {formatCurrency(row.gross, 2)}
+            bruto {formatCurrency(Number(row.gross_amount || row.amount || 0), 2)}
           </span>
         )}
       </div>
