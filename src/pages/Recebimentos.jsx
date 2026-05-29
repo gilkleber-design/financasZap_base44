@@ -36,7 +36,7 @@ export default function Recebimentos() {
 
   const data = useMemo(() => {
     const todayKey = format(now, 'yyyy-MM-dd');
-    const filteredReceivables = receivables.filter((item) => monthKeys.includes((item.competencia || item.due_date || '').slice(0, 7)));
+    const filteredReceivables = receivables.filter((item) => monthKeys.includes((item.due_date || item.competencia || '').slice(0, 7)));
 
     const pipelineRows = hospitals
       .filter((hospital) => hospital.active !== false)
@@ -55,7 +55,7 @@ export default function Recebimentos() {
 
         const cells = months.map((date) => {
           const key = format(date, 'yyyy-MM');
-          const receivableMatches = hospitalReceivables.filter((item) => (item.competencia || item.due_date || '').slice(0, 7) === key);
+          const receivableMatches = hospitalReceivables.filter((item) => (item.due_date || item.competencia || '').slice(0, 7) === key);
           const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
           const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
           const hasReceived = receivableMatches.some((item) => item.status === 'received');
@@ -118,12 +118,13 @@ export default function Recebimentos() {
           id: item.id,
           hospital: item.description?.split('—')[0]?.trim() || source.name,
           competencia: item.competencia || item.due_date,
+          due_date: item.due_date || item.competencia,
           gross,
           tax,
           net,
           status: item.status === 'received' ? 'recebido' : overdue ? 'vencido' : 'a_receber',
         };
-      }).sort((a, b) => String(b.competencia || '').localeCompare(String(a.competencia || '')));
+      }).sort((a, b) => String(b.due_date || '').localeCompare(String(a.due_date || '')));
 
       if (!rows.length) return null;
 
@@ -415,8 +416,8 @@ function RecebimentoRow({ row, variant }) {
     recebido:  'text-[#0A6E50]',
   };
 
-  const competenciaLabel = row.competencia
-    ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), 'MMM/yy', { locale: ptBR })
+  const dueDateLabel = row.due_date
+    ? format(new Date(`${row.due_date.slice(0, 10)}T12:00:00`), 'dd/MMM', { locale: ptBR })
     : '—';
 
   return (
@@ -424,7 +425,7 @@ function RecebimentoRow({ row, variant }) {
       <div className="flex flex-col gap-0.5 min-w-0">
         <span className="text-sm font-semibold text-[#0D3B66] truncate">{row.hospital}</span>
         <span className="text-[10px] text-[#7B92A8]">
-          {row.pjName} · {competenciaLabel}
+          {row.pjName} · Venc: {dueDateLabel}
         </span>
       </div>
       <div className="flex flex-col items-end gap-0.5 ml-4 flex-shrink-0">
