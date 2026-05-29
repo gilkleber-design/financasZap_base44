@@ -360,8 +360,8 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
       )}
 
       {/* Linha + Total esperado */}
-      <div className="border-t-2 border-border pt-3 flex justify-between items-baseline px-1">
-        <span className="text-sm text-muted-foreground">= Total esperado em {mesLabel}</span>
+      <div className="border-t-2 border-border pt-3 flex justify-end items-baseline gap-1 px-1">
+        <span className="text-sm font-semibold text-foreground">TOTAL =</span>
         <span className="text-base font-semibold text-[#0D3B66]">{formatCurrency(totalReal, 2)}</span>
       </div>
     </div>
