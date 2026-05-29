@@ -6,35 +6,24 @@ import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import DashboardLogo from '@/components/dashboard/DashboardLogo';
-import ReceivablesPipelineCard from '@/components/dashboard/ReceivablesPipelineCard';
 import { getInitials, formatCurrency } from '@/components/dashboard/financaszapTheme';
 import { Button } from '@/components/ui/button';
 import ReceivableFormModal from '@/components/receivables/ReceivableFormModal';
-
-const RANGE_OPTIONS = [1, 3, 6, 12];
 
 function getStoredMonth() {
   const value = localStorage.getItem('receb_mes');
   return value ? new Date(`${value}-01T12:00:00`) : new Date();
 }
 
-function getStoredRange() {
-  return Number(localStorage.getItem('receb_intervalo') || 3);
-}
-
 export default function Recebimentos() {
   const [anchorMonth, setAnchorMonth] = useState(getStoredMonth);
-  const [range, setRange] = useState(getStoredRange);
   const [showReceivableForm, setShowReceivableForm] = useState(false);
   const now = new Date();
+  const range = 1;
 
   useEffect(() => {
     localStorage.setItem('receb_mes', format(anchorMonth, 'yyyy-MM'));
   }, [anchorMonth]);
-
-  useEffect(() => {
-    localStorage.setItem('receb_intervalo', String(range));
-  }, [range]);
 
   const months = useMemo(() => Array.from({ length: range }, (_, index) => subMonths(anchorMonth, range - 1 - index)), [anchorMonth, range]);
   const monthKeys = useMemo(() => months.map((date) => format(date, 'yyyy-MM')), [months]);
@@ -191,17 +180,6 @@ export default function Recebimentos() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex items-center gap-2">
-              {RANGE_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  onClick={() => setRange(option)}
-                  className={range === option ? 'rounded-md bg-[#0D3B66] px-3 py-1.5 text-xs font-bold text-white' : 'rounded-md border border-[#E8EDF2] bg-white px-3 py-1.5 text-xs font-bold text-[#7B92A8]'}
-                >
-                  {option}M
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -212,12 +190,7 @@ export default function Recebimentos() {
           <KpiCard label="Melhor pagador" value={data.bestPayer?.name || '—'} sub={data.bestPayer?.rate === 1 ? 'Sempre em dia' : `${((data.bestPayer?.rate || 0) * 100).toFixed(1)}% recebido`} />
         </div>
 
-        <ReceivablesPipelineCard
-          months={months.map((month) => ({ key: format(month, 'yyyy-MM'), label: format(month, 'MMM/yy', { locale: ptBR }).toUpperCase() }))}
-          rows={data.pipelineRows}
-          totals={data.pipelineTotals}
-          hasHospitals={hospitals.filter((hospital) => hospital.active !== false).length > 0}
-        />
+        <ReceivimentosPorStatus pjGroups={data.pjGroups} />
 
         <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -324,4 +297,138 @@ function StatusBadge(props) {
         : 'Prazo';
 
   return <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-bold ${styles[status] || styles.a_receber}`}>{label}</span>;
+}
+
+function ReceivimentosPorStatus({ pjGroups }) {
+  // Achatar todos os rows de todos os grupos, mantendo referência da PJ
+  const allRows = pjGroups.flatMap(group =>
+    group.rows.map(row => ({
+      ...row,
+      pjName: group.name,
+    }))
+  );
+
+  const vencidos    = allRows.filter(r => r.status === 'vencido');
+  const aReceber    = allRows.filter(r => r.status === 'a_receber');
+  const recebidos   = allRows.filter(r => r.status === 'recebido');
+
+  if (allRows.length === 0) {
+    return (
+      <div className="rounded-[14px] border border-border bg-card p-10 text-center shadow-sm">
+        <p className="text-sm text-muted-foreground">Nenhum recebimento encontrado no período.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* VENCIDOS */}
+      {vencidos.length > 0 && (
+        <StatusSection
+          title="Vencido"
+          icon="⚠"
+          count={vencidos.length}
+          rows={vencidos}
+          variant="vencido"
+        />
+      )}
+
+      {/* A RECEBER */}
+      {aReceber.length > 0 && (
+        <StatusSection
+          title="A receber"
+          icon="📅"
+          count={aReceber.length}
+          rows={aReceber}
+          variant="a_receber"
+        />
+      )}
+
+      {/* RECEBIDOS */}
+      {recebidos.length > 0 && (
+        <StatusSection
+          title="Recebido"
+          icon="✓"
+          count={recebidos.length}
+          rows={recebidos}
+          variant="recebido"
+        />
+      )}
+    </div>
+  );
+}
+
+function StatusSection({ title, icon, count, rows, variant }) {
+  const headerStyles = {
+    vencido:   'text-[#C0392B]',
+    a_receber: 'text-[#0A7070]',
+    recebido:  'text-[#0A6E50]',
+  };
+
+  const badgeStyles = {
+    vencido:   'bg-[#FFECEC] text-[#C0392B]',
+    a_receber: 'bg-[#E0F5F5] text-[#0A7070]',
+    recebido:  'bg-[#E6F9F0] text-[#0A6E50]',
+  };
+
+  const totalLiquido = rows.reduce((sum, r) => sum + r.net, 0);
+
+  return (
+    <div className="rounded-[14px] border border-border bg-card shadow-sm overflow-hidden">
+      {/* Header da seção */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-bold uppercase tracking-[0.06em] ${headerStyles[variant]}`}>
+            {icon} {title}
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${badgeStyles[variant]}`}>
+            {count}
+          </span>
+        </div>
+        <span className="text-xs font-bold text-[#0D3B66]">
+          {formatCurrency(totalLiquido, 2)}
+        </span>
+      </div>
+
+      {/* Rows */}
+      <div className="divide-y divide-[#F0F4F8]">
+        {rows.map((row) => (
+          <RecebimentoRow key={row.id} row={row} variant={variant} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecebimentoRow({ row, variant }) {
+  const valueColor = {
+    vencido:   'text-[#C0392B]',
+    a_receber: 'text-[#0D3B66]',
+    recebido:  'text-[#0A6E50]',
+  };
+
+  const competenciaLabel = row.competencia
+    ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), 'MMM/yy', { locale: ptBR })
+    : '—';
+
+  return (
+    <div className="flex items-center justify-between px-5 py-3 hover:bg-[#F8FAFC] transition-colors">
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span className="text-sm font-semibold text-[#0D3B66] truncate">{row.hospital}</span>
+        <span className="text-[10px] text-[#7B92A8]">
+          {row.pjName} · {competenciaLabel}
+        </span>
+      </div>
+      <div className="flex flex-col items-end gap-0.5 ml-4 flex-shrink-0">
+        <span className={`text-sm font-bold ${valueColor[variant]}`}>
+          {formatCurrency(row.net, 2)}
+        </span>
+        {row.tax > 0 && (
+          <span className="text-[9px] text-[#7B92A8]">
+            bruto {formatCurrency(row.gross, 2)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
