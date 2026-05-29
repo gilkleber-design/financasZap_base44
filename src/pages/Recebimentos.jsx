@@ -375,9 +375,9 @@ function StatusCard({ title, icon, rows, transactions, variant }) {
     a_receber: 'text-[#0A7070]',
   };
   const badgeCls = {
-    vencido:   'bg-[#FFECEC] text-[#C0392B]',
-    recebido:  'bg-[#E6F9F0] text-[#0A6E50]',
-    a_receber: 'bg-[#E0F5F5] text-[#0A7070]',
+    vencido:   'bg-[#FFD4D4] text-[#C0392B]',
+    recebido:  'bg-[#CCF3E3] text-[#0A6E50]',
+    a_receber: 'bg-[#B8E8E8] text-[#0A7070]',
   };
   const total = rows.reduce((s, r) => s + Number(r.net_amount || r.amount || 0), 0);
 
