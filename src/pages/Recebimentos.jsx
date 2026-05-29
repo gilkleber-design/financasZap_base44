@@ -228,7 +228,7 @@ export default function Recebimentos() {
                       {group.rows.map((row, index) => (
                         <tr key={row.id} className={index % 2 === 1 ? 'bg-[#FAFBFC]' : 'bg-white'}>
                           <td className="px-4 py-3 text-sm">{row.hospital}</td>
-                          <td className="px-4 py-3 text-sm">{row.competencia ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), 'MMM/yy', { locale: ptBR }) : '—'}</td>
+                          <td className="px-4 py-3 text-sm">{row.competencia ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), 'MMM/yy', { locale: ptBR }).toUpperCase() : '—'}</td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">{formatCurrency(row.gross, 2)}</td>
                           <td className="px-4 py-3 text-sm text-[#C0622A]">{formatCurrency(row.tax, 2)}</td>
                           <td className="px-4 py-3 text-sm font-semibold text-[#0D3B66]">{formatCurrency(row.net, 2)}</td>
