@@ -28,6 +28,10 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Payable not found' }, { status: 404 });
     }
 
+    if (invoicePayable.family_id !== (user.family_id || user.id) && user.role !== 'admin') {
+      return Response.json({ error: 'Forbidden: Payable belongs to another family' }, { status: 403 });
+    }
+
     if (!invoicePayable.is_card_invoice_payable) {
       return Response.json({ message: 'Not a card invoice payable, skipping' });
     }
