@@ -28,12 +28,20 @@ export default function DashboardPage() {
   const greeting = (hour >= 5 && hour < 12) ? 'bom dia' : (hour >= 12 && hour < 18) ? 'boa tarde' : 'boa noite';
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
-  const { data: transactions = [] } = useQuery({ queryKey: ['dashboard-transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });
-  const { data: payables = [] } = useQuery({ queryKey: ['dashboard-payables'], queryFn: () => base44.entities.Payable.list('-due_date', 1000) });
-  const { data: receivables = [] } = useQuery({ queryKey: ['dashboard-receivables'], queryFn: () => base44.entities.Receivable.list('-due_date', 1000) });
-  const { data: budgets = [] } = useQuery({ queryKey: ['dashboard-budgets'], queryFn: () => base44.entities.Budget.list('-year', 500) });
-  const { data: categories = [] } = useQuery({ queryKey: ['dashboard-categories'], queryFn: () => base44.entities.Category.list('name', 500) });
-  const { data: hospitals = [] } = useQuery({ queryKey: ['dashboard-hospitals'], queryFn: () => base44.entities.Hospital.list('name', 500) });
+  const { data: dashboardSource } = useQuery({
+    queryKey: ['dashboard-data', me?.family_id],
+    enabled: !!me,
+    queryFn: async () => {
+      const res = await base44.functions.invoke('getDashboardData', {});
+      return res.data;
+    },
+  });
+  const transactions = dashboardSource?.transactions || [];
+  const payables = dashboardSource?.payables || [];
+  const receivables = dashboardSource?.receivables || [];
+  const budgets = dashboardSource?.budgets || [];
+  const categories = dashboardSource?.categories || [];
+  const hospitals = dashboardSource?.hospitals || [];
 
   const dashboardData = useMemo(() => {
     const validTransactions = transactions.filter((item) => item.status !== 'ignored' && item.status !== 'diverged');

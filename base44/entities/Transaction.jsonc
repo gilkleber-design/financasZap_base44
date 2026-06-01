@@ -113,14 +113,10 @@
     "date"
   ],
   "rls": {
-    "create": true,
     "read": {
       "family_id": "{{user.family_id}}"
     },
-    "update": {
-      "family_id": "{{user.family_id}}"
-    },
-    "delete": {
+    "write": {
       "family_id": "{{user.family_id}}"
     }
   }
