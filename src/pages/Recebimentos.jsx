@@ -10,13 +10,8 @@ import { getInitials, formatCurrency } from '@/components/dashboard/financaszapT
 import { Button } from '@/components/ui/button';
 import ReceivableFormModal from '@/components/receivables/ReceivableFormModal';
 
-function getStoredMonth() {
-  const value = localStorage.getItem('receb_mes');
-  return value ? new Date(`${value}-01T12:00:00`) : new Date();
-}
-
 export default function Recebimentos() {
-  const [anchorMonth, setAnchorMonth] = useState(getStoredMonth);
+  const [anchorMonth, setAnchorMonth] = useState(new Date());
   const [showReceivableForm, setShowReceivableForm] = useState(false);
   const now = new Date();
   const range = 1;

@@ -250,10 +250,7 @@ export default function Payables() {
   const [editingPayable, setEditingPayable] = useState(null);
   const [editingRecurrence, setEditingRecurrence] = useState(null);
   const [deletingPayable, setDeletingPayable] = useState(null);
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const stored = localStorage.getItem('contas_mes');
-    return stored ? new Date(`${stored}-01T12:00:00`) : new Date();
-  });
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [paidSectionOpen, setPaidSectionOpen] = useState(false);
 
   const queryClient = useQueryClient();
