@@ -103,14 +103,20 @@ export const AuthProvider = ({ children }) => {
       const updates = {};
       const pendingInvite = localStorage.getItem('pending_family_invite');
       
-      if (pendingInvite) {
-         if (pendingInvite !== currentUser.family_id && pendingInvite !== currentUser.id) {
+      // Convite só é aplicado se o usuário ainda não pertence a uma família.
+      // Isso impede que alguém troque de família reusando um link de convite.
+      if (pendingInvite && !currentUser.family_id) {
+         if (pendingInvite !== currentUser.id) {
             updates.family_id = pendingInvite;
             needsUpdate = true;
          }
+      }
+      if (pendingInvite) {
          localStorage.removeItem('pending_family_invite');
-      } 
+      }
       
+      // Novo usuário sem convite válido => família própria isolada (family_id = próprio id).
+      // Nunca herda a família de outro usuário.
       if (!updates.family_id && !currentUser.family_id) {
          updates.family_id = currentUser.id;
          needsUpdate = true;

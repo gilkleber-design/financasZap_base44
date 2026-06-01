@@ -40,34 +40,13 @@
   "rls": {
     "create": true,
     "read": {
-      "$or": [
-        {
-          "family_id": "{{user.family_id}}"
-        },
-        {
-          "created_by_id": "{{user.id}}"
-        }
-      ]
+      "family_id": "{{user.family_id}}"
     },
     "update": {
-      "$or": [
-        {
-          "family_id": "{{user.family_id}}"
-        },
-        {
-          "created_by_id": "{{user.id}}"
-        }
-      ]
+      "family_id": "{{user.family_id}}"
     },
     "delete": {
-      "$or": [
-        {
-          "family_id": "{{user.family_id}}"
-        },
-        {
-          "created_by_id": "{{user.id}}"
-        }
-      ]
+      "family_id": "{{user.family_id}}"
     }
   }
 }
