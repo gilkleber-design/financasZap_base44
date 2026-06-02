@@ -39,15 +39,27 @@ const fmt = (v) =>
     currency: 'BRL',
   }).format(v || 0);
 
-function RecurrencesTab({ onEdit }) {
+function ManageAccountsTab({ onEditRecurrence, onEditPayable, onDeletePayable }) {
   const [showForm, setShowForm] = useState(false);
   const [deletingRecurrence, setDeletingRecurrence] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const queryClient = useQueryClient();
 
-  const { data: recurrences = [], isLoading } = useQuery({
+  const { data: recurrences = [], isLoading: loadingRecurrences } = useQuery({
     queryKey: ['recurrences'],
     queryFn: () => base44.entities.Recurrence.list('-created_date', 100),
   });
+
+  const { data: allPayables = [], isLoading: loadingPayables } = useQuery({
+    queryKey: ['all-payables-manage'],
+    queryFn: () => base44.entities.Payable.list('-due_date', 500),
+  });
+
+  const isLoading = loadingRecurrences || loadingPayables;
+
+  const filteredPayables = allPayables.filter(p => 
+    !searchTerm || p.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const deleteMutation = useMutation({
     mutationFn: async (recurrence) => {
@@ -87,23 +99,35 @@ function RecurrencesTab({ onEdit }) {
 
   return (
     <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-      <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
-        <p className="text-sm text-slate-500 font-bold uppercase ml-2">
-          {recurrences.filter((r) => r.active !== false).length} Contas Fixas Ativas
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-2 flex-1">
+          <p className="text-sm text-slate-500 font-bold uppercase ml-2 whitespace-nowrap">
+            {filteredPayables.length} Contas
+          </p>
+          <input
+            type="text"
+            placeholder="Buscar contas..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="flex-1 h-9 rounded-md border border-slate-200 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+        </div>
 
         <Button
           size="sm"
           onClick={() => setShowForm(true)}
-          className="font-bold bg-primary"
+          className="font-bold bg-primary whitespace-nowrap"
         >
-          <Plus className="w-4 h-4 mr-1" /> NOVA CONTA FIXA
+          <Plus className="w-4 h-4 mr-1" /> NOVA CONTA
         </Button>
       </div>
 
-      <Card className="border-0 shadow-sm font-sora bg-white">
-        <CardContent className="p-0">
-          <div className="divide-y divide-slate-100">
+      {recurrences.length > 0 && !searchTerm && (
+        <div className="mb-6">
+          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 pl-2">Matrizes (Contas Fixas Base)</h2>
+          <Card className="border-0 shadow-sm font-sora bg-white">
+            <CardContent className="p-0">
+              <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
             {isLoading && (
               <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
                 Carregando fixas...
@@ -161,7 +185,7 @@ function RecurrencesTab({ onEdit }) {
                       variant="ghost"
                       size="icon"
                       className="h-9 w-9 text-slate-400 hover:text-primary"
-                      onClick={() => onEdit(r)}
+                      onClick={() => onEditRecurrence(r)}
                     >
                       <Edit2 className="w-4 h-4" />
                     </Button>
@@ -198,6 +222,98 @@ function RecurrencesTab({ onEdit }) {
           </div>
         </CardContent>
       </Card>
+      </div>
+      )}
+
+      <div>
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 pl-2">Todas as Contas (Lançamentos / Parcelas)</h2>
+        <Card className="border-0 shadow-sm font-sora bg-white">
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+              {isLoading && (
+                <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
+                  Carregando contas...
+                </p>
+              )}
+
+              {!isLoading && filteredPayables.length === 0 && (
+                <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
+                  Nenhuma conta encontrada
+                </p>
+              )}
+
+              {!isLoading &&
+                filteredPayables.map((p) => {
+                  const isPaid = p.status === 'paid' || p.status === 'provisioned';
+                  return (
+                  <div
+                    key={p.id}
+                    className={`flex items-center gap-4 px-5 py-4 transition-colors ${
+                      isPaid
+                        ? 'opacity-40 bg-slate-50/50'
+                        : 'hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div
+                      className={`w-1.5 h-11 rounded-full flex-shrink-0 ${
+                        isPaid ? 'bg-slate-300' : 'bg-amber-400'
+                      }`}
+                    />
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                        {p.description}
+                        {p.installment_count > 1 && (
+                          <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold">
+                            {p.installment_number}/{p.installment_count}
+                          </span>
+                        )}
+                      </p>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
+                        VENCIMENTO: {format(new Date(p.due_date), 'dd/MM/yyyy')}
+                      </span>
+                    </div>
+
+                    <div className="text-right flex-shrink-0 mr-4">
+                      <p className="text-sm font-black text-slate-900">
+                        {fmt(p.amount)}
+                      </p>
+                      <span
+                        className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          isPaid
+                            ? 'bg-slate-100 text-slate-500'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {p.status === 'paid' ? 'PAGO' : p.status === 'provisioned' ? 'NO CARTÃO' : 'PENDENTE'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-slate-400 hover:text-primary"
+                        onClick={() => onEditPayable(p)}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-slate-300 hover:text-red-500"
+                        onClick={() => onDeletePayable(p)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )})}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <AlertDialog
         open={!!deletingRecurrence}
@@ -495,7 +611,7 @@ export default function Payables() {
               <ChevronLeft className="w-4 h-4 mr-2" />
             )}
             {viewMode === 'mensal'
-              ? 'GERENCIAR CONTAS FIXAS'
+              ? 'GERENCIAR CONTAS'
               : 'VOLTAR PARA MESES'}
           </Button>
 
@@ -511,7 +627,11 @@ export default function Payables() {
       </div>
 
       {viewMode === 'gerenciar_fixas' ? (
-        <RecurrencesTab onEdit={(r) => setEditingRecurrence(r)} />
+        <ManageAccountsTab
+          onEditRecurrence={(r) => setEditingRecurrence(r)}
+          onEditPayable={(p) => setEditingPayable(p)}
+          onDeletePayable={(p) => setDeletingPayable(p)}
+        />
       ) : (
         <>
           <div className="hidden md:flex items-center justify-between border-b border-border bg-card px-6 py-3 -mx-6 -mt-6 mb-3">
