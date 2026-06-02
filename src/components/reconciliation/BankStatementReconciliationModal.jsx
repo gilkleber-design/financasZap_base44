@@ -291,13 +291,13 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
   const { data: receivables = [] } = useQuery({
     queryKey: ['receivables'],
-    queryFn: () => base44.entities.Receivable.list('', 1000),
+    queryFn: () => base44.entities.Receivable.list('-created_date', 500),
     enabled: open,
   });
 
   const { data: hospitals = [] } = useQuery({
     queryKey: ['hospitals'],
-    queryFn: () => base44.entities.Hospital.list('', 500),
+    queryFn: () => base44.entities.Hospital.list('-created_date', 500),
     enabled: open,
   });
 
