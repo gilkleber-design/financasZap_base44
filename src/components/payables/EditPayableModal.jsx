@@ -111,11 +111,14 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Editar Conta a Pagar</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <div className="px-6 py-4 border-b shrink-0">
+          <DialogHeader>
+            <DialogTitle>Editar Conta a Pagar</DialogTitle>
+          </DialogHeader>
+        </div>
+        
+        <div className="space-y-4 p-6 overflow-y-auto flex-1 min-w-0">
           <div>
             <Label>Descrição *</Label>
             <Input
@@ -192,35 +195,37 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           </div>
         </div>
 
-        <div className="flex gap-2 pt-2">
-          <Button variant="outline" onClick={onClose} className="flex-1">
-            Cancelar
-          </Button>
-          <Button onClick={() => setUpdateScope('this')} disabled={saving} className="flex-1">
-            Salvar
-          </Button>
-        </div>
+        <div className="flex flex-col gap-3 px-6 py-4 border-t shrink-0 bg-slate-50 mt-auto">
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} className="flex-1">
+              Cancelar
+            </Button>
+            <Button onClick={() => setUpdateScope('this')} disabled={saving} className="flex-1">
+              Salvar
+            </Button>
+          </div>
 
-        <div className="text-xs text-muted-foreground pt-2 space-y-1">
-          <p className="font-medium">Outras opções:</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-left text-xs h-auto py-1"
-            onClick={() => setUpdateScope('forward')}
-            disabled={saving}
-          >
-            Atualizar este e futuros
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-left text-xs h-auto py-1"
-            onClick={() => setUpdateScope('all')}
-            disabled={saving}
-          >
-            Atualizar todas as parcelas
-          </Button>
+          <div className="text-xs text-muted-foreground space-y-1 border-t border-slate-200 pt-3 mt-1">
+            <p className="font-medium mb-2">Outras opções:</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start text-left text-xs h-auto py-1.5 text-slate-600 hover:text-slate-900"
+              onClick={() => setUpdateScope('forward')}
+              disabled={saving}
+            >
+              Atualizar este e futuros
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start text-left text-xs h-auto py-1.5 text-slate-600 hover:text-slate-900"
+              onClick={() => setUpdateScope('all')}
+              disabled={saving}
+            >
+              Atualizar todas as parcelas
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

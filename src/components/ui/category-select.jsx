@@ -76,13 +76,16 @@ export function CategorySelect({
   return (
     <>
       <Select value={selectValue} onValueChange={emitChange} disabled={isLoading}>
-        <SelectTrigger className={className}>
-          <SelectValue placeholder={placeholder} />
-          {selectedCategory && (
-            <Badge className={`ml-2 text-xs border-0 ${CATEGORY_COLORS[selectedCategory.slug] || CATEGORY_COLORS.outros}`}>
-              {selectedCategory.name}
-            </Badge>
-          )}
+        <SelectTrigger className={`min-w-0 ${className}`}>
+          <div className="flex items-center gap-2 overflow-hidden flex-1">
+            <SelectValue placeholder={placeholder}>
+              {selectedCategory && (
+                <Badge className={`truncate text-xs border-0 ${CATEGORY_COLORS[selectedCategory.slug] || CATEGORY_COLORS.outros}`}>
+                  {selectedCategory.name}
+                </Badge>
+              )}
+            </SelectValue>
+          </div>
         </SelectTrigger>
         <SelectContent>
           {allowNone && <SelectItem value="_none">Nenhuma</SelectItem>}
