@@ -303,14 +303,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     };
   }, [payables, receivables, transactions, selectedAccountId, showOtherAccounts]);
 
-  const toggleCandidate = (rowId, candidate) => {
+  const toggleCandidate = (row, candidate) => {
     setManualMatches(prev => {
-      const current = prev[rowId] || [];
+      const current = prev[row.id] !== undefined ? prev[row.id] : (row.selected || []);
       const exists = current.find(c => c.id === candidate.id);
       if (exists) {
-        return { ...prev, [rowId]: current.filter(c => c.id !== candidate.id) };
+        return { ...prev, [row.id]: current.filter(c => c.id !== candidate.id) };
       } else {
-        return { ...prev, [rowId]: [...current, candidate] };
+        return { ...prev, [row.id]: [...current, candidate] };
       }
     });
   };
@@ -319,6 +319,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     if (!selectedAccountId) return [];
     
     const poolReconciled = [...reconciledTransactions];
+    const poolCandidates = [...candidates];
 
     return statementRows.map((row) => {
       if (ignoredRows[row.id]) return { ...row, status: 'to_ignore' };
@@ -333,12 +334,53 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       if (row.isDraftResolved) return { ...row, status: 'draft_ready' };
 
-      // Se há matches manuais selecionados
-      if (manualMatches[row.id] && manualMatches[row.id].length > 0) {
+      // Se o usuário interagiu manualmente (adicionou ou removeu matches)
+      if (manualMatches[row.id] !== undefined) {
         const selected = manualMatches[row.id];
-        const sum = selected.reduce((acc, c) => acc + (c.amount || 0), 0);
-        const isReady = toCents(sum) === toCents(row.amount);
-        return { ...row, status: isReady ? 'manual_match_ready' : 'manual_match_pending', selected, sum };
+        if (selected.length > 0) {
+          const sum = selected.reduce((acc, c) => acc + (c.amount || 0), 0);
+          const isReady = toCents(sum) === toCents(row.amount);
+          return { ...row, status: isReady ? 'manual_match_ready' : 'manual_match_pending', selected, sum };
+        }
+        return { ...row, status: 'orphan' };
+      }
+
+      // Tenta Auto-Match para contas pendentes
+      const validCandidates = poolCandidates.filter(c => {
+        const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
+        const isCorrectType = row.type === 'income' 
+          ? ['receivable', 'income', 'transfer'].includes(cType)
+          : ['payable', 'expense', 'transfer'].includes(cType);
+          
+        return isCorrectType && matchesBankAmount(c, row.amount);
+      });
+
+      let autoMatchIdx = -1;
+      if (validCandidates.length === 1) {
+        // Apenas um candidato com valor exato (valor é um sinal forte)
+        autoMatchIdx = poolCandidates.findIndex(c => c.id === validCandidates[0].id);
+      } else if (validCandidates.length > 1) {
+        // Mais de um com mesmo valor, escolhe o de data mais próxima (limite 45 dias)
+        let closest = null;
+        let minDiff = Infinity;
+        validCandidates.forEach(c => {
+           const cDate = candidateDate(c);
+           if (!cDate || !row.date) return;
+           const diff = Math.abs(differenceInCalendarDays(parseISO(String(cDate).substring(0, 10)), parseISO(String(row.date).substring(0, 10))));
+           if (diff < minDiff) {
+             minDiff = diff;
+             closest = c;
+           }
+        });
+        if (closest && minDiff <= 45) {
+           autoMatchIdx = poolCandidates.findIndex(c => c.id === closest.id);
+        }
+      }
+
+      if (autoMatchIdx !== -1) {
+         const match = poolCandidates[autoMatchIdx];
+         poolCandidates.splice(autoMatchIdx, 1); // Consome para não duplicar
+         return { ...row, status: 'manual_match_ready', selected: [match], sum: match.amount, isAutoMatch: true };
       }
 
       return { ...row, status: 'orphan' };
@@ -636,7 +678,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                         }).map(c => {
                                             const isSelected = (row.selected || []).find(s => s.id === c.id);
                                             return (
-                                              <CommandItem key={c.id} onSelect={() => toggleCandidate(row.id, c)}>
+                                              <CommandItem key={c.id} onSelect={() => toggleCandidate(row, c)}>
                                                   <div className="flex items-center gap-2">
                                                     <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
                                                       {isSelected && <Check className="w-3 h-3 text-white" />}
