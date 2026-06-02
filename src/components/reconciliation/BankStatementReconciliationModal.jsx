@@ -236,6 +236,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [hideProcessed, setHideProcessed] = useState(false);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [editingOrphan, setEditingOrphan] = useState(null);
+  const [editingDifference, setEditingDifference] = useState(null);
   
   // Novos Estados (Motor e Segurança)
   const [recurrenceType, setRecurrenceType] = useState('single');
@@ -466,7 +467,20 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         else if (row.status === 'manual_match_ready') {
           // Para cada item selecionado que compõe o valor do extrato, criamos/atualizamos a transação real.
           for (const match of row.selected) {
-            if (match.kind === 'transaction') {
+            if (match._isDifference) {
+              await base44.entities.Transaction.create({
+                description: match.description,
+                amount: match.amount,
+                type: match.type,
+                category: match.category,
+                date: row.date,
+                source: 'manual',
+                reconciled: true,
+                status: 'conciliated',
+                notes: 'Criado para cobrir diferença na conciliação',
+                account_id: selectedAccountId,
+              });
+            } else if (match.kind === 'transaction') {
               await base44.entities.Transaction.update(match.id, {
                 reconciled: true,
                 status: 'conciliated',
@@ -611,6 +625,35 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     setEditingOrphan(null);
   };
 
+  const handleSaveDifference = (e) => {
+    e.preventDefault();
+    if (!editingDifference) return;
+
+    const formData = new FormData(e.currentTarget);
+    const category = String(formData.get('category') || '');
+    const description = String(formData.get('description') || '');
+    const differenceAmount = Math.abs(editingDifference.amount - editingDifference.sum);
+
+    const fakeMatch = {
+      id: `diff-${Date.now()}`,
+      kind: 'transaction',
+      type: editingDifference.type,
+      description,
+      amount: differenceAmount,
+      net_amount: differenceAmount,
+      category,
+      date: editingDifference.date,
+      _isDifference: true,
+    };
+
+    setManualMatches(prev => {
+      const current = prev[editingDifference.id] !== undefined ? prev[editingDifference.id] : (editingDifference.selected || []);
+      return { ...prev, [editingDifference.id]: [...current, fakeMatch] };
+    });
+    
+    setEditingDifference(null);
+  };
+
   const isLoading = loadingTransactions || loadingPayables || loadingReceivables || loadingAccounts || parsingPdf;
   
   const displayRows = hideProcessed ? rowsWithState.filter(r => r.status !== 'processed') : rowsWithState;
@@ -674,7 +717,13 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
               {(row.status === 'orphan' || row.status === 'draft_ready' || row.status.startsWith('manual_match')) && (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => { setEditingOrphan(row); setRecurrenceType(row.recurrence || 'single'); }} className="text-blue-600 hover:text-blue-700" title="Criar lançamento avulso para cobrir diferença">
+                    <Button size="sm" variant="outline" onClick={() => { 
+                      if (row.status === 'manual_match_pending') {
+                        setEditingDifference(row);
+                      } else {
+                        setEditingOrphan(row); setRecurrenceType(row.recurrence || 'single'); 
+                      }
+                    }} className="text-blue-600 hover:text-blue-700" title="Criar lançamento avulso para cobrir diferença">
                         {row.status === 'draft_ready' ? <Pencil className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
                     </Button>
                     <Popover>
@@ -848,6 +897,62 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para Adicionar Diferença */}
+      <Dialog open={!!editingDifference} onOpenChange={(isOpen) => !isOpen && setEditingDifference(null)}>
+        <DialogContent className="sm:max-w-[425px] font-sora">
+          <DialogHeader>
+            <DialogTitle>Lançar Diferença</DialogTitle>
+            <DialogDescription>
+              Crie um lançamento apenas para o valor divergente, para fechar a conta do extrato.
+            </DialogDescription>
+          </DialogHeader>
+          {editingDifference && (
+            <form onSubmit={handleSaveDifference} className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Data</label>
+                  <Input disabled value={format(parseISO(editingDifference.date), 'dd/MM/yyyy')} className="bg-slate-50 font-medium" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Valor da Diferença</label>
+                  <Input disabled value={formatCurrency(Math.abs(editingDifference.amount - editingDifference.sum))} className="bg-slate-50 font-black text-right text-amber-600" />
+                </div>
+              </div>
+              
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Descrição da Diferença</label>
+                <Input name="description" defaultValue={`Diferença: ${editingDifference.description}`} autoFocus className="font-medium" required />
+              </div>
+              
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
+                <select 
+                  name="category" 
+                  defaultValue="" 
+                  className="flex h-10 w-full rounded-md border border-input bg-slate-50 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-medium" 
+                  required
+                >
+                  <option value="" disabled>Selecione uma categoria...</option>
+                  {dbCategories
+                    .filter(c => c.active !== false && c.type === editingDifference.type)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(cat => (
+                      <option key={cat.slug} value={cat.slug}>
+                        {cat.name}
+                      </option>
+                  ))}
+                </select>
+              </div>
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" onClick={() => setEditingDifference(null)}>Cancelar</Button>
+                <Button type="submit" className="bg-primary font-bold">Salvar Diferença</Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
