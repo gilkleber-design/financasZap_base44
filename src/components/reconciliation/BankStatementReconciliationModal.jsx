@@ -333,8 +333,34 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     return statementRows.map((row) => {
       if (ignoredRows[row.id]) return { ...row, status: 'to_ignore' };
 
-      // Identifica se já foi processado antes (match exato com transação já reconciliada)
-      const processedIdx = poolReconciled.findIndex(t => getRecordAccountId(t) === selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
+      // Identifica se já foi processado antes (match em grupo ou 1 para 1)
+      
+      const grouped = poolReconciled.reduce((acc, t, idx) => {
+        if (t.statement_group_id && getRecordAccountId(t) === selectedAccountId && isDateNear(t.date, row.date)) {
+           acc[t.statement_group_id] = acc[t.statement_group_id] || [];
+           acc[t.statement_group_id].push({ t, idx });
+        }
+        return acc;
+      }, {});
+
+      let foundGroup = null;
+      for (const [gId, items] of Object.entries(grouped)) {
+         const sum = items.reduce((s, item) => s + (item.t.net_amount ?? item.t.amount ?? 0), 0);
+         if (toCents(sum) === toCents(row.amount)) {
+            foundGroup = items;
+            break;
+         }
+      }
+
+      if (foundGroup) {
+         foundGroup.sort((a,b) => b.idx - a.idx).forEach(item => {
+            poolReconciled.splice(item.idx, 1);
+         });
+         return { ...row, status: 'processed', match: { description: `Composição (${foundGroup.length} transações)`, id: foundGroup[0].t.statement_group_id } };
+      }
+
+      // Match 1 para 1
+      const processedIdx = poolReconciled.findIndex(t => !t.statement_group_id && getRecordAccountId(t) === selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
       if (processedIdx !== -1) {
         const match = poolReconciled[processedIdx];
         poolReconciled.splice(processedIdx, 1); 
@@ -468,6 +494,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
           });
         } 
         else if (row.status === 'manual_match_ready') {
+          const groupId = `grp_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
           // Para cada item selecionado que compõe o valor do extrato, criamos/atualizamos a transação real.
           for (const match of row.selected) {
             if (match._isDifference) {
@@ -482,12 +509,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 status: 'conciliated',
                 notes: 'Criado para cobrir diferença na conciliação',
                 account_id: selectedAccountId,
+                statement_group_id: groupId,
               });
             } else if (match.kind === 'transaction') {
               await base44.entities.Transaction.update(match.id, {
                 reconciled: true,
                 status: 'conciliated',
                 account_id: selectedAccountId,
+                statement_group_id: groupId,
                 notes: match.notes ? match.notes + ' | Conciliado com extrato' : 'Conciliado com extrato',
               });
             }

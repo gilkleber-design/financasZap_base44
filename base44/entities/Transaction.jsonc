@@ -90,6 +90,10 @@
       "default": "registered",
       "description": "Estado real da transa\u00e7\u00e3o"
     },
+    "statement_group_id": {
+      "type": "string",
+      "description": "ID de agrupamento quando m\u00faltiplas transa\u00e7\u00f5es s\u00e3o conciliadas contra uma \u00fanica linha de extrato"
+    },
     "file_url": {
       "type": "string",
       "description": "URL do comprovante (PDF ou imagem)"
@@ -115,13 +119,34 @@
   "rls": {
     "create": true,
     "read": {
-      "data.family_id": "{{user.data.family_id}}"
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.family_id": "{{user.data.family_id}}"
+        }
+      ]
     },
     "update": {
-      "data.family_id": "{{user.data.family_id}}"
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.family_id": "{{user.data.family_id}}"
+        }
+      ]
     },
     "delete": {
-      "data.family_id": "{{user.data.family_id}}"
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.family_id": "{{user.data.family_id}}"
+        }
+      ]
     }
   }
 }
