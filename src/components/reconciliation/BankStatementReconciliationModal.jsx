@@ -213,8 +213,6 @@ function parseCsv(text) {
 }
 
 function candidateDate(candidate) {
-  if (candidate.kind === 'payable') return candidate.due_date;
-  if (candidate.kind === 'receivable') return candidate.due_date;
   return candidate.date;
 }
 
@@ -285,17 +283,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     enabled: open,
   });
 
-  const { data: payables = [], isLoading: loadingPayables } = useQuery({
-    queryKey: ['payables'],
-    queryFn: () => base44.entities.Payable.list('-due_date', 500),
-    enabled: open,
-  });
 
-  const { data: receivables = [], isLoading: loadingReceivables } = useQuery({
-    queryKey: ['receivables'],
-    queryFn: () => base44.entities.Receivable.list('-due_date', 500),
-    enabled: open,
-  });
 
   const visibleAccounts = useMemo(() => {
     console.log("Accounts query data:", accounts);
@@ -317,20 +305,12 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     const pendingTransactions = transactions
       .filter(t => t.status !== 'conciliated' && (isOwner(t) || showOtherAccounts))
       .map(t => ({ ...t, kind: 'transaction' }));
-      
-    const pendingPayables = payables
-      .filter(p => ['pending', 'provisioned'].includes(p.status || 'pending') && (isOwner(p) || showOtherAccounts))
-      .map(p => ({ ...p, kind: 'payable' }));
-      
-    const pendingReceivables = receivables
-      .filter(r => ['pending', 'provisioned'].includes(r.status || 'pending') && (isOwner(r) || showOtherAccounts))
-      .map(r => ({ ...r, kind: 'receivable' }));
 
     return { 
       reconciledTransactions: reconciled, 
-      candidates: [...pendingPayables, ...pendingReceivables, ...pendingTransactions] 
+      candidates: [...pendingTransactions] 
     };
-  }, [payables, receivables, transactions, selectedAccountId, showOtherAccounts]);
+  }, [transactions, selectedAccountId, showOtherAccounts]);
 
   const toggleCandidate = (row, candidate) => {
     setManualMatches(prev => {
@@ -376,10 +356,10 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       // Tenta Auto-Match para contas pendentes
       const validCandidates = poolCandidates.filter(c => {
-        const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
+        const cType = c.type;
         const isCorrectType = row.type === 'income' 
-          ? ['receivable', 'income', 'transfer'].includes(cType)
-          : ['payable', 'expense', 'transfer'].includes(cType);
+          ? ['income', 'transfer'].includes(cType)
+          : ['expense', 'transfer'].includes(cType);
           
         return isCorrectType && matchesBankAmount(c, row.amount);
       });
@@ -442,10 +422,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       try {
         if (match.kind === 'transaction') {
           await base44.entities.Transaction.update(match.id, { account_id: selectedAccountId });
-        } else if (match.kind === 'payable') {
-          await base44.entities.Payable.update(match.id, { account_id: selectedAccountId, origin_id: selectedAccountId, origin_type: 'account' });
-        } else if (match.kind === 'receivable') {
-          await base44.entities.Receivable.update(match.id, { account_id: selectedAccountId });
         }
         queryClient.invalidateQueries();
         toast.success("Lançamento reclassificado. Atualizando mesa...");
@@ -514,43 +490,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 account_id: selectedAccountId,
                 notes: match.notes ? match.notes + ' | Conciliado com extrato' : 'Conciliado com extrato',
               });
-            } else if (match.kind === 'payable') {
-              const transaction = await base44.entities.Transaction.create({
-                description: match.description,
-                amount: match.amount,
-                type: 'expense', 
-                category: match.category,
-                date: row.date,
-                source: 'manual',
-                payable_id: match.id,
-                reconciled: true,
-                status: 'conciliated',
-                account_id: selectedAccountId,
-                notes: 'Pagamento conciliado na mesa',
-              });
-              await base44.entities.Payable.update(match.id, {
-                status: match.origin_type === 'card' ? 'conciliated' : 'paid',
-                transaction_id: transaction.id,
-              });
-            } else if (match.kind === 'receivable') {
-              const transaction = await base44.entities.Transaction.create({
-                description: match.description,
-                amount: match.amount,
-                net_amount: match.amount,
-                type: 'income', 
-                category: match.category,
-                date: row.date,
-                source: 'manual',
-                receivable_id: match.id,
-                reconciled: true,
-                status: 'conciliated',
-                account_id: selectedAccountId,
-                notes: 'Recebimento conciliado na mesa',
-              });
-              await base44.entities.Receivable.update(match.id, {
-                status: 'received',
-                transaction_id: transaction.id,
-              });
             }
           }
         }
@@ -558,9 +497,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['payables'] });
-      queryClient.invalidateQueries({ queryKey: ['payables-list'] });
-      queryClient.invalidateQueries({ queryKey: ['receivables'] });
       toast.success('Auditoria concluída com sucesso!');
       handleClose(false);
     },
@@ -692,7 +628,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     setDiffSelectedCandidate(null);
   };
 
-  const isLoading = loadingTransactions || loadingPayables || loadingReceivables || loadingAccounts || parsingPdf;
+  const isLoading = loadingTransactions || loadingAccounts || parsingPdf;
   
   const diffCandidates = useMemo(() => {
     if (!editingDifference) return [];
@@ -700,11 +636,11 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       const isSelectedInThisRow = (editingDifference.selected || []).some(s => s.id === c.id);
       if (usedCandidateIds.has(c.id) && !isSelectedInThisRow) return false;
 
-      const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
+      const cType = c.type;
       if (editingDifference.type === 'income') {
-          return ['receivable', 'income', 'transfer'].includes(cType);
+          return ['income', 'transfer'].includes(cType);
       } else {
-          return ['payable', 'expense', 'transfer'].includes(cType);
+          return ['expense', 'transfer'].includes(cType);
       }
     });
   }, [editingDifference, candidates, reconciledTransactions, usedCandidateIds]);
@@ -828,11 +764,11 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                             const isSelectedInThisRow = (row.selected || []).some(s => s.id === c.id);
                                             if (usedCandidateIds.has(c.id) && !isSelectedInThisRow) return false;
 
-                                            const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
+                                            const cType = c.type;
                                             if (row.type === 'income') {
-                                                return ['receivable', 'income', 'transfer'].includes(cType);
+                                                return ['income', 'transfer'].includes(cType);
                                             } else {
-                                                return ['payable', 'expense', 'transfer'].includes(cType);
+                                                return ['expense', 'transfer'].includes(cType);
                                             }
                                         }).map(c => {
                                             const isSelected = (row.selected || []).find(s => s.id === c.id);
