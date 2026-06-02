@@ -746,7 +746,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                         <PopoverContent className="w-[400px] p-0" align="end">
                             <Command>
                                 <CommandInput placeholder="Buscar lançamentos para compor..." />
-                                <CommandList className="max-h-[300px] overflow-y-auto">
+                                <CommandList className="max-h-[250px] h-[250px] overflow-y-auto overscroll-contain">
                                     <CommandEmpty>Nenhum lançamento encontrado.</CommandEmpty>
                                     <CommandGroup>
                                         {[...candidates, ...reconciledTransactions].filter(c => {
