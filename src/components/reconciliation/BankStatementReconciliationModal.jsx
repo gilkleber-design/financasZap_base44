@@ -411,7 +411,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
              closest = c;
            }
         });
-        if (closest && minDiff <= 45) {
+        if (closest && minDiff <= 180) { // Aumentado para 180 dias para cobrir atrasos hospitalares
            autoMatchIdx = poolCandidates.findIndex(c => c.id === closest.id);
         }
       }
@@ -517,6 +517,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 status: 'conciliated',
                 account_id: selectedAccountId,
                 statement_group_id: groupId,
+                date: row.date, // Atualiza para a data real em que o dinheiro bateu no extrato
                 notes: match.notes ? match.notes + ' | Conciliado com extrato' : 'Conciliado com extrato',
               });
             }
