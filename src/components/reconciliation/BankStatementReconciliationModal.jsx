@@ -385,45 +385,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         return { ...row, status: 'processed', match };
       }
 
-      // Tentativa de resgatar transações já conciliadas mas com data errada (bug antigo)
-      let oldConciliatedIdx = poolReconciled.findIndex(t => {
-          if (t.statement_group_id || getRecordAccountId(t) !== selectedAccountId || !matchesBankAmount(t, row.amount)) return false;
-          
-          const diff = Math.abs(differenceInCalendarDays(parseISO(String(t.date).substring(0, 10)), parseISO(String(row.date).substring(0, 10))));
-          if (diff > 180) return false;
-
-          if (hasNameMatch(t.description, row.description)) return true;
-          
-          let incomeSourceId = t.income_source_id;
-          let hospitalId = null;
-
-          if (t.receivable_id && receivables.length > 0) {
-            const rec = receivables.find(r => r.id === t.receivable_id);
-            if (rec) {
-              if (!incomeSourceId) incomeSourceId = rec.income_source_id;
-              hospitalId = rec.hospital_id;
-            }
-          }
-
-          if (incomeSourceId && incomeSources.length > 0) {
-            const source = incomeSources.find(s => s.id === incomeSourceId);
-            if (source && hasNameMatch(source.name, row.description)) return true;
-          }
-
-          if (hospitalId && hospitals.length > 0) {
-            const hosp = hospitals.find(h => h.id === hospitalId);
-            if (hosp && (hasNameMatch(hosp.name, row.description) || hasNameMatch(hosp.sigla, row.description))) return true;
-          }
-
-          return false;
-      });
-
-      if (oldConciliatedIdx !== -1) {
-         const match = poolReconciled[oldConciliatedIdx];
-         poolReconciled.splice(oldConciliatedIdx, 1);
-         return { ...row, status: 'manual_match_ready', selected: [match], sum: getMatchedAmount(match, row.amount), isAutoMatch: true };
-      }
-
       if (row.isDraftResolved) return { ...row, status: 'draft_ready' };
 
       // Se o usuário interagiu manualmente (adicionou ou removeu matches)
