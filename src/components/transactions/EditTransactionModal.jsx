@@ -42,7 +42,7 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
 
     const taxRate = parseFloat(form.tax_rate) || 0;
     const amount = parseFloat(form.amount);
-    const netAmount = form.net_amount ? parseFloat(form.net_amount) : (form.type === 'income' && taxRate > 0 ? amount * (1 - taxRate / 100) : amount);
+    const netAmount = form.type === 'income' && taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
 
     const isAccount = form.origin?.startsWith('account:');
     const isCard = form.origin?.startsWith('card:');
