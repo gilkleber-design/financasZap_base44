@@ -814,7 +814,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                             <Button size="sm" variant="outline"><Search className="h-4 w-4" /></Button>
                         </PopoverTrigger>
                         <PopoverContent 
-                            className="w-[400px] p-0" 
+                            className="w-[500px] max-w-[90vw] p-0" 
                             align="end"
                             onWheel={(e) => e.stopPropagation()}
                             onTouchMove={(e) => e.stopPropagation()}
@@ -843,7 +843,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                                       {isSelected && <Check className="w-3 h-3 text-white" />}
                                                     </div>
                                                     <span className="truncate flex-1">
-                                                      {c.description}
+                                                      {String(c.description || '').replace(/\s*\(\d+\/\d+\)$/, '')}
                                                       {candidateDate(c) && (
                                                         <span className="text-slate-400 ml-1.5 font-normal text-[11px]">
                                                           (Venc: {format(parseISO(String(candidateDate(c)).substring(0, 10)), 'dd/MM/yyyy')})
@@ -1063,7 +1063,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                         }}
                       >
                         <span className="font-bold text-slate-700 truncate mr-2">
-                          {c.description}
+                          {String(c.description || '').replace(/\s*\(\d+\/\d+\)$/, '')}
                           {candidateDate(c) && (
                             <span className="text-slate-400 ml-1.5 font-normal text-[11px]">
                               (Venc: {format(parseISO(String(candidateDate(c)).substring(0, 10)), 'dd/MM/yyyy')})
