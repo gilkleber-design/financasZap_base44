@@ -122,12 +122,14 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nova Despesa</DialogTitle>
-          <DialogDescription>Preencha os detalhes da despesa</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <div className="px-6 py-4 border-b shrink-0">
+          <DialogHeader>
+            <DialogTitle>Nova Despesa</DialogTitle>
+            <DialogDescription>Preencha os detalhes da despesa</DialogDescription>
+          </DialogHeader>
+        </div>
+        <div className="space-y-4 p-6 overflow-y-auto flex-1 min-h-0">
 
           {/* Tipo de despesa */}
           <div>
@@ -289,9 +291,9 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
             <Input tabIndex={5} value={form.notes} onChange={e => set('notes', e.target.value)} className="mt-1" placeholder="Opcional..." />
           </div>
 
-          </div>
+        </div>
 
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 px-6 py-4 border-t shrink-0 bg-slate-50 mt-auto">
           <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
           <Button onClick={handleSave} disabled={saving} className="flex-1">
             {saving ? 'Salvando...' : expenseType === 'parcelada' ? 'Gerar Parcelas' : expenseType === 'fixa' ? 'Criar Despesa Fixa' : 'Salvar'}

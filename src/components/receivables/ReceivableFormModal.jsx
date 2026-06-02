@@ -59,9 +59,11 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Nova Conta a Receber</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <div className="px-6 py-4 border-b shrink-0">
+          <DialogHeader><DialogTitle>Nova Conta a Receber</DialogTitle></DialogHeader>
+        </div>
+        <div className="space-y-4 p-6 overflow-y-auto flex-1 min-h-0">
           <div>
             <Label>Descrição *</Label>
             <Input value={form.description} onChange={e => set('description', e.target.value)} className="mt-1" placeholder="Ex: Pagamento empresa X" />
@@ -122,7 +124,7 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
             <Switch checked={form.recurrent} onCheckedChange={v => set('recurrent', v)} />
           </div>
         </div>
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 px-6 py-4 border-t shrink-0 bg-slate-50 mt-auto">
           <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
           <Button onClick={handleSave} disabled={saving} className="flex-1">Salvar</Button>
         </div>
