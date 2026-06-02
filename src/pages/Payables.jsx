@@ -261,7 +261,10 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
       </div>
 
       <div className="mt-8">
-        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 pl-2">Contas Lançadas do Mês</h2>
+        <div className="flex items-center justify-between mb-3 pl-2 pr-2">
+          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Contas Lançadas do Mês</h2>
+          <span className="text-sm font-black text-slate-700">{fmt(filteredPayables.reduce((acc, p) => acc + Number(p.amount || 0), 0))}</span>
+        </div>
         <Card className="border-0 shadow-sm font-sora bg-white">
           <CardContent className="p-0">
             <div className="max-h-[500px] overflow-y-auto pb-4">
@@ -288,8 +291,9 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                     if (group.items.length === 0) return null;
                     return (
                       <div key={group.title} className="mb-2">
-                        <div className="px-5 py-2 bg-slate-50/80 border-y border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                          {group.title} ({group.items.length})
+                        <div className="flex items-center justify-between px-5 py-2 bg-slate-50/80 border-y border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          <span>{group.title} ({group.items.length})</span>
+                          <span>{fmt(group.items.reduce((acc, p) => acc + Number(p.amount || 0), 0))}</span>
                         </div>
                         <div className="divide-y divide-slate-100">
                           {group.items.map(p => {
