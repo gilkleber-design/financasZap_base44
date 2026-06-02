@@ -712,11 +712,8 @@ export default function Payables() {
         <AlertDialogContent className="font-sora">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Como deseja excluir esta transação?
+              Como deseja excluir essa conta?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Selecione o escopo da remoção para esta conta:
-            </AlertDialogDescription>
           </AlertDialogHeader>
 
           <div className="flex flex-col gap-2 mt-4">
@@ -731,14 +728,13 @@ export default function Payables() {
               }
               disabled={deletePayableMutation.isPending}
             >
-              ❌ EXCLUIR APENAS O MÊS DE{' '}
-              {format(currentMonth, 'MMMM', { locale: ptBR }).toUpperCase()}
+              Excluir somente essa conta
             </Button>
 
             {(deletingPayable?.recurrence_id || deletingPayable?.installment_group_id) && (
               <Button
-                variant="destructive"
-                className="font-bold justify-start text-left whitespace-normal h-auto"
+                variant="outline"
+                className="font-bold justify-start text-slate-700"
                 onClick={() =>
                   deletePayableMutation.mutate({
                     payable: deletingPayable,
@@ -747,16 +743,14 @@ export default function Payables() {
                 }
                 disabled={deletePayableMutation.isPending}
               >
-                {deletingPayable?.installment_group_id 
-                  ? '⚠️ EXCLUIR ESTA E TODAS AS PARCELAS FUTURAS' 
-                  : '⚠️ EXCLUIR ESTE MÊS E DESATIVAR DAQUI PARA FRENTE PRESERVA O PASSADO'}
+                Excluir essa e as seguintes
               </Button>
             )}
 
-            {deletingPayable?.installment_group_id && (
+            {(deletingPayable?.recurrence_id || deletingPayable?.installment_group_id) && (
               <Button
                 variant="destructive"
-                className="font-bold justify-start text-left whitespace-normal h-auto"
+                className="font-bold justify-start"
                 onClick={() =>
                   deletePayableMutation.mutate({
                     payable: deletingPayable,
@@ -765,7 +759,7 @@ export default function Payables() {
                 }
                 disabled={deletePayableMutation.isPending}
               >
-                ⚠️ EXCLUIR TODAS AS PARCELAS DA COMPRA
+                Excluir todas
               </Button>
             )}
 
