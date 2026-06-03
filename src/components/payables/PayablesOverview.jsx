@@ -94,7 +94,7 @@ export default function PayablesOverview({
                   <div key={item.id} className={`flex items-center justify-between px-5 py-3 hover:bg-[#F8FAFC] transition-colors ${item.autoDebit ? 'opacity-65 hover:opacity-100' : ''}`}>
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[#0D3B66] truncate">{item.description}</span>
+                         <span className="text-sm font-semibold text-[#0D3B66] truncate">{item.description.replace(/\s*\(\d+\/\d+\)\s*$/, '')}</span>
                         {item.installmentLabel && <span className="rounded border border-[#C8D6E0] bg-[#F0F4F8] px-1.5 py-0.5 text-[9px] font-bold text-[#7B92A8]">{item.installmentLabel}</span>}
                         <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${STATUS_PILL[item.pill] || STATUS_PILL.pending}`}>{item.pillLabel}</span>
                       </div>
