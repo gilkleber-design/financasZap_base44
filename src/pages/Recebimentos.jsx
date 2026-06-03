@@ -509,7 +509,7 @@ function StatusRow({ row, transactions, variant, onOpenReceive }) {
             </span>
           )}
         </div>
-        {variant !== 'recebido' && (
+        {row.status !== 'received' && (
           <Button size="sm" onClick={() => onOpenReceive(row)}>Receber</Button>
         )}
       </div>
