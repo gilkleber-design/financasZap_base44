@@ -21,6 +21,39 @@ export default function PayablesOverview({
   onOpenManageRecurring,
   onOpenPay,
 }) {
+  const headerColor = {
+    overdue: 'text-[#C0392B]',
+    soon: 'text-[#D97706]',
+    week: 'text-[#0A7070]',
+    month: 'text-[#0A7070]',
+    auto: 'text-[#7B92A8]',
+    paid: 'text-[#0A6E50]',
+  };
+  const badgeCls = {
+    overdue: 'bg-[#FFD4D4] text-[#C0392B]',
+    soon: 'bg-[#FDE68A] text-[#D97706]',
+    week: 'bg-[#B8E8E8] text-[#0A7070]',
+    month: 'bg-[#B8E8E8] text-[#0A7070]',
+    auto: 'bg-[#E2E8F0] text-[#7B92A8]',
+    paid: 'bg-[#CCF3E3] text-[#0A6E50]',
+  };
+  const bgHeader = {
+    overdue: 'bg-[#FFF5F5]',
+    soon: 'bg-[#FFFBEB]',
+    week: 'bg-[#F0FAFA]',
+    month: 'bg-[#F0FAFA]',
+    auto: 'bg-[#F8FAFC]',
+    paid: 'bg-[#F0FBF7]',
+  };
+  const valueColor = {
+    overdue: 'text-[#C0392B]',
+    soon: 'text-[#D97706]',
+    week: 'text-[#0D3B66]',
+    month: 'text-[#0D3B66]',
+    auto: 'text-[#0D3B66]',
+    paid: 'text-[#0A6E50]',
+  };
+
   return (
     <div className="space-y-3">
       <div className="rounded-[14px] border border-border bg-card p-4 shadow-sm">
@@ -35,48 +68,56 @@ export default function PayablesOverview({
         <KpiCard label="Vencido" value={formatCurrency(kpis.overdue, 2)} sub={kpis.overdue > 0 ? 'ação urgente' : 'sem atrasos'} valueClassName={kpis.overdue > 0 ? 'text-[#C0392B]' : 'text-[#0A6E50]'} />
       </div>
 
-      {sections.map((section) => (
-        <section key={section.key} className="space-y-2">
-          <button
-            type="button"
-            onClick={section.collapsible ? onTogglePaid : undefined}
-            className={`flex w-full items-center gap-2 border-b border-border pb-1 text-left text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground ${section.key === 'overdue' ? 'section-vencidas' : ''}`}
-          >
-            <section.icon className="h-4 w-4" />
-            <span>{section.title}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${section.key === 'overdue' ? 'bg-[#FFECEC] text-[#C0392B]' : 'bg-[#E8EDF2] text-[#7B92A8]'}`}>{section.items.length}</span>
-            {section.collapsible && <span className="ml-auto text-xs">{paidOpen ? '−' : '+'}</span>}
-          </button>
-
-          {(!section.collapsible || paidOpen) && (
-            <div className="space-y-2">
-              {section.items.map((item) => (
-                <Card key={item.id} className={`border-[#E8EDF2] ${item.style === 'overdue' ? 'border-l-[3px] border-l-[#C0392B]' : item.style === 'urgent' ? 'border-l-[3px] border-l-[#F0A030]' : ''} ${item.autoDebit ? 'opacity-65 hover:opacity-100' : ''}`}>
-                  <CardContent className="flex items-center gap-3 p-4">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#EEF5FB] text-[#0D3B66]">
-                      <section.icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
+      {sections.map((section) => {
+        const total = section.items.reduce((s, r) => s + Number(r.amount || 0), 0);
+        return (
+          <div key={section.key} className="rounded-[14px] border border-border bg-card shadow-sm overflow-hidden">
+            <div 
+              onClick={section.collapsible ? onTogglePaid : undefined}
+              className={`flex items-center justify-between px-5 py-3 border-b border-border ${bgHeader[section.key]} ${section.collapsible ? 'cursor-pointer select-none' : ''}`}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`flex items-center gap-1.5 text-sm font-bold uppercase tracking-[0.06em] ${headerColor[section.key]}`}>
+                  <section.icon className="h-4 w-4" /> {section.title}
+                </span>
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${badgeCls[section.key]}`}>
+                  {section.items.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-[#0D3B66]">{formatCurrency(total, 2)}</span>
+                {section.collapsible && <span className="text-xs text-muted-foreground">{paidOpen ? '−' : '+'}</span>}
+              </div>
+            </div>
+            {(!section.collapsible || paidOpen) && (
+              <div className="divide-y divide-[#F0F4F8]">
+                {section.items.map((item) => (
+                  <div key={item.id} className={`flex items-center justify-between px-5 py-3 hover:bg-[#F8FAFC] transition-colors ${item.autoDebit ? 'opacity-65 hover:opacity-100' : ''}`}>
+                    <div className="flex flex-col gap-0.5 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="truncate text-[13px] font-semibold text-[#0D3B66]">{item.description}</p>
-                        {item.installmentLabel && <span className="ml-2 rounded border border-[#C8D6E0] bg-[#F0F4F8] px-1.5 py-0.5 text-[9px] font-bold text-[#7B92A8]">{item.installmentLabel}</span>}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                        <span>{normalizeCategoryLabel(item.category)}</span>
-                        <span>·</span>
-                        <span>Venc. {item.dueDateLabel}</span>
+                        <span className="text-sm font-semibold text-[#0D3B66] truncate">{item.description}</span>
+                        {item.installmentLabel && <span className="rounded border border-[#C8D6E0] bg-[#F0F4F8] px-1.5 py-0.5 text-[9px] font-bold text-[#7B92A8]">{item.installmentLabel}</span>}
                         <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${STATUS_PILL[item.pill] || STATUS_PILL.pending}`}>{item.pillLabel}</span>
                       </div>
+                      <span className="text-xs text-[#4A6278]">Venc: {item.dueDateLabel} · {normalizeCategoryLabel(item.category)}</span>
                     </div>
-                    <div className={`text-right text-sm font-bold ${item.style === 'overdue' ? 'text-[#C0392B]' : 'text-[#0D3B66]'}`}>{formatCurrency(item.amount, 2)}</div>
-                    {item.canPay && <Button size="sm" onClick={() => onOpenPay(item.original)}>Pagar</Button>}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
-      ))}
+                    <div className="flex items-center gap-4 ml-4 flex-shrink-0">
+                      <span className={`text-sm font-bold ${valueColor[section.key]}`}>
+                        {formatCurrency(item.amount, 2)}
+                      </span>
+                      {item.canPay && (
+                        <Button size="sm" onClick={() => onOpenPay(item.original)} className="font-bold bg-[#0A9E6A] hover:bg-[#088258] text-white">
+                          Pagar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
