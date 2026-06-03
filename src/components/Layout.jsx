@@ -24,7 +24,7 @@ import DashboardLogo from '@/components/dashboard/DashboardLogo';
 const navItems = [
   { path: '/', label: 'Início', icon: LayoutGrid },
   { path: '/calendario', label: 'Plantões', icon: Stethoscope },
-  { path: '/recebimentos', label: 'Receb.', icon: Wallet },
+  { path: '/recebimentos', label: 'Recebíveis', icon: Wallet },
   { path: '/contas-pagar', label: 'Contas', icon: ReceiptText },
   { path: '/transacoes', label: 'Transações', icon: ArrowLeftRight },
   { path: '/relatorios', label: 'Relatórios', icon: PieChart },
@@ -35,7 +35,7 @@ const navItems = [
 
 const mobileNavItems = [
   { path: '/', label: 'Início', icon: LayoutGrid },
-  { path: '/recebimentos', label: 'Recebimentos', icon: Wallet },
+  { path: '/recebimentos', label: 'Recebíveis', icon: Wallet },
   { path: '/contas-pagar', label: 'Contas', icon: ReceiptText },
   { path: '/configuracoes', label: 'Config', icon: Settings },
 ];

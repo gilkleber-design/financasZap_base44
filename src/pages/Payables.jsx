@@ -60,7 +60,9 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
     const normalized = String(due).includes('T') ? String(due) : `${due}T12:00:00`;
     const parsed = new Date(normalized);
     if (isNaN(parsed.getTime())) return false;
-    return isSameMonth(parsed, currentMonth);
+    
+    const isOverdueAndPending = p.status === 'pending' && parsed < new Date(new Date().setHours(0,0,0,0));
+    return isSameMonth(parsed, currentMonth) || isOverdueAndPending;
   });
 
   const filteredPayables = monthPayables.filter(p => 
@@ -328,12 +330,13 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                                   </p>
                                   <span
                                     className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                                      isPaid
-                                        ? 'bg-slate-100 text-slate-500'
-                                        : 'bg-amber-100 text-amber-700'
+                                      p.status === 'paid' ? 'bg-[#E6F9F0] border border-[#0A9E6A] text-[#0A6E50]' 
+                                      : p.status === 'provisioned' ? 'bg-[#EEF2FF] border border-[#7C93FF] text-[#4254C5]' 
+                                      : (new Date(p.due_date || p.competencia) < new Date(new Date().setHours(0,0,0,0))) ? 'bg-[#FFECEC] border border-[#E74C3C] text-[#C0392B]'
+                                      : 'bg-[#E0F5F5] border border-[#0FA3A3] text-[#0A7070]'
                                     }`}
                                   >
-                                    {p.status === 'paid' ? 'PAGO' : p.status === 'provisioned' ? 'NO CARTÃO' : 'PENDENTE'}
+                                    {p.status === 'paid' ? 'PAGO' : p.status === 'provisioned' ? 'NO CARTÃO' : (new Date(p.due_date || p.competencia) < new Date(new Date().setHours(0,0,0,0))) ? 'VENCIDO' : 'PENDENTE'}
                                   </span>
                                 </div>
 

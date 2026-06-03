@@ -32,7 +32,7 @@ const routeTitles = {
   '/transacoes': 'Transações — FinançasZap',
   '/contas-pagar': 'Contas a Pagar — FinançasZap',
   '/contas-receber': 'Contas a Receber — FinançasZap',
-  '/recebimentos': 'Recebimentos — FinançasZap',
+  '/recebimentos': 'Recebíveis — FinançasZap',
   '/configuracoes': 'Configurações — FinançasZap',
 };
 

@@ -105,7 +105,7 @@ export default function PayablesOverview({
                         {formatCurrency(item.amount, 2)}
                       </span>
                       {item.canPay && (
-                        <Button size="sm" onClick={() => onOpenPay(item.original)} className="font-bold bg-[#0A9E6A] hover:bg-[#088258] text-white">
+                        <Button size="sm" onClick={() => onOpenPay(item.original)} className="font-bold bg-primary hover:bg-primary/90 text-white">
                           Pagar
                         </Button>
                       )}

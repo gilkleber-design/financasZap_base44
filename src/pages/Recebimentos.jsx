@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, ChevronLeft, ChevronRight, Download, Landmark, Plus, Settings } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CalendarClock, RefreshCcw, Bell, Building2, ChevronLeft, ChevronRight, Download, Landmark, Plus, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, subMonths, startOfMonth, endOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -146,7 +146,7 @@ export default function Recebimentos() {
           <DashboardLogo className="h-5 w-5" />
           <div className="text-lg font-bold"><span className="text-foreground">Finanças</span><span className="text-primary">Zap</span></div>
           <span className="h-5 w-px bg-border" />
-          <p className="text-sm text-muted-foreground">Recebimentos</p>
+          <p className="text-sm text-muted-foreground">Recebíveis</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative"><Bell className="h-4 w-4 text-muted-foreground" /><span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" /></div>
@@ -157,7 +157,7 @@ export default function Recebimentos() {
       <div className="space-y-3 p-4 md:p-4">
         <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-card p-4 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Recebimentos</h1>
+            <h1 className="text-2xl font-bold text-foreground">Recebíveis</h1>
             <p className="text-sm text-muted-foreground">Visão de caixa por período e por PJ.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -362,7 +362,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
     <div className="space-y-3">
       {vencidos.length > 0 && (
         <StatusCard
-          title="Vencido" icon="⚠"
+          title="Vencido" icon={<AlertTriangle className="h-4 w-4" />}
           rows={vencidos}
           transactions={transactions}
           variant="vencido"
@@ -371,7 +371,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
       )}
       {recebidos.length > 0 && (
         <StatusCard
-          title="Recebido" icon="✓"
+          title="Recebido" icon={<CheckCircle2 className="h-4 w-4" />}
           rows={recebidos}
           transactions={transactions}
           variant="recebido"
@@ -380,7 +380,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
       )}
       {aReceber.length > 0 && (
         <StatusCard
-          title="A receber" icon="📅"
+          title="A receber" icon={<CalendarClock className="h-4 w-4" />}
           rows={aReceber}
           transactions={transactions}
           variant="a_receber"
@@ -396,7 +396,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
 
       {reembolsos.length > 0 && (
         <StatusCard
-          title="Reembolsos" icon="🔄"
+          title="Reembolsos" icon={<RefreshCcw className="h-4 w-4" />}
           rows={reembolsos}
           transactions={transactions}
           variant="reembolso"
@@ -438,7 +438,7 @@ function StatusCard({ title, icon, rows, transactions, variant, onOpenReceive })
     <div className={`rounded-[14px] border border-border bg-card shadow-sm overflow-hidden ${variant === 'reembolso' ? 'opacity-60 grayscale-[0.2]' : ''}`}>
       <div className={`flex items-center justify-between px-5 py-3 border-b border-border ${bgHeader[variant]}`}>
         <div className="flex items-center gap-2">
-          <span className={`text-sm font-bold uppercase tracking-[0.06em] ${headerColor[variant]}`}>
+          <span className={`flex items-center gap-1.5 text-sm font-bold uppercase tracking-[0.06em] ${headerColor[variant]}`}>
             {icon} {title}
           </span>
           <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${badgeCls[variant]}`}>
@@ -510,7 +510,7 @@ function StatusRow({ row, transactions, variant, onOpenReceive }) {
           )}
         </div>
         {row.status !== 'received' && (
-          <Button size="sm" onClick={() => onOpenReceive(row)}>Receber</Button>
+          <Button size="sm" onClick={() => onOpenReceive(row)} className="font-bold bg-primary hover:bg-primary/90 text-white">Receber</Button>
         )}
       </div>
     </div>
