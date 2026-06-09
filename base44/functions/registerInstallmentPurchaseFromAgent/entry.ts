@@ -187,6 +187,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    const familyId = user.family_id || user.data?.family_id || user.id;
     const groupId = makeGroupId();
     const createdPayables = await base44.entities.Payable.bulkCreate(
       installments.map((item) => ({
@@ -206,6 +207,7 @@ Deno.serve(async (req) => {
         installment_number: item.number,
         installment_group_id: groupId,
         notes: notes || 'Gerado via Assistente — compra parcelada no cartão',
+        family_id: familyId,
       }))
     );
 
