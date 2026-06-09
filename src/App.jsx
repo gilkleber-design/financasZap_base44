@@ -9,6 +9,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Layout from '@/components/Layout';
 import Dashboard from '@/pages/Dashboard';
 import Transactions from '@/pages/Transactions';
+import Purchases from '@/pages/Purchases';
 import Payables from '@/pages/Payables';
 import Receivables from '@/pages/Receivables';
 import Recebimentos from '@/pages/Recebimentos';
@@ -30,6 +31,7 @@ const routeTitles = {
   '/planejamento': 'Planejamento — FinançasZap',
   '/revisao-dados': 'Revisão de Dados — FinançasZap',
   '/transacoes': 'Transações — FinançasZap',
+  '/compras': 'Compras do Mês — FinançasZap',
   '/contas-pagar': 'Contas a Pagar — FinançasZap',
   '/contas-receber': 'Contas a Receber — FinançasZap',
   '/recebimentos': 'Recebíveis — FinançasZap',
@@ -64,6 +66,7 @@ const AuthenticatedApp = () => {
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/transacoes" element={<Transactions />} />
+        <Route path="/compras" element={<Purchases />} />
         <Route path="/contas-pagar" element={<Payables />} />
         <Route path="/contas-receber" element={<Receivables />} />
         <Route path="/recebimentos" element={<Recebimentos />} />

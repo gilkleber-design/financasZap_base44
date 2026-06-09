@@ -15,7 +15,8 @@ import {
   LogOut, 
   UserCircle, 
   Plus,
-  Link2
+  Link2,
+  ShoppingBag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
@@ -27,6 +28,7 @@ const navItems = [
   { path: '/recebimentos', label: 'Recebíveis', icon: Wallet },
   { path: '/contas-pagar', label: 'Contas', icon: ReceiptText },
   { path: '/transacoes', label: 'Transações', icon: ArrowLeftRight },
+  { path: '/compras', label: 'Compras', icon: ShoppingBag },
   { path: '/relatorios', label: 'Relatórios', icon: PieChart },
   { path: '/planejamento', label: 'Planej.', icon: Target },
   { path: '/revisao-dados', label: 'Revisão', icon: ClipboardCheck, adminOnly: true },
