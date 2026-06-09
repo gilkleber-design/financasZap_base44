@@ -81,7 +81,9 @@ export default function Reports() {
   
   const filteredPayables = payables.filter(p => {
     if (p.is_card_invoice_payable) return false; // fatura consolidada: itens já contam individualmente
-    const payableMonth = format(new Date(p.competencia || p.due_date), 'yyyy-MM');
+    // Parcelas de cartão competem no vencimento de cada parcela; demais usam competencia.
+    const ref = p.installment_group_id ? p.due_date : (p.competencia || p.due_date);
+    const payableMonth = format(new Date(ref), 'yyyy-MM');
     return payableMonth === selectedMonthStr;
   });
 
@@ -134,7 +136,9 @@ export default function Reports() {
     return payables.filter(p => {
       if (p.origin_type !== 'card') return false;
       if (p.is_card_invoice_payable) return false; // ignora a fatura consolidada (evita dupla contagem)
-      const ref = p.competencia || p.due_date;
+      // Parcelas de cartão competem no mês do vencimento de cada parcela (due_date),
+      // pois a competencia costuma vir igual à data da compra em todas as parcelas.
+      const ref = p.installment_group_id ? p.due_date : (p.competencia || p.due_date);
       if (!ref) return false;
       return format(new Date(ref), 'yyyy-MM') === selectedMonthStr;
     });
