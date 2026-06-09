@@ -80,6 +80,7 @@ export default function Reports() {
   const selectedMonthStr = format(currentMonth, 'yyyy-MM');
   
   const filteredPayables = payables.filter(p => {
+    if (p.is_card_invoice_payable) return false; // fatura consolidada: itens já contam individualmente
     const payableMonth = format(new Date(p.competencia || p.due_date), 'yyyy-MM');
     return payableMonth === selectedMonthStr;
   });
@@ -126,21 +127,39 @@ export default function Reports() {
     return transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
   }, [transactions, monthStart, monthEnd, currentYear]);
 
+  // Parcelas/contas de CARTÃO do mês (regime de competência).
+  // Compras parceladas no cartão viram Payable (sem Transaction), então
+  // precisam ser somadas às despesas por categoria pela competência.
+  const cardPayablesThisMonth = useMemo(() => {
+    return payables.filter(p => {
+      if (p.origin_type !== 'card') return false;
+      if (p.is_card_invoice_payable) return false; // ignora a fatura consolidada (evita dupla contagem)
+      const ref = p.competencia || p.due_date;
+      if (!ref) return false;
+      return format(new Date(ref), 'yyyy-MM') === selectedMonthStr;
+    });
+  }, [payables, selectedMonthStr]);
+
   // Agrupamento de Categorias
   const mapaCategoria = {};
   let valorPassivosTransicao = 0;
 
-  monthTx.filter(t => t.type === 'expense').forEach(t => {
-    const slug = String(t.category || 'outros').toLowerCase();
-
+  const acumularDespesa = (slug, amount) => {
     if (slug === 'passivos_de_transicao') {
-      valorPassivosTransicao += t.amount;
+      valorPassivosTransicao += amount;
       return;
     }
     if (slug === 'retiradas') return;
-
     if (!mapaCategoria[slug]) mapaCategoria[slug] = 0;
-    mapaCategoria[slug] += t.amount;
+    mapaCategoria[slug] += amount;
+  };
+
+  monthTx.filter(t => t.type === 'expense').forEach(t => {
+    acumularDespesa(String(t.category || 'outros').toLowerCase(), t.amount || 0);
+  });
+
+  cardPayablesThisMonth.forEach(p => {
+    acumularDespesa(String(p.category || 'outros').toLowerCase(), p.amount || 0);
   });
 
   // Ordena todas as categorias
@@ -185,6 +204,13 @@ export default function Reports() {
         return acc;
       }, {});
 
+    // Inclui parcelas/contas de cartão do mês (competência) no realizado
+    cardPayablesThisMonth.forEach((p) => {
+      const slug = String(p.category || 'outros').toLowerCase();
+      if (slug === 'passivos_de_transicao' || slug === 'retiradas') return;
+      actualBySlug[slug] = (actualBySlug[slug] || 0) + Number(p.amount || 0);
+    });
+
     const items = Object.keys({ ...budgetBySlug, ...actualBySlug }).map((slug) => {
       const actual = actualBySlug[slug] || 0;
       const limit = Number(budgetBySlug[slug] || 0);
@@ -207,7 +233,7 @@ export default function Reports() {
       if (b.hasLimit) return 1;
       return b.actual - a.actual;
     });
-  }, [budgets, categories, currentMonth, monthTx, getCategoryNameBySlug]);
+  }, [budgets, categories, currentMonth, monthTx, getCategoryNameBySlug, cardPayablesThisMonth]);
 
   // Resumo Fiscal
   const receivedReceivables = receivables.filter((item) => item.status === 'received' && item.due_date >= monthStart && item.due_date <= monthEnd);
