@@ -584,8 +584,20 @@ export default function Payables() {
         };
       });
 
+    const currentMonthKeyLocal = format(currentMonth, 'yyyy-MM');
+
     return [
-      { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.dueDate < todayStart && !item.autoDebit) },
+      {
+        key: 'overdue',
+        title: 'Vencidas',
+        icon: PAYABLE_SECTION_ICONS.overdue,
+        // Só itens do mês atual — itens de meses anteriores já aparecem no banner de alerta
+        items: mapped.filter((item) =>
+          item.dueDate < todayStart &&
+          !item.autoDebit &&
+          format(item.dueDate, 'yyyy-MM') === currentMonthKeyLocal
+        ),
+      },
       { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
       { key: 'week', title: 'Esta Semana', icon: PAYABLE_SECTION_ICONS.week, items: mapped.filter((item) => !item.autoDebit && item.dueDate > tomorrow && item.dueDate <= weekEnd) },
       { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
