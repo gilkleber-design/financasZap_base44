@@ -406,6 +406,7 @@ export default function Payables() {
   const [deletingPayable, setDeletingPayable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [paidSectionOpen, setPaidSectionOpen] = useState(false);
+  const [atrasadasOpen, setAtrasadasOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const monthKey = format(currentMonth, 'yyyy-MM');
@@ -731,17 +732,6 @@ export default function Payables() {
             </div>
           </div>
 
-          {atrasadasMesesAnteriores.length > 0 && (
-            <div className="rounded-[10px] border border-[#FFCDD2] bg-[#FFF5F5] px-5 py-3 flex justify-between items-center mb-3">
-              <span className="text-sm text-[#C0392B] font-medium">
-                ⚠ {atrasadasMesesAnteriores.length} conta(s) em atraso de meses anteriores
-              </span>
-              <span className="text-sm font-bold text-[#C0392B]">
-                {fmt(totalAtrasadasAnteriores)}
-              </span>
-            </div>
-          )}
-
           <PayablesOverview
             monthLabel={format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
             kpis={kpis}
@@ -751,6 +741,11 @@ export default function Payables() {
             onOpenNew={() => setShowForm(true)}
             onOpenManageRecurring={() => setViewMode('gerenciar_fixas')}
             onOpenPay={(item) => setConfirmingPayable(item)}
+            atrasadas={atrasadasMesesAnteriores}
+            totalAtrasadas={totalAtrasadasAnteriores}
+            atrasadasOpen={atrasadasOpen}
+            onToggleAtrasadas={() => setAtrasadasOpen(v => !v)}
+            parseItemDate={parseItemDate}
           />
 
           <Button onClick={() => setShowForm(true)} className="fixed bottom-20 right-4 z-40 h-12 w-12 rounded-full p-0 shadow-lg md:hidden">
