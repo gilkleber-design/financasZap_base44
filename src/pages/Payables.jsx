@@ -470,8 +470,7 @@ export default function Payables() {
       .filter(p => {
         const d = String(p.due_date || p.competencia || '');
         return (p.status === 'paid' || p.status === 'provisioned') &&
-               d.slice(0, 7) === currentMonthKey &&
-               d.slice(0, 10) <= hojeStr;
+               d.slice(0, 7) === currentMonthKey;
       })
       .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
@@ -489,7 +488,7 @@ export default function Payables() {
         const d = String(p.due_date || p.competencia || '');
         return p.status === 'pending' &&
                d.slice(0, 7) === currentMonthKey &&
-               d.slice(0, 10) > hojeStr;
+               d.slice(0, 10) >= hojeStr;
       })
       .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
