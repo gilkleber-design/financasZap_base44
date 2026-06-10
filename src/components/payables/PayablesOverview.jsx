@@ -1,6 +1,5 @@
 import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, CreditCard, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency, normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
 const STATUS_PILL = {
@@ -30,6 +29,7 @@ export default function PayablesOverview({
     paid: 'text-[#0A6E50]',
     reembolso: 'text-slate-500',
   };
+
   const badgeCls = {
     overdue: 'bg-[#FFD4D4] text-[#C0392B]',
     soon: 'bg-[#FDE68A] text-[#D97706]',
@@ -39,6 +39,7 @@ export default function PayablesOverview({
     paid: 'bg-[#CCF3E3] text-[#0A6E50]',
     reembolso: 'bg-slate-200 text-slate-500',
   };
+
   const bgHeader = {
     overdue: 'bg-[#FFF5F5]',
     soon: 'bg-[#FFFBEB]',
@@ -48,6 +49,7 @@ export default function PayablesOverview({
     paid: 'bg-[#F0FBF7]',
     reembolso: 'bg-slate-100',
   };
+
   const valueColor = {
     overdue: 'text-[#C0392B]',
     soon: 'text-[#D97706]',
@@ -58,20 +60,45 @@ export default function PayablesOverview({
     reembolso: 'text-slate-500',
   };
 
+  const pct = kpis.expected > 0
+    ? ((kpis.paid / kpis.expected) * 100).toFixed(1)
+    : '0.0';
+
   return (
     <div className="space-y-3">
+      {/* KPIs — ordem: PREVISTO | PAGO | VENCIDO | A VENCER */}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Total do mês" value={formatCurrency(kpis.expected, 2)} sub="soma completa" />
-        <KpiCard label="Pago" value={formatCurrency(kpis.paid, 2)} sub={`${kpis.expected ? ((kpis.paid / kpis.expected) * 100).toFixed(1) : '0.0'}% do mês`} />
-        <KpiCard label="A vencer" value={formatCurrency(kpis.open, 2)} sub="aguardando prazo" />
-        <KpiCard label="Vencido" value={formatCurrency(kpis.overdue, 2)} sub={kpis.overdue > 0 ? 'ação urgente' : 'sem atrasos'} valueClassName={kpis.overdue > 0 ? 'text-[#C0392B]' : 'text-[#0A6E50]'} />
+        <KpiCard
+          label="Previsto"
+          value={formatCurrency(kpis.expected, 2)}
+          sub="total do mês"
+        />
+        <KpiCard
+          label="Pago"
+          value={formatCurrency(kpis.paid, 2)}
+          sub={`${pct}% do previsto`}
+        />
+        <KpiCard
+          label="Vencido"
+          value={formatCurrency(kpis.overdue, 2)}
+          sub={kpis.overdue > 0 ? 'ação urgente' : 'sem atrasos'}
+          valueClassName={kpis.overdue > 0 ? 'text-[#C0392B]' : 'text-[#0A6E50]'}
+        />
+        <KpiCard
+          label="A vencer"
+          value={formatCurrency(kpis.open, 2)}
+          sub="aguardando prazo"
+        />
       </div>
 
       {sections.map((section) => {
         const total = section.items.reduce((s, r) => s + Number(r.amount || 0), 0);
         return (
-          <div key={section.key} className={`rounded-[14px] border border-border bg-card shadow-sm overflow-hidden ${section.key === 'reembolso' ? 'opacity-60 grayscale-[0.2]' : ''}`}>
-            <div 
+          <div
+            key={section.key}
+            className={`rounded-[14px] border border-border bg-card shadow-sm overflow-hidden ${section.key === 'reembolso' ? 'opacity-60 grayscale-[0.2]' : ''}`}
+          >
+            <div
               onClick={section.collapsible ? onTogglePaid : undefined}
               className={`flex items-center justify-between px-5 py-3 border-b border-border ${bgHeader[section.key]} ${section.collapsible ? 'cursor-pointer select-none' : ''}`}
             >
@@ -85,27 +112,47 @@ export default function PayablesOverview({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-[#0D3B66]">{formatCurrency(total, 2)}</span>
-                {section.collapsible && <span className="text-xs text-muted-foreground">{paidOpen ? '−' : '+'}</span>}
+                {section.collapsible && (
+                  <span className="text-xs text-muted-foreground">{paidOpen ? '−' : '+'}</span>
+                )}
               </div>
             </div>
+
             {(!section.collapsible || paidOpen) && (
               <div className="divide-y divide-[#F0F4F8]">
                 {section.items.map((item) => (
-                  <div key={item.id} className={`flex items-center justify-between px-5 py-3 hover:bg-[#F8FAFC] transition-colors ${item.autoDebit ? 'opacity-65 hover:opacity-100' : ''}`}>
+                  <div
+                    key={item.id}
+                    className={`flex items-center justify-between px-5 py-3 hover:bg-[#F8FAFC] transition-colors ${item.autoDebit ? 'opacity-65 hover:opacity-100' : ''}`}
+                  >
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <div className="flex items-center gap-2">
-                         <span className="text-sm font-semibold text-[#0D3B66] truncate">{item.description.replace(/\s*\(\d+\/\d+\)\s*$/, '')}</span>
-                        {item.installmentLabel && <span className="rounded border border-[#C8D6E0] bg-[#F0F4F8] px-1.5 py-0.5 text-[9px] font-bold text-[#7B92A8]">{item.installmentLabel}</span>}
-                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${STATUS_PILL[item.pill] || STATUS_PILL.pending}`}>{item.pillLabel}</span>
+                        <span className="text-sm font-semibold text-[#0D3B66] truncate">
+                          {item.description.replace(/\s*\(\d+\/\d+\)\s*$/, '')}
+                        </span>
+                        {item.installmentLabel && (
+                          <span className="rounded border border-[#C8D6E0] bg-[#F0F4F8] px-1.5 py-0.5 text-[9px] font-bold text-[#7B92A8]">
+                            {item.installmentLabel}
+                          </span>
+                        )}
+                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${STATUS_PILL[item.pill] || STATUS_PILL.pending}`}>
+                          {item.pillLabel}
+                        </span>
                       </div>
-                      <span className="text-xs text-[#4A6278]">Venc: {item.dueDateLabel} · {normalizeCategoryLabel(item.category)}</span>
+                      <span className="text-xs text-[#4A6278]">
+                        Venc: {item.dueDateLabel} · {normalizeCategoryLabel(item.category)}
+                      </span>
                     </div>
                     <div className="flex items-center gap-4 ml-4 flex-shrink-0">
                       <span className={`text-sm font-bold ${valueColor[section.key]}`}>
                         {formatCurrency(item.amount, 2)}
                       </span>
                       {item.canPay && (
-                        <Button size="sm" onClick={() => onOpenPay(item.original)} className="font-bold bg-primary hover:bg-primary/90 text-white">
+                        <Button
+                          size="sm"
+                          onClick={() => onOpenPay(item.original)}
+                          className="font-bold bg-primary hover:bg-primary/90 text-white"
+                        >
                           Pagar
                         </Button>
                       )}
