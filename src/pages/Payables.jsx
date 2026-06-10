@@ -60,12 +60,11 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
     const normalized = String(due).includes('T') ? String(due) : `${due}T12:00:00`;
     const parsed = new Date(normalized);
     if (isNaN(parsed.getTime())) return false;
-    
     const isOverdueAndPending = p.status === 'pending' && parsed < new Date(new Date().setHours(0,0,0,0));
     return isSameMonth(parsed, currentMonth) || isOverdueAndPending;
   });
 
-  const filteredPayables = monthPayables.filter(p => 
+  const filteredPayables = monthPayables.filter(p =>
     !searchTerm || p.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -80,7 +79,6 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
       const linkedPayables = payables.filter(
         (p) => p.recurrence_id === recurrence.id
       );
-
       for (const p of linkedPayables) {
         if (p.status !== 'paid') {
           await base44.entities.Payable.delete(p.id);
@@ -90,7 +88,6 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
           });
         }
       }
-
       await base44.entities.Recurrence.delete(recurrence.id);
     },
     onSuccess: () => {
@@ -124,114 +121,106 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
 
       {recurrences.length > 0 && !searchTerm && (
         <div className="mb-6">
-          <button 
+          <button
             onClick={() => setIsMatrizesOpen(!isMatrizesOpen)}
             className="flex items-center gap-2 w-full text-left focus:outline-none mb-3 pl-2 group"
           >
             <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-700 transition-colors">Matrizes (Contas Fixas Base)</h2>
             {isMatrizesOpen ? <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-slate-600" /> : <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
           </button>
-          
           {isMatrizesOpen && (
             <Card className="border-0 shadow-sm font-sora bg-white animate-in slide-in-from-top-2 duration-200">
               <CardContent className="p-0">
                 <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
-            {isLoading && (
-              <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
-                Carregando fixas...
-              </p>
-            )}
-
-            {!isLoading && recurrences.length === 0 && (
-              <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
-                Nenhuma conta fixa cadastrada
-              </p>
-            )}
-
-            {!isLoading &&
-              recurrences.map((r) => (
-                <div
-                  key={r.id}
-                  className={`flex items-center gap-4 px-5 py-4 transition-colors ${
-                    r.active === false
-                      ? 'opacity-40 bg-slate-50/50'
-                      : 'hover:bg-slate-50/50'
-                  }`}
-                >
-                  <div
-                    className={`w-1.5 h-11 rounded-full flex-shrink-0 ${
-                      r.active === false ? 'bg-slate-300' : 'bg-blue-400'
-                    }`}
-                  />
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-800 uppercase tracking-tight">
-                      {r.description}
+                  {isLoading && (
+                    <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
+                      Carregando fixas...
                     </p>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
-                      VENCE TODO DIA {r.due_day}
-                    </span>
-                  </div>
-
-                  <div className="text-right flex-shrink-0 mr-4">
-                    <p className="text-sm font-black text-slate-900">
-                      {fmt(r.amount)}
+                  )}
+                  {!isLoading && recurrences.length === 0 && (
+                    <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
+                      Nenhuma conta fixa cadastrada
                     </p>
-                    <span
-                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                        r.active === false
-                          ? 'bg-slate-100 text-slate-500'
-                          : 'bg-blue-100 text-blue-700'
-                      }`}
-                    >
-                      {r.active === false ? 'INATIVA' : 'CONTA ATIVA'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 text-slate-400 hover:text-primary"
-                      onClick={() => onEditRecurrence(r)}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 text-slate-400 hover:text-primary"
-                      onClick={() =>
-                        toggleMutation.mutate({
-                          id: r.id,
-                          active: r.active === false,
-                        })
-                      }
-                    >
-                      {r.active === false ? (
-                        <ToggleLeft className="w-5 h-5 text-slate-400" />
-                      ) : (
-                        <ToggleRight className="w-5 h-5 text-primary" />
-                      )}
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 text-slate-300 hover:text-red-500"
-                      onClick={() => setDeletingRecurrence(r)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  )}
+                  {!isLoading &&
+                    recurrences.map((r) => (
+                      <div
+                        key={r.id}
+                        className={`flex items-center gap-4 px-5 py-4 transition-colors ${
+                          r.active === false
+                            ? 'opacity-40 bg-slate-50/50'
+                            : 'hover:bg-slate-50/50'
+                        }`}
+                      >
+                        <div
+                          className={`w-1.5 h-11 rounded-full flex-shrink-0 ${
+                            r.active === false ? 'bg-slate-300' : 'bg-blue-400'
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+                            {r.description}
+                          </p>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
+                            VENCE TODO DIA {r.due_day}
+                          </span>
+                        </div>
+                        <div className="text-right flex-shrink-0 mr-4">
+                          <p className="text-sm font-black text-slate-900">
+                            {fmt(r.amount)}
+                          </p>
+                          <span
+                            className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                              r.active === false
+                                ? 'bg-slate-100 text-slate-500'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}
+                          >
+                            {r.active === false ? 'INATIVA' : 'CONTA ATIVA'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-slate-400 hover:text-primary"
+                            onClick={() => onEditRecurrence(r)}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-slate-400 hover:text-primary"
+                            onClick={() =>
+                              toggleMutation.mutate({
+                                id: r.id,
+                                active: r.active === false,
+                              })
+                            }
+                          >
+                            {r.active === false ? (
+                              <ToggleLeft className="w-5 h-5 text-slate-400" />
+                            ) : (
+                              <ToggleRight className="w-5 h-5 text-primary" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-slate-300 hover:text-red-500"
+                            onClick={() => setDeletingRecurrence(r)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                 </div>
-              ))}
-          </div>
-        </CardContent>
-      </Card>
-      )}
-      </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm mb-6 mt-4">
@@ -247,7 +236,6 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
             className="flex-1 h-9 rounded-md border border-slate-200 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
-
         <Button
           size="sm"
           onClick={() => setShowForm(true)}
@@ -270,13 +258,11 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                   Carregando contas...
                 </p>
               )}
-
               {!isLoading && filteredPayables.length === 0 && (
                 <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
                   Nenhuma conta encontrada
                 </p>
               )}
-
               {!isLoading && filteredPayables.length > 0 && (
                 <>
                   {[
@@ -309,7 +295,6 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                                     isPaid ? 'bg-slate-300' : 'bg-amber-400'
                                   }`}
                                 />
-
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
                                     {p.description}
@@ -323,15 +308,14 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                                     VENCIMENTO: {format(new Date(String(p.due_date).includes('T') ? p.due_date : `${p.due_date}T12:00:00`), 'dd/MM/yyyy')}
                                   </span>
                                 </div>
-
                                 <div className="text-right flex-shrink-0 mr-4">
                                   <p className="text-sm font-black text-slate-900">
                                     {fmt(p.amount)}
                                   </p>
                                   <span
                                     className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                                      p.status === 'paid' ? 'bg-[#E6F9F0] border border-[#0A9E6A] text-[#0A6E50]' 
-                                      : p.status === 'provisioned' ? 'bg-[#EEF2FF] border border-[#7C93FF] text-[#4254C5]' 
+                                      p.status === 'paid' ? 'bg-[#E6F9F0] border border-[#0A9E6A] text-[#0A6E50]'
+                                      : p.status === 'provisioned' ? 'bg-[#EEF2FF] border border-[#7C93FF] text-[#4254C5]'
                                       : (new Date(p.due_date || p.competencia) < new Date(new Date().setHours(0,0,0,0))) ? 'bg-[#FFECEC] border border-[#E74C3C] text-[#C0392B]'
                                       : 'bg-[#E0F5F5] border border-[#0FA3A3] text-[#0A7070]'
                                     }`}
@@ -339,7 +323,6 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                                     {p.status === 'paid' ? 'PAGO' : p.status === 'provisioned' ? 'NO CARTÃO' : (new Date(p.due_date || p.competencia) < new Date(new Date().setHours(0,0,0,0))) ? 'VENCIDO' : 'PENDENTE'}
                                   </span>
                                 </div>
-
                                 <div className="flex items-center gap-1">
                                   <Button
                                     variant="ghost"
@@ -349,7 +332,6 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                                   >
                                     <Edit2 className="w-4 h-4" />
                                   </Button>
-
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -386,12 +368,10 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
               passado serão mantidas intactas no seu histórico.
             </AlertDialogDescription>
           </AlertDialogHeader>
-
           <div className="flex gap-3 mt-4">
             <AlertDialogCancel className="flex-1 font-bold">
               CANCELAR
             </AlertDialogCancel>
-
             <Button
               variant="destructive"
               className="flex-1 font-bold"
@@ -426,8 +406,8 @@ export default function Payables() {
   const [deletingPayable, setDeletingPayable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [paidSectionOpen, setPaidSectionOpen] = useState(false);
-
   const queryClient = useQueryClient();
+
   const monthKey = format(currentMonth, 'yyyy-MM');
 
   const { data: payablesResponse, isLoading: loadingPayables } = useQuery({
@@ -440,6 +420,7 @@ export default function Payables() {
   });
 
   const payablesItems = payablesResponse?.data?.items || [];
+
   const todayStart = useMemo(() => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 0, 0, 0), []);
 
   const parseItemDate = (value) => {
@@ -457,15 +438,20 @@ export default function Payables() {
     return payablesItems.filter(p => p.category === 'reembolso');
   }, [payablesItems]);
 
+  // ─── KPIs ────────────────────────────────────────────────────────────────────
+  // INVARIANTE: Previsto = Pago + Vencido + A Vencer
+  // Vencido e A Vencer usam "não-pago" em vez de "pending" para capturar
+  // qualquer status fora do padrão (overdue, null, etc.) e fechar a conta.
   const kpis = useMemo(() => {
     const currentMonthKey = format(currentMonth, 'yyyy-MM');
-    const hojeDate = new Date();
-    const hojeStr = format(hojeDate, 'yyyy-MM-dd');
+    const hojeStr = format(new Date(), 'yyyy-MM-dd');
 
+    // Previsto: todos os itens com due_date no mês, independente de status
     const previsto = validPayables
       .filter(p => String(p.due_date || p.competencia || '').slice(0, 7) === currentMonthKey)
       .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
+    // Pago: paid ou provisioned no mês (sem restrição de data dentro do mês)
     const pago = validPayables
       .filter(p => {
         const d = String(p.due_date || p.competencia || '');
@@ -474,19 +460,21 @@ export default function Payables() {
       })
       .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
+    // Vencido: qualquer status não-pago, mês atual, due_date já passou
     const vencido = validPayables
       .filter(p => {
         const d = String(p.due_date || p.competencia || '');
-        return p.status === 'pending' &&
+        return p.status !== 'paid' && p.status !== 'provisioned' &&
                d.slice(0, 7) === currentMonthKey &&
                d.slice(0, 10) < hojeStr;
       })
       .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
+    // A Vencer: qualquer status não-pago, mês atual, due_date >= hoje
     const aVencer = validPayables
       .filter(p => {
         const d = String(p.due_date || p.competencia || '');
-        return p.status === 'pending' &&
+        return p.status !== 'paid' && p.status !== 'provisioned' &&
                d.slice(0, 7) === currentMonthKey &&
                d.slice(0, 10) >= hojeStr;
       })
@@ -502,15 +490,17 @@ export default function Payables() {
       overdue: vencido,
       overdueLabel: "ação urgente",
       open: aVencer,
-      openLabel: "aguardando prazo"
+      openLabel: "aguardando prazo",
     };
   }, [validPayables, currentMonth]);
 
+  // Contas de meses anteriores ainda não pagas (banner de alerta)
   const atrasadasMesesAnteriores = useMemo(() => {
     const currentMonthKey = format(currentMonth, 'yyyy-MM');
     return validPayables.filter(p => {
-       const d = String(p.due_date || p.competencia || '');
-       return p.status === 'pending' && d.length >= 7 && d.slice(0, 7) < currentMonthKey;
+      const d = String(p.due_date || p.competencia || '');
+      return p.status !== 'paid' && p.status !== 'provisioned' &&
+             d.length >= 7 && d.slice(0, 7) < currentMonthKey;
     });
   }, [validPayables, currentMonth]);
 
@@ -526,15 +516,13 @@ export default function Payables() {
     const weekEnd = endOfWeek(todayStart, { weekStartsOn: 0 });
     const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 12, 0, 0);
 
-    const pendingItems = validPayables.filter(p => p.status === 'pending');
-    
+    const pendingItems = validPayables.filter(p => p.status !== 'paid' && p.status !== 'provisioned');
+
     const mapped = pendingItems.map((item) => {
       const dueDate = parseItemDate(item.due_date || item.competencia);
       if (!dueDate) return null;
-      
       const overdue = dueDate < todayStart;
       const autoDebit = item.payment_modality === 'automatic_debit';
-      
       return {
         id: item.id,
         description: item.description,
@@ -579,7 +567,6 @@ export default function Payables() {
         const dueDate = parseItemDate(item.due_date || item.competencia);
         const isProvisioned = item.status === 'provisioned';
         const isPaid = item.status === 'paid' || item.status === 'provisioned';
-        
         return {
           id: item.id,
           description: item.description,
@@ -614,16 +601,13 @@ export default function Payables() {
         await base44.entities.Recurrence.update(payable.recurrence_id, {
           active: false,
         });
-
         const payables = await base44.entities.Payable.list('-due_date', 500);
-
         const toDelete = payables.filter(
           (p) =>
             p.recurrence_id === payable.recurrence_id &&
             p.status !== 'paid' &&
             new Date(p.due_date) >= new Date(payable.due_date)
         );
-
         for (const p of toDelete) {
           await base44.entities.Payable.delete(p.id);
         }
@@ -635,7 +619,6 @@ export default function Payables() {
             p.status !== 'paid' &&
             new Date(p.due_date) >= new Date(payable.due_date)
         );
-
         for (const p of toDelete) {
           await base44.entities.Payable.delete(p.id);
         }
@@ -646,7 +629,6 @@ export default function Payables() {
             p.installment_group_id === payable.installment_group_id &&
             p.status !== 'paid'
         );
-
         for (const p of toDelete) {
           await base44.entities.Payable.delete(p.id);
         }
@@ -775,7 +757,6 @@ export default function Payables() {
               Como deseja excluir essa conta?
             </AlertDialogTitle>
           </AlertDialogHeader>
-
           <div className="flex flex-col gap-2 mt-4">
             <Button
               variant="outline"
@@ -790,7 +771,6 @@ export default function Payables() {
             >
               Excluir somente essa conta
             </Button>
-
             {(deletingPayable?.recurrence_id || deletingPayable?.installment_group_id) && (
               <Button
                 variant="outline"
@@ -806,7 +786,6 @@ export default function Payables() {
                 Excluir essa e as seguintes
               </Button>
             )}
-
             {(deletingPayable?.recurrence_id || deletingPayable?.installment_group_id) && (
               <Button
                 variant="destructive"
@@ -822,7 +801,6 @@ export default function Payables() {
                 Excluir todas
               </Button>
             )}
-
             <AlertDialogCancel className="font-bold mt-2">
               CANCELAR
             </AlertDialogCancel>
@@ -839,7 +817,6 @@ export default function Payables() {
           }}
         />
       )}
-
       {confirmingPayable && (
         <ConfirmPayableModal
           payable={confirmingPayable}
@@ -849,7 +826,6 @@ export default function Payables() {
           }}
         />
       )}
-
       {editingPayable && (
         <EditPayableModal
           payable={editingPayable}
@@ -861,7 +837,6 @@ export default function Payables() {
           }}
         />
       )}
-
       {editingRecurrence && (
         <RecurrenceFormModal
           initial={editingRecurrence}
