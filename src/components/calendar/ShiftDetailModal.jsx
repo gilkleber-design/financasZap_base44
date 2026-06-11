@@ -232,6 +232,33 @@ export default function ShiftDetailModal({ shift, hospital, source, onClose, onP
               </Button>
             </>
           )}
+          {shift.status === 'cancelled' && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => onUpdateStatus(shift.id, 'scheduled')}
+                className="w-full bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border-amber-200"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Desfazer Cancelamento
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onEdit(shift)}
+                className="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 border-blue-200"
+              >
+                Editar
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setView('delete_confirm')}
+                className="w-full text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Deletar
+              </Button>
+            </>
+          )}
           <Button variant="outline" onClick={onClose} className="w-full">Fechar</Button>
         </div>
       </DialogContent>
