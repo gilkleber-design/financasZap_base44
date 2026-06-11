@@ -16,7 +16,8 @@ import {
   UserCircle, 
   Plus,
   Link2,
-  ShoppingBag
+  ShoppingBag,
+  Repeat
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
@@ -25,6 +26,7 @@ import DashboardLogo from '@/components/dashboard/DashboardLogo';
 const navItems = [
   { path: '/', label: 'Início', icon: LayoutGrid },
   { path: '/calendario', label: 'Plantões', icon: Stethoscope },
+  { path: '/receitas-recorrentes', label: 'Recorrentes', icon: Repeat },
   { path: '/recebimentos', label: 'Recebíveis', icon: Wallet },
   { path: '/contas-pagar', label: 'Contas', icon: ReceiptText },
   { path: '/transacoes', label: 'Transações', icon: ArrowLeftRight },

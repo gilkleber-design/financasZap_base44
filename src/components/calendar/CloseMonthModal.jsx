@@ -1,464 +1,248 @@
-import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { CurrencyInput } from '@/components/ui/currency-input';
-import { Badge } from '@/components/ui/badge';
-import { format, startOfMonth, addMonths, addDays } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { AlertCircle, Lock, Plus, Info, Undo2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle } from 'lucide-react';
-import { resolveHospitalPaymentModel } from '@/lib/shifts';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-const kindLabel = { regular: 'Regular', extra: 'Extra', sobreaviso: 'Sobreaviso' };
-const kindColor = {
-  regular: 'bg-blue-100 text-blue-700',
-  extra: 'bg-yellow-100 text-yellow-700',
-  sobreaviso: 'bg-red-100 text-red-700',
-};
+export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
+    const month = monthStart.getMonth() + 1;
+    const year = monthStart.getFullYear();
+    const queryClient = useQueryClient();
 
-export default function CloseMonthModal({ shifts, hospitals, sources, currentMonth, onClose, onConfirm }) {
-  const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(null); // { count, total }
-  const [statuses, setStatuses] = useState(() =>
-    Object.fromEntries(shifts.map(s => {
-      let st = 'done';
-      if (s.status === 'cancelled' || s.status === 'passed') st = 'cancelled'; // Trata passed como cancelled visualmente no checkbox
-      else if (s.shift_kind === 'avista') st = 'avista';
-      return [s.id, st];
-    }))
-  );
-  const [extraIncomes, setExtraIncomes] = useState([]);
-  const [showExtraForm, setShowExtraForm] = useState(false);
-  const [extraForm, setExtraForm] = useState({ description: '', amount: '', categorySlug: 'salario', sourceId: '' });
-  const [selectedTemplate, setSelectedTemplate] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    
+    // UI State
+    const [shiftStatuses, setShiftStatuses] = useState({}); // { id: 'done' | 'cancelled' }
+    const [incomes, setIncomes] = useState([]); // [{ id, recurring_income_id, description, amount, category_id, notes, checked }]
 
-  const extraTemplates = {
-    salario_afya: { description: 'SALÁRIO AFYA', amount: 5199.58, categorySlug: 'salario', sourceId: '' },
-    bolsa_residencia: { description: 'BOLSA PRECEPTORIA RESIDENCIA', amount: 2500, categorySlug: 'bolsas', sourceId: '' },
-    bolsa_internato: { description: 'BOLSA INTERNATO', amount: '', categorySlug: 'bolsas', sourceId: '' },
-  };
+    // Fetch Preview
+    const { data: preview, isLoading, error } = useQuery({
+        queryKey: ['month-closure-preview', month, year],
+        queryFn: async () => {
+            const res = await base44.functions.invoke('getMonthClosurePreview', { month, year });
+            return res.data;
+        }
+    });
 
-  const toggle = (id) => {
-    const shift = shifts.find(s => s.id === id);
-    // Não permite alterar plantões que já eram passed/avista antes do fechamento
-    if (shift?.status === 'passed' || shift?.shift_kind === 'avista') return;
-    setStatuses(prev => ({
-      ...prev,
-      [id]: prev[id] === 'cancelled' ? 'done' : 'cancelled',
-    }));
-  };
+    // Also fetch shifts for the list (since preview only returned count/total, we need the actual list for the UI checkboxes)
+    const { data: shifts = [] } = useQuery({
+        queryKey: ['shifts-to-close', month, year],
+        queryFn: async () => {
+            const monthPrefix = `${year}-${month.toString().padStart(2, '0')}`;
+            const startDate = `${monthPrefix}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            const endDate = `${monthPrefix}-${lastDay.toString().padStart(2, '0')}`;
+            const allShifts = await base44.entities.Shift.filter({
+                date: { $gte: startDate, $lte: endDate },
+            });
+            // Filter closable
+            return allShifts.filter(s => !s.is_avista && s.status !== 'passed' && !s.receivable_id);
+        }
+    });
 
-  const doableShifts = shifts.filter(s => s.shift_kind !== 'avista' && statuses[s.id] === 'done');
+    const { data: hospitals = [] } = useQuery({ queryKey: ['hospitals'], queryFn: () => base44.entities.Hospital.list() });
 
-  // Agrupar shifts confirmados por hospital
-  const byHospital = doableShifts.reduce((acc, s) => {
-    if (!acc[s.hospital_id]) acc[s.hospital_id] = [];
-    acc[s.hospital_id].push(s);
-    return acc;
-  }, {});
+    // Initialize state when preview loads
+    useEffect(() => {
+        if (preview && shifts.length > 0 && Object.keys(shiftStatuses).length === 0) {
+            const initialShifts = {};
+            shifts.forEach(s => {
+                initialShifts[s.id] = s.status === 'cancelled' ? 'cancelled' : 'done';
+            });
+            setShiftStatuses(initialShifts);
 
-  // Para cada hospital, calcular recebíveis que serão gerados
-  const receivablePreview = Object.entries(byHospital).flatMap(([hid, hshifts]) => {
-    const hospital = hospitals.find(h => h.id === hid);
-    const source = sources.find(s => s.id === hospital?.income_source_id);
-    const paymentModel = resolveHospitalPaymentModel(hospital);
-    const taxRate = source?.default_tax_rate || 0;
+            const initialIncomes = preview.recurring_incomes.map(ri => ({
+                id: ri.id,
+                recurring_income_id: ri.id,
+                description: ri.description,
+                amount: ri.suggested_amount,
+                category_id: ri.category_id,
+                notes: '',
+                checked: ri.pre_check,
+                lock_amount: ri.lock_amount
+            }));
+            setIncomes(initialIncomes);
+        }
+    }, [preview, shifts]);
 
-    const refDate = currentMonth || new Date(hshifts[0].date + 'T12:00:00');
-    const offset = hospital?.payment_months_offset ?? 1;
-    const day = hospital?.payment_day || 1;
-    const targetMonth = addMonths(startOfMonth(refDate), offset);
-    const dueDate = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), day);
+    const handleConfirm = async () => {
+        setIsSaving(true);
+        try {
+            const finalIncomes = incomes
+                .filter(i => i.checked)
+                .map(i => ({
+                    recurring_income_id: i.recurring_income_id || null,
+                    description: i.description,
+                    amount: i.amount,
+                    category_id: i.category_id,
+                    notes: i.notes || null
+                }));
 
-    const monthLabel = format(refDate, 'MMMM/yyyy', { locale: ptBR });
+            const res = await base44.functions.invoke('closeMonth', {
+                month,
+                year,
+                shift_statuses: shiftStatuses,
+                incomes: finalIncomes
+            });
 
-    if (paymentModel === 'so_producao') {
-      // Só produção: 1 receivable agregado com soma dos valor_producao,
-      // vencimento = hoje + atraso_medio_pdt dias
-      const totalBruto = hshifts.reduce((acc, s) => acc + Number(s.valor_producao || s.valor || 0), 0);
-      const total = taxRate > 0 ? totalBruto * (1 - taxRate / 100) : totalBruto;
-      const atraso = Number(hospital?.atraso_medio_pdt || 0);
-      const prodDueDate = addDays(new Date(), atraso);
-      return [{
-        hospital,
-        source,
-        total,
-        totalBruto,
-        taxRate,
-        dueDate: prodDueDate,
-        shifts: hshifts,
-        label: `Produção ${hospital.sigla} — ${monthLabel}`,
-        isPdt: false,
-        isProducao: true,
-      }];
-    }
+            if (res.data.error) throw new Error(res.data.error);
 
-    // Plantão (so_plantao ou plantao_producao): soma todos os shifts do hospital
-    const totalBruto = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
-    const total = taxRate > 0 ? totalBruto * (1 - taxRate / 100) : totalBruto;
-    const result = [{
-      hospital,
-      source,
-      total,
-      totalBruto,
-      taxRate,
-      dueDate,
-      shifts: hshifts,
-      label: `${hospital.sigla} — Plantões ${monthLabel}`,
-      isPdt: false,
-      isProducao: false,
-    }];
+            toast.success('M\u00eas fechado com sucesso!');
+            onClosed();
+        } catch (err) {
+            toast.error(err.message || 'Erro ao fechar o m\u00eas');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
-    // Se for plantao_producao, adicionar PDT estimado separado (mantém comportamento legado)
-    if (paymentModel === 'plantao_producao' && hospital?.valor_medio_pdt) {
-      const atraso = Number(hospital?.atraso_medio_pdt || 15);
-      const pdtDueDate = addDays(dueDate, atraso);
-      const pdtBruto = Number(hospital.valor_medio_pdt) || 0;
-      const pdtLiquido = taxRate > 0 ? pdtBruto * (1 - taxRate / 100) : pdtBruto;
-      result.push({
-        hospital,
-        source,
-        total: pdtLiquido,
-        totalBruto: pdtBruto,
-        taxRate,
-        dueDate: pdtDueDate,
-        shifts: hshifts,
-        label: `${hospital.sigla} PDT ${monthLabel}`,
-        isPdt: true,
-        isProducao: false,
-      });
-    }
+    const addAvulso = () => {
+        setIncomes([...incomes, {
+            id: `avulso_${Date.now()}`,
+            recurring_income_id: null,
+            description: 'Nova Receita Extra',
+            amount: 0,
+            category_id: null,
+            notes: '',
+            checked: true,
+            lock_amount: false
+        }]);
+    };
 
-    return result;
-  });
+    const toggleShift = (id) => {
+        setShiftStatuses(prev => ({
+            ...prev,
+            [id]: prev[id] === 'done' ? 'cancelled' : 'done'
+        }));
+    };
 
-  const handleTemplateSelect = (templateKey) => {
-    if (templateKey === 'outro') {
-      setSelectedTemplate('outro');
-      setExtraForm({ description: '', amount: '', categorySlug: 'salario', sourceId: '' });
-    } else {
-      const template = extraTemplates[templateKey];
-      setSelectedTemplate(templateKey);
-      setExtraForm({ ...template });
-    }
-  };
+    const updateIncome = (id, field, value) => {
+        setIncomes(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
+    };
 
-  const addExtraIncome = () => {
-    if (!extraForm.description || !extraForm.amount) return;
-    const amount = parseFloat(extraForm.amount);
-    setExtraIncomes([...extraIncomes, { ...extraForm, amount, taxRate: 0, netAmount: amount }]);
-    setExtraForm({ description: '', amount: '', categorySlug: 'salario', sourceId: '' });
-    setSelectedTemplate('');
-    setShowExtraForm(false);
-  };
+    if (isLoading) return <Dialog open><DialogContent><div className="p-8 text-center">Carregando pr\u00e9via...</div></DialogContent></Dialog>;
+    if (error) return <Dialog open onOpenChange={onClose}><DialogContent><div className="p-8 text-center text-red-500">Erro: {error.message}</div></DialogContent></Dialog>;
 
-  const removeExtraIncome = (idx) => {
-    setExtraIncomes(extraIncomes.filter((_, i) => i !== idx));
-  };
+    const selectedShiftsTotal = shifts.filter(s => shiftStatuses[s.id] === 'done').reduce((acc, s) => acc + (Number(s.valor) || 0) + (Number(s.valor_producao) || 0), 0);
+    const selectedIncomesTotal = incomes.filter(i => i.checked).reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+    const totalExpected = selectedShiftsTotal + selectedIncomesTotal;
 
-  const extraIncomesPreview = extraIncomes.map(ei => ({
-    description: ei.description,
-    total: ei.netAmount,
-    totalBruto: ei.amount,
-    taxRate: ei.taxRate || 0,
-    dueDate: currentMonth ? addMonths(startOfMonth(currentMonth), 1) : new Date(),
-    label: ei.description,
-    isPdt: false,
-    isProducao: false,
-    isExtra: true,
-    sourceId: ei.sourceId,
-    categorySlug: ei.categorySlug,
-  }));
-
-  const allReceivables = [...receivablePreview, ...extraIncomesPreview];
-  const grandTotal = allReceivables.reduce((acc, r) => acc + r.total, 0);
-  const grandBruto = allReceivables.reduce((acc, r) => acc + r.totalBruto, 0);
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Fechamento do Mês</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2 flex flex-col">
-          {/* Seção de receitas extras — sempre visível */}
-          <div className="border border-border rounded-xl p-4 bg-card space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Receitas Extras
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowExtraForm(!showExtraForm)}
-                className="text-xs h-6"
-              >
-                {showExtraForm ? '✕' : '+ Adicionar'}
-              </Button>
-            </div>
-
-            {showExtraForm && !selectedTemplate && (
-              <div className="bg-accent/30 border border-border rounded-xl p-3 space-y-3">
-                <p className="text-xs font-semibold text-muted-foreground">Selecione ou adicione uma renda extra:</p>
-                <div className="grid grid-cols-1 gap-2">
-                  <button
-                    onClick={() => handleTemplateSelect('salario_afya')}
-                    className="text-left p-2.5 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
-                  >
-                    <p className="text-sm font-semibold text-foreground">SALÁRIO AFYA</p>
-                    <p className="text-xs text-muted-foreground">CLT · R$ 5.199,58</p>
-                  </button>
-                  <button
-                    onClick={() => handleTemplateSelect('bolsa_residencia')}
-                    className="text-left p-2.5 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
-                  >
-                    <p className="text-sm font-semibold text-foreground">BOLSA PRECEPTORIA RESIDENCIA</p>
-                    <p className="text-xs text-muted-foreground">PJ Vitruvian · R$ 2.500,00 (13% imposto)</p>
-                  </button>
-                  <button
-                    onClick={() => handleTemplateSelect('bolsa_internato')}
-                    className="text-left p-2.5 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
-                  >
-                    <p className="text-sm font-semibold text-foreground">BOLSA INTERNATO</p>
-                    <p className="text-xs text-muted-foreground">Valor variável · Crédito direto</p>
-                  </button>
-                  <button
-                    onClick={() => handleTemplateSelect('outro')}
-                    className="text-left p-2.5 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
-                  >
-                    <p className="text-sm font-semibold text-foreground">OUTRO</p>
-                    <p className="text-xs text-muted-foreground">Adicionar renda customizada</p>
-                  </button>
+    return (
+        <Dialog open onOpenChange={onClose}>
+            <DialogContent className="font-sora sm:max-w-[600px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
+                <div className="px-6 py-4 border-b border-border shrink-0">
+                    <DialogTitle className="text-xl">FECHAMENTO DE {format(monthStart, 'MMMM/yyyy', {locale: ptBR}).toUpperCase()}</DialogTitle>
+                    <DialogDescription>Confirme os plant\u00f5es e receitas para gerar os receb\u00edveis do m\u00eas.</DialogDescription>
                 </div>
-              </div>
-            )}
 
-            {showExtraForm && selectedTemplate && (
-              <div className="bg-accent/30 border border-border rounded-xl p-3 space-y-3">
-                {selectedTemplate !== 'outro' && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                    <p className="text-xs font-semibold text-blue-700">{extraForm.description}</p>
-                    <p className="text-xs text-blue-600 mt-1">
-                      Categoria: {extraForm.categorySlug === 'salario' ? 'Salário' : extraForm.categorySlug === 'bolsas' ? 'Bolsas' : 'Extras'}
-                    </p>
-                  </div>
-                )}
-                {selectedTemplate === 'outro' && (
-                  <input
-                    type="text"
-                    placeholder="Descrição"
-                    value={extraForm.description}
-                    onChange={e => setExtraForm({ ...extraForm, description: e.target.value })}
-                    className="w-full px-2 py-1.5 text-sm rounded border border-input bg-background"
-                  />
-                )}
-                <div className="grid grid-cols-3 gap-2">
-                  <CurrencyInput
-                    value={extraForm.amount}
-                    onChange={(value) => setExtraForm({ ...extraForm, amount: value })}
-                    className="px-2 py-1.5 text-sm rounded border border-input bg-background h-auto"
-                  />
-                  <select
-                    value={extraForm.categorySlug}
-                    onChange={e => setExtraForm({ ...extraForm, categorySlug: e.target.value })}
-                    className="px-2 py-1.5 text-sm rounded border border-input bg-background"
-                  >
-                    <option value="salario">Salário</option>
-                    <option value="bolsas">Bolsas</option>
-                    <option value="extras">Extras</option>
-                  </select>
-                  <Button size="sm" onClick={addExtraIncome} className="h-8">Adicionar</Button>
+                <ScrollArea className="flex-1 px-6 py-4">
+                    <div className="space-y-6">
+                        {/* PLANT\u00d5ES */}
+                        <section>
+                            <h3 className="text-xs font-bold text-slate-500 mb-3 tracking-widest uppercase">PLANT\u00d5ES ({shifts.filter(s=>shiftStatuses[s.id]==='done').length})</h3>
+                            <div className="space-y-2">
+                                {shifts.length === 0 && <p className="text-sm text-slate-400">Nenhum plant\u00e3o pendente.</p>}
+                                {shifts.map(shift => {
+                                    const hospital = hospitals.find(h => h.id === shift.hospital_id);
+                                    const val = (Number(shift.valor) || 0) + (Number(shift.valor_producao) || 0);
+                                    const isDone = shiftStatuses[shift.id] === 'done';
+                                    
+                                    return (
+                                        <div key={shift.id} className={`flex items-center justify-between p-2 rounded-lg border ${isDone ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/50 border-transparent opacity-60'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <Checkbox checked={isDone} onCheckedChange={() => toggleShift(shift.id)} />
+                                                <div className="text-sm">
+                                                    <span className={`font-bold ${isDone ? 'text-slate-700' : 'line-through text-slate-400'}`}>
+                                                        {hospital?.sigla || 'Hosp'} — {shift.type} {format(new Date(`${shift.date}T12:00:00`), 'dd/MM')}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="text-sm font-semibold text-slate-600">
+                                                {isDone ? fmt(val) : 'Cancelado'}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                <div className="text-right text-sm font-bold text-slate-700 pt-2">
+                                    Subtotal: {fmt(selectedShiftsTotal)}
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* RECEITAS RECORRENTES */}
+                        <section>
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-xs font-bold text-slate-500 tracking-widest uppercase">RECEITAS EXTRAS E BOLSAS</h3>
+                            </div>
+                            <div className="space-y-3">
+                                {incomes.map((inc, idx) => (
+                                    <div key={inc.id} className={`p-3 rounded-lg border ${inc.checked ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/50 border-transparent opacity-60'}`}>
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <Checkbox checked={inc.checked} onCheckedChange={(v) => updateIncome(inc.id, 'checked', v)} />
+                                            <div className="flex-1">
+                                                <Input 
+                                                    value={inc.description} 
+                                                    onChange={e => updateIncome(inc.id, 'description', e.target.value)}
+                                                    className="h-7 text-sm font-bold bg-transparent border-none px-0 shadow-none focus-visible:ring-0"
+                                                    disabled={!inc.checked || inc.lock_amount}
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {inc.lock_amount && <Lock className="w-3 h-3 text-amber-600" />}
+                                                <Input 
+                                                    type="number"
+                                                    value={inc.amount}
+                                                    onChange={e => updateIncome(inc.id, 'amount', e.target.value)}
+                                                    disabled={!inc.checked || inc.lock_amount}
+                                                    className="w-28 h-7 text-sm text-right font-semibold"
+                                                />
+                                            </div>
+                                        </div>
+                                        {inc.checked && (
+                                            <div className="pl-7">
+                                                <Input 
+                                                    placeholder="Adicionar nota (ex: f\u00e9rias, horas extras)..." 
+                                                    value={inc.notes}
+                                                    onChange={e => updateIncome(inc.id, 'notes', e.target.value)}
+                                                    className="h-6 text-xs text-muted-foreground border-transparent bg-transparent shadow-none px-0"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                <Button variant="outline" size="sm" onClick={addAvulso} className="w-full text-xs border-dashed">
+                                    <Plus className="w-3 h-3 mr-2" /> Adicionar Receita Avulsa
+                                </Button>
+                                <div className="text-right text-sm font-bold text-slate-700 pt-2">
+                                    Subtotal: {fmt(selectedIncomesTotal)}
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </ScrollArea>
+
+                <div className="px-6 py-4 bg-slate-100 border-t border-border shrink-0 flex items-center justify-between">
+                    <div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">TOTAL ESPERADO</p>
+                        <p className="text-2xl font-black text-primary">{fmt(totalExpected)}</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
+                        <Button onClick={handleConfirm} disabled={isSaving} className="bg-primary hover:bg-primary/90">
+                            {isSaving ? 'Fechando...' : 'Confirmar Fechamento'}
+                        </Button>
+                    </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { setSelectedTemplate(''); setExtraForm({ description: '', amount: '', categorySlug: 'salario', sourceId: '' }); }}
-                  className="w-full text-xs"
-                >
-                  Voltar
-                </Button>
-              </div>
-            )}
-
-            {extraIncomes.length > 0 && (
-              <div className="space-y-2">
-                {extraIncomes.map((ei, idx) => (
-                  <div key={idx} className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-violet-800">{ei.description}</p>
-                      <p className="text-xs text-violet-600 capitalize">{ei.categorySlug === 'plantoes' ? 'Plantões' : ei.categorySlug}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-violet-700">{fmt(ei.netAmount)}</p>
-                    </div>
-                    <button
-                      onClick={() => removeExtraIncome(idx)}
-                      className="text-red-500 hover:text-red-700 text-xs underline"
-                    >
-                      Remover
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            Revise os plantões. Clique para marcar como <strong>cancelado</strong> (não gerará recebível).
-          </p>
-
-          {/* Lista de plantões — excluindo os "à vista" que já têm recebível próprio e os já passados */}
-          <div className="space-y-2">
-            {shifts.filter(s => s.shift_kind !== 'avista').map(s => {
-              const hospital = hospitals.find(h => h.id === s.hospital_id);
-              const source = sources.find(src => src.id === hospital?.income_source_id);
-              const taxRate = source?.default_tax_rate || 0;
-              const paymentModel = resolveHospitalPaymentModel(hospital);
-              const isProducao = paymentModel === 'so_producao';
-              const bruto = isProducao ? Number(s.valor_producao || s.valor || 0) : (s.valor || 0);
-              const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
-              const cancelled = statuses[s.id] === 'cancelled';
-
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => toggle(s.id)}
-                  className={`w-full text-left flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                    cancelled ? 'bg-muted/30 border-border opacity-50' : 'bg-card border-border hover:border-primary/30'
-                  }`}
-                >
-                  <div className="flex-shrink-0">
-                    {cancelled
-                      ? <XCircle className="w-5 h-5 text-red-400" />
-                      : <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{hospital?.sigla}</span>
-                      <Badge className={`text-xs py-0 h-4 px-1.5 border-0 ${kindColor[s.shift_kind] || 'bg-gray-100 text-gray-600'}`}>
-                        {isProducao ? 'Produção' : `${s.type} ${kindLabel[s.shift_kind] || s.shift_kind}`}
-                      </Badge>
-                      {s.is_turno && (
-                        <Badge className="text-xs py-0 h-4 px-1.5 border-0 bg-slate-100 text-slate-700">Turno</Badge>
-                      )}
-                      {s.status === 'passed' && (
-                        <Badge className="text-xs py-0 h-4 px-1.5 border-0 bg-purple-100 text-purple-700">Passado</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {format(new Date(s.date + 'T12:00:00'), "dd/MM/yyyy (EEEE)", { locale: ptBR })}
-                    </p>
-                  </div>
-                  <div className={`text-right ${cancelled ? 'line-through text-muted-foreground' : ''}`}>
-                    <p className={`text-sm font-semibold ${cancelled ? '' : 'text-emerald-600'}`}>{fmt(liquido)}</p>
-                    {taxRate > 0 && !cancelled && (
-                      <p className="text-xs text-muted-foreground">{fmt(bruto)} bruto</p>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Preview de recebíveis */}
-          <div className="border-t border-border pt-4">
-           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-             Contas a Receber que serão geradas
-           </p>
-           {allReceivables.length === 0 ? (
-             <p className="text-sm text-muted-foreground text-center py-3">Nenhuma receita para confirmar.</p>
-           ) : (
-             <div className="space-y-2">
-               {allReceivables.map((r, i) => (
-                  <div
-                    key={i}
-                    className={`border rounded-xl p-3 flex items-center justify-between gap-3 ${
-                      r.isExtra
-                        ? 'bg-violet-50 border-violet-200'
-                        : r.isPdt
-                        ? 'bg-blue-50 border-blue-200'
-                        : r.isProducao
-                        ? 'bg-purple-50 border-purple-200'
-                        : 'bg-emerald-50 border-emerald-200'
-                    }`}
-                  >
-                    <div>
-                      <p className={`text-sm font-semibold ${
-                        r.isExtra ? 'text-violet-800' : r.isPdt ? 'text-blue-800' : r.isProducao ? 'text-purple-800' : 'text-emerald-800'
-                      }`}>
-                        {r.label}
-                        {r.isExtra && <span className="ml-2 text-xs font-normal text-violet-600">(Receita Extra)</span>}
-                        {r.isPdt && <span className="ml-2 text-xs font-normal text-blue-600">(PDT Estimado)</span>}
-                      </p>
-                      <p className={`text-xs mt-0.5 ${
-                        r.isExtra ? 'text-violet-600' : r.isPdt ? 'text-blue-600' : r.isProducao ? 'text-purple-600' : 'text-emerald-600'
-                      }`}>
-                        {!r.isExtra && `Vencimento: ${format(r.dueDate, 'dd/MM/yyyy')}`}
-                        {r.source && ` · PJ: ${r.source.name}`}
-                        {r.taxRate > 0 && ` · ${r.taxRate}% imposto`}
-                        {r.isPdt && ' (+15 dias do plantão)'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-base font-bold ${
-                        r.isExtra ? 'text-violet-700' : r.isPdt ? 'text-blue-700' : r.isProducao ? 'text-purple-700' : 'text-emerald-700'
-                      }`}>
-                        {fmt(r.total)}
-                      </p>
-                      {r.taxRate > 0 && (
-                        <p className={`text-xs ${r.isExtra ? 'text-violet-500' : r.isPdt ? 'text-blue-500' : r.isProducao ? 'text-purple-500' : 'text-emerald-500'}`}>{fmt(r.totalBruto)} bruto</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Total */}
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex justify-between items-center">
-            <span className="text-sm font-semibold">Total a Receber</span>
-            <div className="text-right">
-              <p className="text-xl font-bold text-primary">{fmt(grandTotal)}</p>
-              {receivablePreview.some(r => r.taxRate > 0) && (
-                <p className="text-xs text-muted-foreground">{fmt(grandBruto)} bruto</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {done ? (
-          <div className="flex flex-col items-center gap-4 py-4">
-            <CheckCircle2 className="w-14 h-14 text-emerald-500" />
-            <div className="text-center">
-              <p className="text-lg font-bold text-emerald-700">Fechamento realizado com sucesso!</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {done.count} conta(s) a receber gerada(s) · {fmt(done.total)} líquido
-              </p>
-            </div>
-            <Button onClick={onClose} className="w-full">Fechar</Button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} disabled={loading} className="flex-1">Cancelar</Button>
-            <Button
-              onClick={async () => {
-                setLoading(true);
-                await onConfirm(statuses, allReceivables);
-                setDone({ count: allReceivables.length, total: grandTotal });
-                setLoading(false);
-              }}
-              disabled={allReceivables.length === 0 || loading}
-              className="flex-1"
-            >
-              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processando...</> : 'Confirmar Fechamento'}
-            </Button>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
+            </DialogContent>
+        </Dialog>
+    );
 }

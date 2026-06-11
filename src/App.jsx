@@ -22,9 +22,11 @@ import CardInvoices from '@/pages/CardInvoices';
 import Planning from '@/pages/Planning';
 import LinkHub from '@/pages/LinkHub';
 import DataReview from '@/pages/DataReview';
+import RecurringIncomes from '@/pages/RecurringIncomes';
 
 const routeTitles = {
   '/': 'Início — FinançasZap',
+  '/receitas-recorrentes': 'Receitas Recorrentes — FinançasZap',
   '/relatorios': 'Relatórios — FinançasZap',
   '/hospitais': 'Hospitais — FinançasZap',
   '/calendario': 'Calendário — FinançasZap',
@@ -79,6 +81,7 @@ const AuthenticatedApp = () => {
         <Route path="/planejamento" element={<Planning />} />
         <Route path="/revisao-dados" element={<DataReview />} />
         <Route path="/hub-amarracao" element={<LinkHub />} />
+        <Route path="/receitas-recorrentes" element={<RecurringIncomes />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

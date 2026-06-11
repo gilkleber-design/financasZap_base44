@@ -75,6 +75,10 @@
       "type": "string",
       "description": "ID do Receivable gerado no fechamento"
     },
+    "closure_id": {
+      "type": "string",
+      "description": "Vincula o plant\u00e3o ao fechamento que o gerou"
+    },
     "notes": {
       "type": "string"
     },

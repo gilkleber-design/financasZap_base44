@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import ShiftModal from '@/components/calendar/ShiftModal';
 import CloseMonthModal from '@/components/calendar/CloseMonthModal';
+import ReopenMonthModal from '@/components/calendar/ReopenMonthModal';
 import ShiftDetailModal from '@/components/calendar/ShiftDetailModal';
 import MonthlyHospitalSummary from '@/components/calendar/MonthlyHospitalSummary';
 import { calculateShiftValue } from '@/lib/shifts';
@@ -129,35 +130,49 @@ export default function CalendarPage() {
     };
   }, [monthShifts, hospitals, sources]);
 
-  const isMonthClosed = monthShifts.some(s => s.status === 'done' && s.receivable_id && s.shift_kind !== 'avista');
+  const monthNumber = currentMonth.getMonth() + 1;
+  const yearNumber = currentMonth.getFullYear();
+
+  const { data: closure } = useQuery({
+    queryKey: ['monthly_closure', monthNumber, yearNumber],
+    queryFn: () => base44.entities.MonthlyClosure.filter({ month: monthNumber, year: yearNumber }),
+  });
+  const isMonthClosed = closure?.[0]?.status === 'closed';
 
   const handleSaveShifts = async (newShifts, meta) => {
     if (meta?.isAvista && newShifts.length === 1) {
-      // Cria o shift primeiro, depois gera o recebível e vincula
-      const [shiftData] = newShifts;
-      const shift = await base44.entities.Shift.create(shiftData);
-      const { hospital, source, bruto, liquido, taxRate, date } = meta;
-      const monthLabel = format(new Date(date + 'T12:00:00'), 'MMMM/yyyy', { locale: ptBR });
-      const categories = await base44.entities.Category.filter({ slug: 'plantoes' });
-      const plantaoCategory = categories?.[0] || null;
-      const rec = await base44.entities.Receivable.create({
-        description: `${hospital.sigla} — À Vista ${format(new Date(date + 'T12:00:00'), 'dd/MM/yyyy')}`,
-        amount: bruto || 0,
-        net_amount: liquido || bruto || 0,
-        due_date: date,
-        competencia: format(startOfMonth(new Date(date + 'T12:00:00')), 'yyyy-MM-dd'),
-        income_source_id: hospital.income_source_id || '',
-        hospital_id: hospital.id,
-        category: 'plantoes',
-        category_id: plantaoCategory?.id,
-        tax_rate: taxRate || undefined,
-        status: 'pending',
-        notes: `Plantão à vista`,
-      });
-      await base44.entities.Shift.update(shift.id, { receivable_id: rec.id });
-      queryClient.invalidateQueries({ queryKey: ['shifts'] });
-      queryClient.invalidateQueries({ queryKey: ['receivables'] });
-      toast.success('Plantão à vista criado! Conta a receber gerada.');
+      let shiftId = null;
+      try {
+        const [shiftData] = newShifts;
+        const shift = await base44.entities.Shift.create(shiftData);
+        shiftId = shift.id;
+        const { hospital, source, bruto, liquido, taxRate, date } = meta;
+        const categories = await base44.entities.Category.filter({ slug: 'plantoes' });
+        const plantaoCategory = categories?.[0] || null;
+        const rec = await base44.entities.Receivable.create({
+          description: `${hospital.sigla} — À Vista ${format(new Date(date + 'T12:00:00'), 'dd/MM/yyyy')}`,
+          amount: bruto || 0,
+          net_amount: liquido || bruto || 0,
+          due_date: date,
+          competencia: format(startOfMonth(new Date(date + 'T12:00:00')), 'yyyy-MM-dd'),
+          income_source_id: hospital.income_source_id || '',
+          hospital_id: hospital.id,
+          category: 'plantoes',
+          category_id: plantaoCategory?.id,
+          tax_rate: taxRate || undefined,
+          status: 'pending',
+          receivable_type: 'avista',
+          source_shift_ids: [shift.id],
+          notes: `Plantão à vista`,
+        });
+        await base44.entities.Shift.update(shift.id, { receivable_id: rec.id });
+        queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        queryClient.invalidateQueries({ queryKey: ['receivables'] });
+        toast.success('Plantão à vista criado! Conta a receber gerada.');
+      } catch (err) {
+        if (shiftId) await base44.entities.Shift.delete(shiftId);
+        toast.error('Erro ao salvar plantão à vista: ' + err.message);
+      }
     } else {
       createShiftsMutation.mutate(newShifts);
     }
@@ -237,91 +252,7 @@ export default function CalendarPage() {
     toast.success(`${toUpdate.length} plantão(s) atualizado(s).`);
   };
 
-  // Reabrir mês: verifica pagamentos já realizados antes de reverter
-  const executeReopenMonth = async () => {
-    setConfirmReopen(false);
-    setReopening(true);
-    try {
-      const closedShifts = monthShifts.filter(s => s.status === 'done' && s.receivable_id);
-      const receivableIds = [...new Set(closedShifts.map(s => s.receivable_id).filter(Boolean))];
-
-      // Busca os recebíveis vinculados para checar se já foram pagos
-      const allReceivables = await Promise.all(receivableIds.map(id => base44.entities.Receivable.filter({ id })));
-      const flatReceivables = allReceivables.flat();
-      const paidReceivables = flatReceivables.filter(r => r.status === 'received' || r.transaction_id);
-
-      // Deleta lançamentos de receita vinculados aos recebíveis pagos
-      if (paidReceivables.length > 0) {
-        const txIds = paidReceivables.map(r => r.transaction_id).filter(Boolean);
-        await Promise.all(txIds.map(id => base44.entities.Transaction.delete(id)));
-      }
-
-      // Reverte plantões para scheduled
-      await Promise.all(closedShifts.map(s =>
-        base44.entities.Shift.update(s.id, { status: 'scheduled', receivable_id: null })
-      ));
-      // Deleta os recebíveis
-      await Promise.all(receivableIds.map(id => base44.entities.Receivable.delete(id)));
-      await queryClient.invalidateQueries();
-      toast.success(`Mês reaberto! ${closedShifts.length} plantão(s) revertido(s) e ${receivableIds.length} conta(s) a receber removida(s).`);
-    } finally {
-      setReopening(false);
-    }
-  };
-
-  const handleCloseMonth = async (statuses, receivablePreview) => {
-    // Atualiza apenas os plantões que estavam como 'scheduled' (não mexe em cancelados/passados já existentes)
-    const updates = Object.entries(statuses)
-      .filter(([id]) => {
-        const shift = monthShifts.find(s => s.id === id);
-        return shift?.status === 'scheduled';
-      })
-      .map(([id, status]) => updateShiftMutation.mutateAsync({ id, data: { status } }));
-    await Promise.all(updates);
-
-    // Gera Receivables usando exatamente o receivablePreview (já filtrado sem cancelados)
-    for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt, isExtra, sourceId, categorySlug } of receivablePreview) {
-      // Se for receita extra (isExtra), usamos a categoria escolhida no modal
-      const targetCategorySlug = isExtra ? (categorySlug || 'salario') : 'plantoes';
-      const categories = await base44.entities.Category.filter({ slug: targetCategorySlug });
-      // Se não encontrar, faz fallback pra primeira disponivel
-      let finalCategory = categories?.[0];
-      if (!finalCategory && isExtra) {
-         const fallbackCategories = await base44.entities.Category.filter({ slug: 'extras' });
-         finalCategory = fallbackCategories?.[0] || null;
-      }
-      
-      const rec = await createReceivableMutation.mutateAsync({
-        description: label,
-        amount: totalBruto || 0,
-        net_amount: total || totalBruto || 0,
-        due_date: format(dueDate, 'yyyy-MM-dd'),
-        competencia: format(startOfMonth(hshifts?.length > 0 ? new Date(hshifts[0].date + 'T12:00:00') : currentMonth), 'yyyy-MM-dd'),
-        income_source_id: hospital?.income_source_id || source?.id || sourceId || '',
-        hospital_id: hospital?.id,
-        category: finalCategory?.slug || targetCategorySlug,
-        category_id: finalCategory?.id,
-        tax_rate: taxRate || 0,
-        status: 'pending',
-        notes: isExtra
-          ? `Receita extra adicionada no fechamento`
-          : isPdt
-          ? `PDT — valor estimado (${hshifts?.length || 0} plantão(s))`
-          : `Fechamento automático: ${hshifts?.length || 0} plantão(s)`,
-      });
-
-      if (hshifts?.length > 0) {
-        // Vincula receivable_id apenas nos plantões confirmados (done), não nos cancelados/passados
-        await Promise.all(
-          hshifts
-            .filter(s => statuses[s.id] === 'done')
-            .map(s => updateShiftMutation.mutateAsync({ id: s.id, data: { receivable_id: rec.id } }))
-        );
-      }
-    }
-
-    await queryClient.invalidateQueries();
-  };
+  // Reabertura e Fechamento agora são gerenciados pelos novos modais e backend functions.
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -486,33 +417,24 @@ export default function CalendarPage() {
       )}
 
       {confirmReopen && (
-        <AlertDialog open onOpenChange={() => setConfirmReopen(false)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Reabrir mês?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Todos os plantões fechados voltarão para "agendado" e as contas a receber geradas serão removidas.
-                Se alguma já foi recebida, o lançamento de receita também será excluído.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="flex gap-2">
-              <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
-              <Button variant="destructive" className="flex-1" onClick={executeReopenMonth}>
-                Reabrir Mesmo Assim
-              </Button>
-            </div>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ReopenMonthModal
+          monthStart={currentMonth}
+          onClose={() => setConfirmReopen(false)}
+          onReopened={() => {
+            setConfirmReopen(false);
+            queryClient.invalidateQueries();
+          }}
+        />
       )}
 
       {showClose && (
         <CloseMonthModal
-          shifts={monthShifts}
-          hospitals={hospitals}
-          sources={sources}
-          currentMonth={currentMonth}
+          monthStart={currentMonth}
           onClose={() => setShowClose(false)}
-          onConfirm={handleCloseMonth}
+          onClosed={() => {
+            setShowClose(false);
+            queryClient.invalidateQueries();
+          }}
         />
       )}
     </div>

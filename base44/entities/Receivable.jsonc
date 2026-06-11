@@ -66,6 +66,27 @@
     },
     "family_id": {
       "type": "string"
+    },
+    "closure_id": {
+      "type": "string",
+      "description": "Vincula a um fechamento (MonthlyClosure)"
+    },
+    "receivable_type": {
+      "type": "string",
+      "enum": [
+        "shifts_aggregated",
+        "pdt_estimate",
+        "extra_income",
+        "avista"
+      ],
+      "description": "Categoriza a origem"
+    },
+    "source_shift_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Quais plant\u00f5es comp\u00f5em este receb\u00edvel"
     }
   },
   "required": [

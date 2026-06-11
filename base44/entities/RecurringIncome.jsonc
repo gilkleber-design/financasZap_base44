@@ -1,0 +1,77 @@
+{
+  "name": "RecurringIncome",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Ex: Sal\u00e1rio Afya, Bolsa Preceptoria"
+    },
+    "default_amount": {
+      "type": "number",
+      "description": "Valor base sugerido"
+    },
+    "category_id": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "description": "Slug fallback"
+    },
+    "income_source_id": {
+      "type": "string"
+    },
+    "due_day": {
+      "type": "number",
+      "description": "Dia previsto de recebimento (1-31)"
+    },
+    "pre_check": {
+      "type": "boolean",
+      "default": true,
+      "description": "Se vem pr\u00e9-marcada (inclu\u00edda) no fechamento"
+    },
+    "lock_amount": {
+      "type": "boolean",
+      "default": false,
+      "description": "Se valor \u00e9 travado (n\u00e3o edit\u00e1vel no fechamento)"
+    },
+    "remember_last": {
+      "type": "boolean",
+      "default": false,
+      "description": "Se preenche com \u00faltimo valor real recebido em vez do default"
+    },
+    "last_amount": {
+      "type": "number",
+      "description": "Cache do \u00faltimo valor confirmado em um fechamento"
+    },
+    "last_received_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "notes": {
+      "type": "string"
+    },
+    "family_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "description",
+    "default_amount"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "data.family_id": "{{user.data.family_id}}"
+    },
+    "update": {
+      "data.family_id": "{{user.data.family_id}}"
+    },
+    "delete": {
+      "data.family_id": "{{user.data.family_id}}"
+    }
+  }
+}

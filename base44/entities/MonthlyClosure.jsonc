@@ -1,0 +1,72 @@
+{
+  "name": "MonthlyClosure",
+  "type": "object",
+  "properties": {
+    "month": {
+      "type": "number",
+      "description": "M\u00eas 1-12"
+    },
+    "year": {
+      "type": "number",
+      "description": "Ano"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "closed",
+        "reopened"
+      ],
+      "default": "open"
+    },
+    "closed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "closed_by_id": {
+      "type": "string",
+      "description": "ID do usu\u00e1rio que fechou"
+    },
+    "reopened_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reopened_by_id": {
+      "type": "string"
+    },
+    "reopen_reason": {
+      "type": "string"
+    },
+    "total_gross": {
+      "type": "number",
+      "description": "Total bruto no momento do fechamento (snapshot)"
+    },
+    "total_net": {
+      "type": "number",
+      "description": "Total l\u00edquido (snapshot)"
+    },
+    "shift_count": {
+      "type": "number",
+      "description": "Plant\u00f5es considerados (snapshot)"
+    },
+    "family_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "month",
+    "year"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "data.family_id": "{{user.data.family_id}}"
+    },
+    "update": {
+      "data.family_id": "{{user.data.family_id}}"
+    },
+    "delete": {
+      "data.family_id": "{{user.data.family_id}}"
+    }
+  }
+}

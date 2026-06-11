@@ -1,0 +1,58 @@
+{
+  "name": "ClosureIncome",
+  "type": "object",
+  "properties": {
+    "closure_id": {
+      "type": "string",
+      "description": "ID do MonthlyClosure"
+    },
+    "recurring_income_id": {
+      "type": "string",
+      "description": "Template de origem (null se avulso)"
+    },
+    "description": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Valor real desse m\u00eas"
+    },
+    "category_id": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "income_source_id": {
+      "type": "string"
+    },
+    "receivable_id": {
+      "type": "string",
+      "description": "Receivable gerado a partir desse income"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00e3o do m\u00eas (ex: f\u00e9rias, horas extras)"
+    },
+    "family_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "closure_id",
+    "description",
+    "amount"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "data.family_id": "{{user.data.family_id}}"
+    },
+    "update": {
+      "data.family_id": "{{user.data.family_id}}"
+    },
+    "delete": {
+      "data.family_id": "{{user.data.family_id}}"
+    }
+  }
+}
