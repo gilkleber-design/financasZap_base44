@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { UserCheck, Trash2, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { UserCheck, Trash2, AlertTriangle, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -187,6 +187,33 @@ export default function ShiftDetailModal({ shift, hospital, source, onClose, onP
               >
                 <XCircle className="w-4 h-4 mr-2" />
                 Cancelar
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onEdit(shift)}
+                className="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 border-blue-200"
+              >
+                Editar
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setView('delete_confirm')}
+                className="w-full text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Deletar
+              </Button>
+            </>
+          )}
+          {shift.status === 'done' && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => onUpdateStatus(shift.id, 'scheduled')}
+                className="w-full bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border-amber-200"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Desfazer Realizado
               </Button>
               <Button
                 variant="outline"
