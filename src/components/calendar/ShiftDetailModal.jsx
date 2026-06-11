@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { UserCheck, Trash2, AlertTriangle } from 'lucide-react';
+import { UserCheck, Trash2, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -169,9 +169,30 @@ export default function ShiftDetailModal({ shift, hospital, source, onClose, onP
         <div className="space-y-2">
           {shift.status === 'scheduled' && (
             <>
+              <Button 
+                onClick={() => {
+                  onEdit({ ...shift, status: 'done' });
+                  onClose();
+                }} 
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Realizado
+              </Button>
               <Button onClick={() => setView('pass')} className="w-full bg-purple-600 hover:bg-purple-700">
                 <UserCheck className="w-4 h-4 mr-2" />
                 Passei
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onEdit({ ...shift, status: 'cancelled' });
+                  onClose();
+                }}
+                className="w-full text-slate-600 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border-slate-200"
+              >
+                <XCircle className="w-4 h-4 mr-2" />
+                Cancelar
               </Button>
               <Button
                 variant="outline"
