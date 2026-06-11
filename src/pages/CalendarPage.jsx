@@ -417,6 +417,10 @@ export default function CalendarPage() {
           onPass={handlePassShift}
           onDeleteScope={handleDeleteScope}
           onEdit={(shift) => { setEditingShift(shift); setSelectedShift(null); }}
+          onUpdateStatus={(id, status) => {
+            updateShiftMutation.mutate({ id, data: { status } });
+            setSelectedShift(null);
+          }}
         />
       )}
 

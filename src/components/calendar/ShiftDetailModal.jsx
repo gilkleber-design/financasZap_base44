@@ -24,7 +24,7 @@ const statusLabel = {
   passed: '🩶 Passado',
 };
 
-export default function ShiftDetailModal({ shift, hospital, source, onClose, onPass, onDeleteScope, onEdit }) {
+export default function ShiftDetailModal({ shift, hospital, source, onClose, onPass, onDeleteScope, onEdit, onUpdateStatus }) {
   const [view, setView] = useState('detail');
   const [passedTo, setPassedTo] = useState('');
   const [passedDate, setPassedDate] = useState(shift.date);
@@ -170,10 +170,7 @@ export default function ShiftDetailModal({ shift, hospital, source, onClose, onP
           {shift.status === 'scheduled' && (
             <>
               <Button 
-                onClick={() => {
-                  onEdit({ ...shift, status: 'done' });
-                  onClose();
-                }} 
+                onClick={() => onUpdateStatus(shift.id, 'done')} 
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
               >
                 <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -185,10 +182,7 @@ export default function ShiftDetailModal({ shift, hospital, source, onClose, onP
               </Button>
               <Button
                 variant="outline"
-                onClick={() => {
-                  onEdit({ ...shift, status: 'cancelled' });
-                  onClose();
-                }}
+                onClick={() => onUpdateStatus(shift.id, 'cancelled')}
                 className="w-full text-slate-600 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border-slate-200"
               >
                 <XCircle className="w-4 h-4 mr-2" />
