@@ -5,7 +5,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Lock, LockOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, LockOpen, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import ShiftModal from '@/components/calendar/ShiftModal';
@@ -351,14 +351,17 @@ export default function CalendarPage() {
                       <div
                         key={s.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
-                        className={`text-xs px-1.5 py-0.5 rounded border truncate flex items-center justify-between cursor-pointer hover:opacity-80 ${displayStyle}`}
+                        className={`text-xs px-1.5 py-0.5 rounded border truncate flex items-center gap-1 cursor-pointer hover:opacity-80 ${displayStyle}`}
                       >
-                        <span className="truncate">
+                        {s.status === 'done' && (
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                        )}
+                        <span className="truncate flex-1">
                           {h?.sigla} {s.type}
                           {s.status === 'passed' && ' ↗'}
                         </span>
                         {s.is_turno && styleKey !== 'cancelled' && (
-                          <span className="text-[9px] font-bold bg-black/10 text-black/60 px-1 rounded-sm flex-shrink-0 ml-1" title="Turno (meio plantão)">½</span>
+                          <span className="text-[9px] font-bold bg-black/10 text-black/60 px-1 rounded-sm flex-shrink-0" title="Turno (meio plantão)">½</span>
                         )}
                       </div>
                     );
@@ -387,6 +390,7 @@ export default function CalendarPage() {
       <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-purple-200 border border-purple-300" /><span>Produção</span></div>
       <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-200 border border-green-300" /><span>À Vista</span></div>
       <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300 border border-gray-400" /><span>Cancelado / Passado</span></div>
+      <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-600" /><span>Realizado</span></div>
       <div className="flex items-center gap-1.5"><span className="text-[9px] font-bold bg-black/10 text-black/60 px-1 rounded-sm">½</span><span>Turno</span></div>
       </div>
 
