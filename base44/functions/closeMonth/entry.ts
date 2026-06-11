@@ -15,6 +15,7 @@ Deno.serve(async (req) => {
         }
 
         const rollbackQueue = [];
+        const family_id = user.data?.family_id || null;
 
         try {
             const closure = await base44.entities.MonthlyClosure.create({
@@ -25,7 +26,8 @@ Deno.serve(async (req) => {
                 closed_by_id: user.id,
                 total_gross: 0,
                 total_net: 0,
-                shift_count: 0
+                shift_count: 0,
+                family_id
             });
             rollbackQueue.unshift(async () => await base44.entities.MonthlyClosure.delete(closure.id));
 
@@ -96,7 +98,8 @@ Deno.serve(async (req) => {
                     status: 'pending',
                     closure_id: closure.id,
                     receivable_type: 'shifts_aggregated',
-                    source_shift_ids: data.shifts
+                    source_shift_ids: data.shifts,
+                    family_id
                 });
                 rollbackQueue.unshift(async () => await base44.entities.Receivable.delete(rec.id));
                 totalNet += netTotal;
@@ -121,7 +124,8 @@ Deno.serve(async (req) => {
                         tax_rate: taxRate,
                         status: 'pending',
                         closure_id: closure.id,
-                        receivable_type: 'pdt_estimate'
+                        receivable_type: 'pdt_estimate',
+                        family_id
                     });
                     rollbackQueue.unshift(async () => await base44.entities.Receivable.delete(pdtRec.id));
                     totalGross += pdtGross;
@@ -172,7 +176,8 @@ Deno.serve(async (req) => {
                     amount: incomeAmount,
                     category_id: catId,
                     income_source_id: incSrcId,
-                    notes: inc.notes || null
+                    notes: inc.notes || null,
+                    family_id
                 });
                 rollbackQueue.unshift(async () => await base44.entities.ClosureIncome.delete(closureInc.id));
 
@@ -187,7 +192,8 @@ Deno.serve(async (req) => {
                     tax_rate: taxRate,
                     status: 'pending',
                     closure_id: closure.id,
-                    receivable_type: 'extra_income'
+                    receivable_type: 'extra_income',
+                    family_id
                 });
                 rollbackQueue.unshift(async () => await base44.entities.Receivable.delete(incRec.id));
 
