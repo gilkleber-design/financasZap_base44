@@ -26,7 +26,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
     const [incomes, setIncomes] = useState([]); // [{ id, recurring_income_id, description, amount, category_id, notes, checked }]
 
     // Fetch Preview
-    const { data: preview, isLoading, error } = useQuery({
+    const { data: preview, isLoading, error, isFetchedAfterMount: isPreviewFetched } = useQuery({
         queryKey: ['month-closure-preview', month, year],
         queryFn: async () => {
             const res = await base44.functions.invoke('getMonthClosurePreview', { month, year });
@@ -35,7 +35,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
     });
 
     // Also fetch shifts for the list (since preview only returned count/total, we need the actual list for the UI checkboxes)
-    const { data: shifts = [] } = useQuery({
+    const { data: shifts = [], isFetchedAfterMount: isShiftsFetched } = useQuery({
         queryKey: ['shifts-to-close', month, year],
         queryFn: async () => {
             const monthPrefix = `${year}-${month.toString().padStart(2, '0')}`;
@@ -135,8 +135,9 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
         setIncomes(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
     };
 
-    if (isLoading) return <Dialog open><DialogContent><div className="p-8 text-center">Carregando prévia...</div></DialogContent></Dialog>;
     if (error) return <Dialog open onOpenChange={onClose}><DialogContent><div className="p-8 text-center text-red-500">Erro: {error.message}</div></DialogContent></Dialog>;
+    const isActuallyLoading = isLoading || !isPreviewFetched || !isShiftsFetched;
+    if (isActuallyLoading) return <Dialog open><DialogContent><div className="p-8 text-center">Carregando prévia...</div></DialogContent></Dialog>;
 
     const selectedShiftsNetTotal = shifts.filter(s => shiftStatuses[s.id] === 'done').reduce((acc, s) => {
         const hospital = hospitals.find(h => h.id === s.hospital_id);
