@@ -186,6 +186,9 @@ export default async function reqHandler(req) {
                 const cat = getCategory(item.category_id, item.category);
                 const id = cat ? cat.id : (item.category ? String(item.category).toLowerCase() : '__sem_categoria__');
                 map[id].expected += getAmount(item);
+                if (item.status !== 'paid' && item.status !== 'received') {
+                    map[id].pending += getAmount(item);
+                }
             });
 
             txs.forEach(item => {
@@ -197,7 +200,6 @@ export default async function reqHandler(req) {
             const roots = [];
             const byId = {};
             Object.values(map).forEach(m => {
-                m.pending = Math.max(0, m.expected - m.paid);
                 byId[m.category_id || m.slug] = m;
             });
 
@@ -218,6 +220,7 @@ export default async function reqHandler(req) {
                                 pending: 0,
                                 children: []
                             };
+                            roots.push(byId[m.parent_id]);
                         }
                     }
                     if (byId[m.parent_id]) {
@@ -434,7 +437,7 @@ export default async function reqHandler(req) {
                 total_gross: fiscalTotalGross,
                 total_net: fiscalTotalNet,
                 total_tax: fiscalTaxRetained,
-                effective_rate: fiscalTotalGross > 0 ? (fiscalTaxRetained / fiscalTotalGross) * 100 : 0,
+                effective_rate: fiscalTotalGross > 0 ? ((fiscalTaxRetained / fiscalTotalGross) * 100).toFixed(1) + '%' : "0.0%",
                 by_source: incomeBySource
             },
             cashflow_6m,
