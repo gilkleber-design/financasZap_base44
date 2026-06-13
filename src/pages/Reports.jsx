@@ -372,32 +372,65 @@ export default function Reports() {
   // --- VERIFY MODE ---
   useEffect(() => {
     if (verifyMode && newReport) {
+      console.log("=== INICIANDO VERIFY MODE ===");
+      
+      // 1. Expense Realized
       const legacyExpense = allCategoryData.reduce((sum, c) => sum + c.value, 0);
       const newExpense = newReport.expense.realized_total;
       if (Math.abs(legacyExpense - newExpense) > 0.01) {
         console.warn(`[VERIFY] Divergência em Expense Realized. Legacy: ${legacyExpense}, Novo: ${newExpense}`);
       }
 
+      // 2. Income Realized
+      const legacyIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount !== undefined ? t.net_amount : t.amount || 0), 0);
+      const newIncome = newReport.income.realized_total;
+      if (Math.abs(legacyIncome - newIncome) > 0.01) {
+        console.warn(`[VERIFY] Divergência em Income Realized. Legacy: ${legacyIncome}, Novo: ${newIncome}`);
+      }
+
+      // 3. Expense Expected (Limits)
+      const legacyExpectedExpense = plannedVsActual.reduce((sum, item) => sum + item.limit, 0);
+      const newExpectedExpense = newReport.expense.expected_total;
+      // O legacyExpectedExpense soma os limites do budget. No novo modelo, expected é a soma dos Payables. Pode divergir e é esperado!
+      if (Math.abs(legacyExpectedExpense - newExpectedExpense) > 0.01) {
+        console.warn(`[VERIFY] Divergência em Expense Expected. Legacy (Limites do Budget): ${legacyExpectedExpense}, Novo (Payables Expected): ${newExpectedExpense}`);
+      }
+
+      // 4. Fiscal
       if (Math.abs(totalGross - newReport.fiscal.total_gross) > 0.01) {
         console.warn(`[VERIFY] Divergência em Fiscal Gross. Legacy: ${totalGross}, Novo: ${newReport.fiscal.total_gross}`);
       }
-      
       if (Math.abs(totalNet - newReport.fiscal.total_net) > 0.01) {
         console.warn(`[VERIFY] Divergência em Fiscal Net. Legacy: ${totalNet}, Novo: ${newReport.fiscal.total_net}`);
       }
 
-      const currentMonthCashflowLegacy = months[5];
-      const currentMonthCashflowNew = newReport.cashflow_6m[5];
-      if (currentMonthCashflowLegacy && currentMonthCashflowNew) {
-         if (Math.abs(currentMonthCashflowLegacy.Receitas - currentMonthCashflowNew.income_net) > 0.01) {
-            console.warn(`[VERIFY] Divergência em Cashflow Receitas. Legacy: ${currentMonthCashflowLegacy.Receitas}, Novo: ${currentMonthCashflowNew.income_net}`);
-         }
-         if (Math.abs(currentMonthCashflowLegacy.Despesas - currentMonthCashflowNew.expense_gross) > 0.01) {
-            console.warn(`[VERIFY] Divergência em Cashflow Despesas. Legacy: ${currentMonthCashflowLegacy.Despesas}, Novo: ${currentMonthCashflowNew.expense_gross}`);
-         }
+      // 5. Cashflow 6 Meses Completo
+      for (let i = 0; i < 6; i++) {
+        const lCash = months[i];
+        const nCash = newReport.cashflow_6m[i];
+        if (lCash && nCash) {
+           if (Math.abs(lCash.Receitas - nCash.income_net) > 0.01) {
+              console.warn(`[VERIFY] Divergência em Cashflow Receitas (${lCash.name}). Legacy: ${lCash.Receitas}, Novo: ${nCash.income_net}`);
+           }
+           if (Math.abs(lCash.Despesas - nCash.expense_gross) > 0.01) {
+              console.warn(`[VERIFY] Divergência em Cashflow Despesas (${lCash.name}). Legacy: ${lCash.Despesas}, Novo: ${nCash.expense_gross}`);
+           }
+        }
       }
+
+      // 6. Planned vs Actual by Category
+      plannedVsActual.forEach(lItem => {
+        const nItem = displayPlannedVsActual.find(n => n.slug === lItem.slug);
+        if (nItem) {
+           if (Math.abs(lItem.actual - nItem.actual) > 0.01) {
+              console.warn(`[VERIFY] Categoria "${lItem.name}" divergência em Actual. Legacy: ${lItem.actual}, Novo: ${nItem.actual}`);
+           }
+        }
+      });
+      
+      console.log("=== FIM VERIFY MODE ===");
     }
-  }, [verifyMode, newReport, allCategoryData, totalGross, totalNet, months]);
+  }, [verifyMode, newReport, allCategoryData, totalGross, totalNet, months, monthTx, plannedVsActual, displayPlannedVsActual]);
 
   return (
     <div className="p-6 space-y-6">
