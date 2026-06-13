@@ -448,11 +448,9 @@ export default function Reports() {
           <h1 className="text-2xl font-sora font-bold">Relatórios</h1>
           <p className="text-muted-foreground text-sm mt-1">Visão financeira completa</p>
         </div>
-        {debugMode && (
-          <Button onClick={runDebug} disabled={isDebugLoading} className="bg-amber-500 hover:bg-amber-600 text-white">
-            {isDebugLoading ? 'Carregando...' : '🐛 Debug Maio'}
-          </Button>
-        )}
+        <Button onClick={runDebug} disabled={isDebugLoading} className="bg-amber-500 hover:bg-amber-600 text-white">
+          {isDebugLoading ? 'Carregando...' : '🐛 Debug Maio'}
+        </Button>
       </div>
 
       {debugData && (
