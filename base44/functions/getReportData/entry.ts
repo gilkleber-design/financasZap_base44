@@ -24,9 +24,9 @@ export default async function reqHandler(req) {
         const lastDay = new Date(year, month, 0).getDate();
         const endDateStr = `${year}-${pad(month)}-${pad(lastDay)}`;
 
-        // Fetch categories and sources
-        const categories = await base44.asServiceRole.entities.Category.filter({ family_id }, 'name', 500);
-        const incomeSources = await base44.asServiceRole.entities.IncomeSource.filter({ family_id }, 'name', 500);
+        // Fetch categories and sources using user context (handles RLS automatically)
+        const categories = await base44.entities.Category.list('name', 500);
+        const incomeSources = await base44.entities.IncomeSource.list('name', 500);
 
         const catMap = {};
         const slugMap = {};
@@ -35,28 +35,36 @@ export default async function reqHandler(req) {
             if (c.slug) slugMap[c.slug.toLowerCase()] = c;
         });
 
+        const unknown_category_slugs = new Set();
+
         const getCategory = (id, slug) => {
             if (id && catMap[id]) return catMap[id];
-            if (slug && slugMap[String(slug).toLowerCase()]) return slugMap[String(slug).toLowerCase()];
+            
+            const searchSlugId = String(id || '').toLowerCase();
+            if (id && slugMap[searchSlugId]) return slugMap[searchSlugId];
+
+            const searchSlug = String(slug || '').toLowerCase();
+            if (slug && slugMap[searchSlug]) return slugMap[searchSlug];
+            
+            if (id && !catMap[id]) unknown_category_slugs.add(id);
+            if (slug && !slugMap[searchSlug]) unknown_category_slugs.add(slug);
+
             return null;
         };
 
-        // Fetch Data
-        const transactions = await base44.asServiceRole.entities.Transaction.filter({
-            family_id,
+        // Fetch Data using user context
+        const transactions = await base44.entities.Transaction.filter({
             date: { $gte: startDateStr, $lte: endDateStr }
         }, '', 5000);
 
-        const payables = await base44.asServiceRole.entities.Payable.filter({
-            family_id,
+        const payables = await base44.entities.Payable.filter({
             $or: [
                 { competencia: { $gte: startDateStr, $lte: endDateStr } },
                 { due_date: { $gte: startDateStr, $lte: endDateStr } }
             ]
         }, '', 5000);
 
-        const receivables = await base44.asServiceRole.entities.Receivable.filter({
-            family_id,
+        const receivables = await base44.entities.Receivable.filter({
             $or: [
                 { competencia: { $gte: startDateStr, $lte: endDateStr } },
                 { due_date: { $gte: startDateStr, $lte: endDateStr } }
@@ -80,8 +88,9 @@ export default async function reqHandler(req) {
             !exclude_transaction_statuses.includes(t.status)
         );
 
-        let validPayables = payables.filter(p => isMonth(getDataRef(p, false)));
-        let validReceivables = receivables.filter(r => isMonth(getDataRef(r, false)));
+        let validPayables = payables.filter(p => isMonth(getDataRef(p, false))).map(p => ({ ...p, data_ref: getDataRef(p, false) }));
+        let validReceivables = receivables.filter(r => isMonth(getDataRef(r, false))).map(r => ({ ...r, data_ref: getDataRef(r, false) }));
+        const validTransactionsWithRef = validTransactions.map(t => ({ ...t, data_ref: getDataRef(t, true) }));
 
         // Rules handling
         if (include_card_invoices) {
@@ -110,13 +119,15 @@ export default async function reqHandler(req) {
             return exclude_categories.includes(slug);
         };
 
-        const incomeExpectedTotal = validReceivables.filter(r => !isCategoryExcluded(r)).reduce((s, r) => s + getAmount(r), 0);
-        const incomeReceivedTxs = validTransactions.filter(t => t.type === 'income' && !isCategoryExcluded(t));
+        const incomeExpectedArray = validReceivables.filter(r => !isCategoryExcluded(r));
+        const incomeExpectedTotal = incomeExpectedArray.reduce((s, r) => s + getAmount(r), 0);
+        const incomeReceivedTxs = validTransactionsWithRef.filter(t => t.type === 'income' && !isCategoryExcluded(t));
         const incomeReceivedTotal = incomeReceivedTxs.reduce((s, t) => s + getAmount(t, true), 0);
         const incomePendingTotal = Math.max(0, incomeExpectedTotal - incomeReceivedTotal);
 
-        const expenseExpectedTotal = validPayables.filter(p => !isCategoryExcluded(p)).reduce((s, p) => s + getAmount(p), 0);
-        const expensePaidTxs = validTransactions.filter(t => t.type === 'expense' && !isCategoryExcluded(t));
+        const expenseExpectedArray = validPayables.filter(p => !isCategoryExcluded(p));
+        const expenseExpectedTotal = expenseExpectedArray.reduce((s, p) => s + getAmount(p), 0);
+        const expensePaidTxs = validTransactionsWithRef.filter(t => t.type === 'expense' && !isCategoryExcluded(t));
         const expensePaidTotal = expensePaidTxs.reduce((s, t) => s + getAmount(t, true), 0);
         const expensePendingTotal = Math.max(0, expenseExpectedTotal - expensePaidTotal);
 
@@ -206,18 +217,18 @@ export default async function reqHandler(req) {
             return roots.sort((a,b) => b.expected - a.expected || b.paid - a.paid);
         };
 
-        const incomeByCategory = buildCategoryTree(incomeReceivedTxs, validReceivables.filter(r => !isCategoryExcluded(r)));
+        const incomeByCategory = buildCategoryTree(incomeReceivedTxs, incomeExpectedArray);
         const mappedIncomeByCategory = incomeByCategory.map(n => ({
             ...n, received: n.paid, paid: undefined
         }));
 
-        const expenseByCategory = buildCategoryTree(expensePaidTxs, validPayables.filter(p => !isCategoryExcluded(p)));
+        const expenseByCategory = buildCategoryTree(expensePaidTxs, expenseExpectedArray);
 
         const sourceMap = {};
         validReceivables.forEach(r => {
             const sId = r.income_source_id || 'outras';
             if (!sourceMap[sId]) {
-                const s = incomeSources.find(x => x.id === sId);
+                const s = incomeSources.find(x => String(x.id) === String(sId));
                 sourceMap[sId] = {
                     source_id: sId, source_name: s ? s.name : (sId === 'outras' ? 'Outras' : 'PJ não identificada'),
                     source_type: s ? s.type : 'pj', expected_gross: 0, received_gross: 0,
@@ -231,7 +242,7 @@ export default async function reqHandler(req) {
         incomeReceivedTxs.forEach(t => {
             const sId = t.income_source_id || 'outras';
             if (!sourceMap[sId]) {
-                const s = incomeSources.find(x => x.id === sId);
+                const s = incomeSources.find(x => String(x.id) === String(sId));
                 sourceMap[sId] = {
                     source_id: sId, source_name: s ? s.name : (sId === 'outras' ? 'Outras' : 'PJ não identificada'),
                     source_type: s ? s.type : 'pj', expected_gross: 0, received_gross: 0,
@@ -243,6 +254,14 @@ export default async function reqHandler(req) {
             sourceMap[sId].tax_amount += Number(t.tax_amount || 0);
         });
 
+        // Calculate tax correctly
+        Object.values(sourceMap).forEach(s => {
+            s.tax_amount = s.expected_gross - s.expected_net;
+            if (s.tax_amount > 0 && s.expected_gross > 0 && s.tax_rate === 0) {
+                s.tax_rate = Number((s.tax_amount / s.expected_gross * 100).toFixed(1));
+            }
+        });
+
         const incomeBySource = Object.values(sourceMap);
 
         const resultObj = {
@@ -250,8 +269,12 @@ export default async function reqHandler(req) {
             realized: incomeReceivedTotal - expensePaidTotal,
             projected: incomeReceivedTotal + incomePendingTotal - (expensePaidTotal + expensePendingTotal),
             balance_start_of_month: 0,
-            balance_end_of_month_projected: 0
+            balance_end_of_month_projected: 0 // Will add resultObj.projected
         };
+        
+        resultObj.balance_end_of_month_projected = resultObj.balance_start_of_month + resultObj.projected;
+
+        const orphanTransactions = expensePaidTxs.filter(t => !t.payable_id && !t.receivable_id);
 
         const reportData = {
             meta: {
@@ -261,18 +284,29 @@ export default async function reqHandler(req) {
                 filters_applied: { date_basis, amount_basis, excluded_categories: exclude_categories, excluded_transaction_statuses: exclude_transaction_statuses, include_card_invoices }
             },
             income: {
-                expected: { total: incomeExpectedTotal, count: validReceivables.filter(r => !isCategoryExcluded(r)).length },
+                expected: { total: incomeExpectedTotal, count: incomeExpectedArray.length },
                 received: { total: incomeReceivedTotal, count: incomeReceivedTxs.length },
-                pending: { total: incomePendingTotal, count: 0 },
+                pending: { total: incomePendingTotal, count: Math.max(0, incomeExpectedArray.length - incomeReceivedTxs.length) },
                 by_source: incomeBySource, by_category: mappedIncomeByCategory
             },
             expense: {
-                expected: { total: expenseExpectedTotal, count: validPayables.filter(p => !isCategoryExcluded(p)).length },
+                expected: { total: expenseExpectedTotal, count: expenseExpectedArray.length },
                 paid: { total: expensePaidTotal, count: expensePaidTxs.length },
-                pending: { total: expensePendingTotal, count: 0 },
+                pending: { total: expensePendingTotal, count: Math.max(0, expenseExpectedArray.length - expensePaidTxs.length) },
                 by_category: expenseByCategory
             },
-            result: resultObj
+            result: resultObj,
+            diagnostics: {
+                unknown_category_slugs: Array.from(unknown_category_slugs),
+                counts: {
+                    transactions_total: validTransactionsWithRef.length,
+                    payables_total: validPayables.length,
+                    receivables_total: validReceivables.length,
+                    orphan_transactions: orphanTransactions.length
+                },
+                warnings: [],
+                truncated_results: false
+            }
         };
 
         try {
