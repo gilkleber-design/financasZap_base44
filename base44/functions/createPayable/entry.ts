@@ -41,7 +41,8 @@ async function createPaidTransaction(base44, payable, paymentDate, originId) {
     payable_id: payable.id,
     reconciled: true,
     account_id: originId,
-  });
+    family_id: payable.family_id,
+    });
 
   await base44.entities.Payable.update(payable.id, { transaction_id: transaction.id });
   return transaction;
@@ -55,7 +56,11 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const expenseType = body.expense_type;
-    const basePayload = cleanBasePayload(body);
+    const family_id = user.family_id || user.data?.family_id || user.id;
+    const basePayload = {
+      ...cleanBasePayload(body),
+      family_id
+    };
 
     if (!basePayload.description || !Number.isFinite(basePayload.amount) || basePayload.amount <= 0) {
       return Response.json({ error: 'Descrição e valor válido são obrigatórios' }, { status: 400 });
