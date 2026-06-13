@@ -80,6 +80,33 @@ Deno.serve(async (req) => {
         const orphansMay = txsMay.filter(t => !t.payable_id || !payablesMap[t.payable_id]);
         const top10Orphans = orphansMay.slice(0, 10).map(t => ({ id: t.id, desc: t.description, amount: t.amount, date: t.date }));
 
+        // A. Payables duplicados (mesmo description + ref + amount)
+        const dupKey = (p) => `${p.description?.toLowerCase().trim()}|${p.competencia || p.due_date}|${p.amount}`;
+        const dupGroups = {};
+        payablesMay.forEach(p => {
+            const k = dupKey(p);
+            if (!dupGroups[k]) dupGroups[k] = [];
+            dupGroups[k].push(p);
+        });
+        const duplicatePayables = Object.values(dupGroups)
+            .filter(arr => arr.length > 1)
+            .map(arr => ({
+                desc: arr[0].description,
+                ref: arr[0].competencia || arr[0].due_date,
+                amount: arr[0].amount,
+                count: arr.length,
+                excess_sum: arr[0].amount * (arr.length - 1),
+                ids: arr.map(p => p.id),
+                statuses: arr.map(p => p.status)
+            }));
+
+        // B. Transações que parecem pagamento de fatura de cartão (sem payable_id)
+        const cardKeywords = ['fatura', 'invoice', 'cartão', 'cartao', 'nubank', 'itaú', 'itau', 'elo', 'mastercard', 'visa', 'mercado pago', 'bradesco card', 'c6', 'inter card'];
+        const cardOrphans = orphansMay.filter(t => {
+            const d = (t.description || '').toLowerCase();
+            return cardKeywords.some(k => d.includes(k));
+        }).map(t => ({ id: t.id, desc: t.description, amount: t.amount, date: t.date }));
+
         // 7. Payables pendentes em maio
         const payablesMayPending = payablesMay.filter(p => p.status !== 'paid');
         const top5PayablesPending = payablesMayPending.slice(0, 5).map(p => ({ id: p.id, desc: p.description, amount: p.amount, ref: p.competencia || p.due_date }));
@@ -97,8 +124,25 @@ Deno.serve(async (req) => {
         const c_orphansSum = orphansMay.reduce((s, t) => s + (t.amount || 0), 0);
         const d_payablesPaidSum = payablesMayPaid.reduce((s, p) => s + (p.amount || 0), 0);
 
+        const cardOrphansSum = cardOrphans.reduce((s, t) => s + t.amount, 0);
+        const dupPayablesExcessSum = duplicatePayables.reduce((s, d) => s + d.excess_sum, 0);
+
         return Response.json({
             _debug,
+            A_duplicate_payables: {
+                title: "A. Payables Duplicados em Maio (mesmo desc+ref+amount)",
+                count: duplicatePayables.length,
+                excess_sum: dupPayablesExcessSum,
+                note: "IDs listados — NÃO foram deletados. O primeiro ID é o 'original', os demais são duplicatas.",
+                items: duplicatePayables
+            },
+            B_card_orphan_txs: {
+                title: "B. Transactions Órfãs que parecem fatura de cartão",
+                count: cardOrphans.length,
+                sum: cardOrphansSum,
+                note: "Estas transactions estão sem payable_id e provavelmente são pagamentos de fatura. Se vinculadas a um CardInvoice payable, sairiam das orphans.",
+                items: cardOrphans
+            },
             1: { title: "1. Transactions Expense (date=Mai/2026)", count: txsMay.length, sum: txsMay.reduce((s, t) => s + (t.amount || 0), 0), top5: top5Txs },
             2: { title: "2. Payables (ref=Mai/2026, status=paid)", count: payablesMayPaid.length, sum: d_payablesPaidSum, top5: top5PayablesPaid },
             3: { title: "3. Cruzamento (Tx Mai -> Payable Outro Mês)", count: crossingTxs.length, sum: b_txsPaidOtherMonth, items: crossingTxs },
