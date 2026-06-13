@@ -1,4 +1,6 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+
+const USE_NEW_REPORT_DATA = false;
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card } from '@/components/ui/card';
@@ -22,6 +24,16 @@ export default function Reports() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [consolidatedModalOpen, setConsolidatedModalOpen] = useState(false);
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const verifyMode = searchParams.get('verify') === '1';
+
+  const { data: newReportRes } = useQuery({
+    queryKey: ['reportData', currentMonth.getMonth() + 1, currentMonth.getFullYear()],
+    queryFn: () => base44.functions.invoke('getReportData', { month: currentMonth.getMonth() + 1, year: currentMonth.getFullYear() }),
+    enabled: USE_NEW_REPORT_DATA || verifyMode,
+  });
+  const newReport = newReportRes?.data;
 
   const currentYear = new Date().getFullYear();
   const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
@@ -262,6 +274,131 @@ export default function Reports() {
     }))
     .sort((a, b) => b.tax - a.tax);
 
+  // --- ADAPTERS INLINE ---
+  const adaptToLegacyPlannedItems = (byCategory) => {
+    if (!byCategory) return [];
+    const budgetBySlug = budgets.reduce((acc, budget) => {
+      const categoryIdToSlug = new Map(categories.map((category) => [category.id, String(category.slug || '').toLowerCase()]));
+      const slug = categoryIdToSlug.get(budget.category_id);
+      if (slug && budget.month === currentMonth.getMonth() + 1 && budget.year === currentMonth.getFullYear()) {
+        acc[slug] = Number(budget.amount || 0);
+      }
+      return acc;
+    }, {});
+    
+    const flattenCategories = (cats) => {
+        let result = [];
+        cats.forEach(c => {
+           result.push(c);
+           if (c.children) result.push(...flattenCategories(c.children));
+        });
+        return result;
+    };
+    
+    const allCats = flattenCategories(byCategory);
+    
+    const items = allCats.map(cat => {
+      const slug = cat.slug;
+      const actual = cat.paid;
+      const limit = Number(budgetBySlug[slug] || 0);
+      const hasLimit = limit > 0;
+      const percent = hasLimit ? (actual / limit) * 100 : 0;
+      return { slug, name: cat.name, actual, limit, hasLimit, percent };
+    });
+    
+    return items.sort((a, b) => {
+      if (a.hasLimit && b.hasLimit) return b.percent - a.percent;
+      if (a.hasLimit) return -1;
+      if (b.hasLimit) return 1;
+      return b.actual - a.actual;
+    });
+  };
+
+  const adaptCashflow = (report) => {
+    if (!report?.cashflow_6m) return [];
+    return report.cashflow_6m.map(m => ({
+      name: m.label.split('/')[0],
+      Receitas: m.income_net,
+      Despesas: m.expense_gross,
+      Saldo: m.balance
+    }));
+  };
+
+  const adaptCategoryData = (byCategory) => {
+    if (!byCategory) return [];
+    const all = byCategory.map(c => ({
+      name: c.name,
+      color: c.color || '#94A3B8',
+      value: c.paid
+    })).filter(c => c.value > 0).sort((a,b) => b.value - a.value);
+    
+    if (all.length > 6) {
+      const top6 = all.slice(0, 6);
+      const others = all.slice(6).reduce((s, i) => s + i.value, 0);
+      return [...top6, { name: 'Demais Categorias', color: '#E2E8F0', value: others }];
+    }
+    return all;
+  };
+
+  const adaptFiscalSummary = (report) => {
+    if (!report?.fiscal) return { totalGross: 0, totalTax: 0, totalNet: 0, effectiveRate: '0.0%', sourceRows: [] };
+    const f = report.fiscal;
+    const sourceRows = (f.by_source || [])
+      .map(s => ({ name: s.source_name, tax: s.tax_amount }))
+      .sort((a, b) => b.tax - a.tax);
+    return {
+      totalGross: f.total_gross,
+      totalTax: f.total_tax,
+      totalNet: f.total_net,
+      effectiveRate: f.effective_rate,
+      sourceRows
+    };
+  };
+
+  const adaptAuditData = (report) => {
+    if (!report?.expense?.items) return [];
+    return report.expense.items.map(item => ({
+      ...item,
+      is_orphan: item._model === 'Transaction'
+    }));
+  };
+
+  const displayAuditData = USE_NEW_REPORT_DATA && newReport ? adaptAuditData(newReport) : auditData;
+  const displayMonths = USE_NEW_REPORT_DATA && newReport ? adaptCashflow(newReport) : months;
+  const displayCategoryData = USE_NEW_REPORT_DATA && newReport ? adaptCategoryData(newReport.expense.by_category) : categoryData;
+  const displayPlannedVsActual = USE_NEW_REPORT_DATA && newReport ? adaptToLegacyPlannedItems(newReport.expense.by_category) : plannedVsActual;
+  const displayFiscal = USE_NEW_REPORT_DATA && newReport ? adaptFiscalSummary(newReport) : { totalGross, totalTax, totalNet, effectiveRate, sourceRows };
+
+  // --- VERIFY MODE ---
+  useEffect(() => {
+    if (verifyMode && newReport) {
+      const legacyExpense = allCategoryData.reduce((sum, c) => sum + c.value, 0);
+      const newExpense = newReport.expense.realized_total;
+      if (Math.abs(legacyExpense - newExpense) > 0.01) {
+        console.warn(`[VERIFY] Divergência em Expense Realized. Legacy: ${legacyExpense}, Novo: ${newExpense}`);
+      }
+
+      if (Math.abs(totalGross - newReport.fiscal.total_gross) > 0.01) {
+        console.warn(`[VERIFY] Divergência em Fiscal Gross. Legacy: ${totalGross}, Novo: ${newReport.fiscal.total_gross}`);
+      }
+      
+      if (Math.abs(totalNet - newReport.fiscal.total_net) > 0.01) {
+        console.warn(`[VERIFY] Divergência em Fiscal Net. Legacy: ${totalNet}, Novo: ${newReport.fiscal.total_net}`);
+      }
+
+      const currentMonthCashflowLegacy = months[5];
+      const currentMonthCashflowNew = newReport.cashflow_6m[5];
+      if (currentMonthCashflowLegacy && currentMonthCashflowNew) {
+         if (Math.abs(currentMonthCashflowLegacy.Receitas - currentMonthCashflowNew.income_net) > 0.01) {
+            console.warn(`[VERIFY] Divergência em Cashflow Receitas. Legacy: ${currentMonthCashflowLegacy.Receitas}, Novo: ${currentMonthCashflowNew.income_net}`);
+         }
+         if (Math.abs(currentMonthCashflowLegacy.Despesas - currentMonthCashflowNew.expense_gross) > 0.01) {
+            console.warn(`[VERIFY] Divergência em Cashflow Despesas. Legacy: ${currentMonthCashflowLegacy.Despesas}, Novo: ${currentMonthCashflowNew.expense_gross}`);
+         }
+      }
+    }
+  }, [verifyMode, newReport, allCategoryData, totalGross, totalNet, months]);
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -309,7 +446,7 @@ export default function Reports() {
               <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Fluxo de Caixa — Últimos 6 Meses</h3>
               <div className="relative h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={months} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <BarChart data={displayMonths} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#F0F4F8" />
                     <XAxis 
                       dataKey="name" 
@@ -346,13 +483,13 @@ export default function Reports() {
             <Card className="bg-white border-[0.5px] border-[#E8EDF2] rounded-[16px] p-5 shadow-[0_1px_4px_rgba(13,59,102,0.06)]">
               <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Despesas por Categoria (Mês Atual)</h3>
               <div className="relative h-[200px]">
-                {categoryData.length === 0 ? (
+                {displayCategoryData.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Nenhuma despesa neste mês</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie 
-                        data={categoryData} 
+                        data={displayCategoryData} 
                         cx="50%" 
                         cy="50%" 
                         innerRadius="62%" 
@@ -361,7 +498,7 @@ export default function Reports() {
                         stroke="#FFFFFF"
                         strokeWidth={2}
                       >
-                        {categoryData.map((item, i) => (
+                        {displayCategoryData.map((item, i) => (
                           <Cell key={item.name || i} fill={item.color} />
                         ))}
                       </Pie>
@@ -369,7 +506,7 @@ export default function Reports() {
                         contentStyle={{ backgroundColor: '#0D3B66', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
                         itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                         formatter={(value, name) => {
-                          const total = categoryData.reduce((acc, curr) => acc + curr.value, 0);
+                          const total = displayCategoryData.reduce((acc, curr) => acc + curr.value, 0);
                           const pct = ((value / total) * 100).toFixed(1);
                           return [`${fmt(value)} (${pct}%)`, name];
                         }}
@@ -391,14 +528,14 @@ export default function Reports() {
             </Card>
           </div>
 
-          <OverviewPlannedVsActual items={plannedVsActual} currentMonth={currentMonth} />
+          <OverviewPlannedVsActual items={displayPlannedVsActual} currentMonth={currentMonth} />
 
           <OverviewFiscalSummary
-            totalGross={totalGross}
-            totalTax={totalTax}
-            totalNet={totalNet}
-            effectiveRate={effectiveRate}
-            sourceRows={sourceRows}
+            totalGross={displayFiscal.totalGross}
+            totalTax={displayFiscal.totalTax}
+            totalNet={displayFiscal.totalNet}
+            effectiveRate={displayFiscal.effectiveRate}
+            sourceRows={displayFiscal.sourceRows}
           />
         </TabsContent>
 
@@ -415,10 +552,10 @@ export default function Reports() {
             </Button>
           </div>
 
-          <AuditCategoryPieChart auditData={auditData} categories={categories} />
+          <AuditCategoryPieChart auditData={displayAuditData} categories={categories} />
 
           <AuditReportAccordion 
-             payables={auditData} 
+             payables={displayAuditData} 
              onRowClick={handlePayableClick} 
              categories={categories}
            />
