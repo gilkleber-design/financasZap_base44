@@ -297,13 +297,13 @@ export default async function reqHandler(req) {
             
             // Corrige o cálculo de imposto quando a transaction traz a informação diretamente
             const tGross = Number(t.amount || 0);
-            let tNet = Number(t.net_amount !== undefined ? t.net_amount : t.amount || 0);
+            let tNet = Number((t.net_amount !== undefined && t.net_amount !== null) ? t.net_amount : t.amount || 0);
             let tTaxAmount = Number(t.tax_amount || 0);
             
             // Se a transaction tem tax_rate mas não tax_amount, calcula agora
             if (t.tax_rate > 0 && tTaxAmount === 0 && tGross > 0) {
                 tTaxAmount = tGross * (Number(t.tax_rate) / 100);
-                if (t.net_amount === undefined) {
+                if (t.net_amount === undefined || t.net_amount === null) {
                     tNet = tGross - tTaxAmount;
                 }
             }
