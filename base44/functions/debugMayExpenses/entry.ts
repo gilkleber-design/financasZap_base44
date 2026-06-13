@@ -6,6 +6,32 @@ Deno.serve(async (req) => {
         const user = await base44.auth.me();
         if (!user || user.role !== 'admin') return Response.json({ error: 'Unauthorized' }, { status: 403 });
 
+        // ---- BLOCO C.1: listar transactions por categoria de fatura ----
+        const body = await req.json().catch(() => ({}));
+        if (body.mode === 'list_fatura_categories') {
+            const allCats = await base44.entities.Category.list('name', 500);
+            const allTxs = await base44.entities.Transaction.filter({ type: 'expense' }, '-date', 2000);
+            
+            const targetSlugs = ['faturas_de_cartao', 'passivos_de_transicao', 'fatura'];
+            const targetCats = allCats.filter(c => targetSlugs.includes(c.slug));
+            const targetIds = targetCats.filter(c => c.slug !== 'fatura').map(c => c.id);
+            const targetSlugNames = ['faturas_de_cartao', 'passivos_de_transicao'];
+            
+            const hits = allTxs.filter(t => 
+                targetIds.includes(t.category_id) || 
+                targetSlugNames.includes(t.category)
+            );
+            
+            return Response.json({
+                categories_found: targetCats.map(c => ({ id: c.id, name: c.name, slug: c.slug, type: c.type })),
+                all_slugs_sample: allCats.slice(0, 30).map(c => ({ slug: c.slug, type: c.type })),
+                transactions_count: hits.length,
+                total_amount: hits.reduce((s, t) => s + (t.amount || 0), 0),
+                items: hits.map(t => ({ id: t.id, date: t.date, description: t.description, amount: t.amount, category: t.category, category_id: t.category_id }))
+            });
+        }
+        // ----------------------------------------------------------------
+
         const startMay = '2026-05-01';
         const startJun = '2026-06-01';
 
