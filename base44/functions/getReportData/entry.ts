@@ -13,7 +13,7 @@ export default async function reqHandler(req) {
         
         const date_basis = filters.date_basis || 'competencia';
         const amount_basis = filters.amount_basis || 'gross';
-        const exclude_categories = filters.exclude_categories || ['passivos_de_transicao', 'retiradas'];
+        const exclude_categories = filters.exclude_categories || [];
         const exclude_transaction_statuses = filters.exclude_transaction_statuses || ['ignored'];
         const include_card_invoices = filters.include_card_invoices !== false;
 

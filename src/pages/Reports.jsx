@@ -231,7 +231,6 @@ export default function Reports() {
       valorPassivosTransicao += amount;
       return;
     }
-    if (slug === 'retiradas') return;
     if (!mapaCategoria[slug]) mapaCategoria[slug] = 0;
     mapaCategoria[slug] += amount;
   };
@@ -239,6 +238,8 @@ export default function Reports() {
   monthTx.filter(t => t.type === 'expense').forEach(t => {
     acumularDespesa(String(t.category || 'outros').toLowerCase(), t.amount || 0);
   });
+
+  // Nota: 'passivos_de_transicao' ainda excluída abaixo via acumularDespesa (hardcode local mantido só para essa categoria legada)
 
   cardPayablesThisMonth.forEach(p => {
     acumularDespesa(String(p.category || 'outros').toLowerCase(), p.amount || 0);
@@ -281,7 +282,7 @@ export default function Reports() {
       .filter((tx) => tx.type === 'expense')
       .reduce((acc, tx) => {
         const slug = String(tx.category || 'outros').toLowerCase();
-        if (slug === 'passivos_de_transicao' || slug === 'retiradas') return acc;
+        if (slug === 'passivos_de_transicao') return acc;
         acc[slug] = (acc[slug] || 0) + Number(tx.amount || 0);
         return acc;
       }, {});
@@ -289,7 +290,7 @@ export default function Reports() {
     // Inclui parcelas/contas de cartão do mês (competência) no realizado
     cardPayablesThisMonth.forEach((p) => {
       const slug = String(p.category || 'outros').toLowerCase();
-      if (slug === 'passivos_de_transicao' || slug === 'retiradas') return;
+      if (slug === 'passivos_de_transicao') return;
       actualBySlug[slug] = (actualBySlug[slug] || 0) + Number(p.amount || 0);
     });
 
