@@ -86,7 +86,7 @@ export default function Settings() {
 
 
   const inviteMember = useMutation({
-    mutationFn: (email) => base44.auth.invite(email),
+    mutationFn: (email) => base44.users.inviteUser(email, 'user'),
     onSuccess: () => {queryClient.invalidateQueries(['workspace_members']);setShowInviteForm(false);setInviteEmail('');toast.success('Convite enviado!');}
   });
 
