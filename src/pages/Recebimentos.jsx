@@ -13,6 +13,7 @@ import ConfirmReceivableModal from '@/components/dashboard/ConfirmReceivableModa
 
 export default function Recebimentos() {
   const [anchorMonth, setAnchorMonth] = useState(new Date());
+  const [filterMode, setFilterMode] = useState('due_date'); // 'due_date' | 'competencia'
   const [showReceivableForm, setShowReceivableForm] = useState(false);
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
   const now = new Date();
@@ -53,9 +54,12 @@ export default function Recebimentos() {
     const normalReceivables = enrichedReceivables.filter(r => r.category !== 'reembolso');
 
     const expectedReceivables = normalReceivables.filter(item => {
-      const due = (item.due_date || '').slice(0, 7);
-      const isOverdue = item.status !== 'received' && (item.due_date || '') < hoje && due <= currentMonthKey;
-      return due === currentMonthKey || isOverdue;
+      const dateField = filterMode === 'competencia'
+        ? (item.competencia || item.due_date || '')
+        : (item.due_date || '');
+      const key = dateField.slice(0, 7);
+      const isOverdue = item.status !== 'received' && (item.due_date || '') < hoje && key <= currentMonthKey;
+      return key === currentMonthKey || isOverdue;
     });
 
     const totalEsperado = expectedReceivables.reduce((sum, item) => sum + item.net_amount, 0);
@@ -135,7 +139,7 @@ export default function Recebimentos() {
       bestPayer: hospitalPerformance[0],
       pjGroups,
     };
-  }, [receivables, transactions, hospitals, incomeSources, anchorMonth, now]);
+  }, [receivables, transactions, hospitals, incomeSources, anchorMonth, now, filterMode]);
 
   const canGoNext = true;
 
@@ -171,6 +175,16 @@ export default function Recebimentos() {
               <Plus className="h-4 w-4" />
               Novo recebível
             </Button>
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-1 text-xs font-semibold">
+              <button
+                onClick={() => setFilterMode('due_date')}
+                className={`rounded px-2 py-1 transition-colors ${filterMode === 'due_date' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >Vencimento</button>
+              <button
+                onClick={() => setFilterMode('competencia')}
+                className={`rounded px-2 py-1 transition-colors ${filterMode === 'competencia' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >Competência</button>
+            </div>
             <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1">
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAnchorMonth((current) => subMonths(current, 1))}>
                 <ChevronLeft className="h-4 w-4" />
