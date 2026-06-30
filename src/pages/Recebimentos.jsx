@@ -137,7 +137,7 @@ export default function Recebimentos() {
     };
   }, [receivables, transactions, hospitals, incomeSources, anchorMonth, now]);
 
-  const canGoNext = !isAfter(startOfMonth(addOneMonth(anchorMonth)), startOfMonth(now));
+  const canGoNext = true;
 
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-6">
