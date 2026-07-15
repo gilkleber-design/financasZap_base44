@@ -1,5 +1,8 @@
 Deno.serve(async (req) => {
-  const { acao, dados } = await req.json();
+  const body = await req.json();
+  const { acao, dados } = body;
+
+  console.log('INPUT:', JSON.stringify({ acao, dados: dados || {} }));
 
   const resp = await fetch(
     'https://wujsjspxzousguycylux.supabase.co/functions/v1/agente-api',
@@ -13,5 +16,9 @@ Deno.serve(async (req) => {
     },
   );
 
-  return Response.json(await resp.json());
+  const respBody = await resp.text();
+  console.log('STATUS:', resp.status);
+  console.log('RESPONSE:', respBody);
+
+  return Response.json(JSON.parse(respBody));
 });
