@@ -11,6 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Plus, Trash2, Building2, MessageSquare, CreditCard, Landmark, Tag, ChevronDown, ChevronUp, Pencil, UserPlus, ShieldCheck, Link2 } from 'lucide-react';
+
+const WHATSAPP_AGENT_NUMBER = '17034571882';
+const WHATSAPP_ACTIVATION_TEXT = 'Olá! Quero ativar o FinançasZap.';
+const WHATSAPP_AGENT_LINK = `https://wa.me/${WHATSAPP_AGENT_NUMBER}?text=${encodeURIComponent(WHATSAPP_ACTIVATION_TEXT)}`;
 import { toast } from 'sonner';
 
 
@@ -176,6 +180,24 @@ export default function Settings() {
        <h1 className="text-2xl font-bold">Configurações</h1>
        <p className="text-muted-foreground text-sm">Gerenciamento do Workspace</p>
      </header>
+
+     {/* CONECTAR WHATSAPP */}
+     <div className="flex items-center justify-between gap-3 rounded-xl border border-[#25D366]/30 bg-[#25D366]/5 p-4 shadow-sm">
+       <div className="flex items-center gap-3">
+         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15 text-[#128C7E]">
+           <MessageSquare className="h-5 w-5" />
+         </div>
+         <div>
+           <p className="text-sm font-bold text-slate-700">Assistente no WhatsApp</p>
+           <p className="text-xs text-muted-foreground">Registre gastos e receitas conversando pelo WhatsApp.</p>
+         </div>
+       </div>
+       <Button asChild className="bg-[#25D366] hover:bg-[#1FAD54] text-white font-bold">
+         <a href={WHATSAPP_AGENT_LINK} target="_blank" rel="noopener noreferrer">
+           <MessageSquare className="w-4 h-4 mr-1.5" /> Conectar
+         </a>
+       </Button>
+     </div>
 
 
      {/* 1. MEMBROS */}
