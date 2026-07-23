@@ -12,9 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Plus, Trash2, Building2, MessageSquare, CreditCard, Landmark, Tag, ChevronDown, ChevronUp, Pencil, UserPlus, ShieldCheck, Link2 } from 'lucide-react';
 
-const WHATSAPP_AGENT_NUMBER = '17034571882';
-const WHATSAPP_ACTIVATION_TEXT = 'Olá! Quero ativar o FinançasZap.';
-const WHATSAPP_AGENT_LINK = `https://wa.me/${WHATSAPP_AGENT_NUMBER}?text=${encodeURIComponent(WHATSAPP_ACTIVATION_TEXT)}`;
+const WHATSAPP_AGENT_LINK = base44.agents.getWhatsAppConnectURL('financas_zap');
 import { toast } from 'sonner';
 
 
