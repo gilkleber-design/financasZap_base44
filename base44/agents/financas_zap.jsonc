@@ -21,6 +21,6 @@
   "selected_workspace_skill_ids": [],
   "model": "automatic",
   "line_greeting": "",
-  "allow_anonymous_access": false,
+  "allow_anonymous_access": true,
   "name": "financas_zap"
 }
