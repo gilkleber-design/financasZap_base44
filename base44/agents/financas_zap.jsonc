@@ -11,7 +11,7 @@
   "telegram_greeting": "",
   "memory_config": {
     "enabled": true,
-    "scope": "conversation",
+    "scope": "user",
     "include_other_conversation_context": false,
     "instructions": "NUNCA memorize nem reutilize dados financeiros: valores, comprovantes, benefici\u00e1rios, lojas, contas, categorias, saldos, or\u00e7amentos ou respostas j\u00e1 enviadas. Esses dados vivem apenas na API financaszap e mudam a todo momento. A \u00fanica coisa a manter \u00e9 o objeto `dados.registro` do \u00faltimo lan\u00e7amento gravado (para corre\u00e7\u00e3o/exclus\u00e3o imediata) e o estado do fluxo de menu em andamento."
   },
